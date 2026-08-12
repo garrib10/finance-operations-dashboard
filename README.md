@@ -1,0 +1,141 @@
+# Finance Operations Dashboard
+
+![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1-brightgreen?logo=springboot&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)
+![Maven](https://img.shields.io/badge/Maven-3.9-C71A36?logo=apachemaven&logoColor=white)
+![JWT](https://img.shields.io/badge/JWT-Authentication-black?logo=jsonwebtokens)
+![JUnit 5](https://img.shields.io/badge/JUnit-5-25A162?logo=junit5&logoColor=white)
+![Mockito](https://img.shields.io/badge/Mockito-Testing-78A641)
+![Swagger](https://img.shields.io/badge/Swagger-OpenAPI-85EA2D?logo=swagger&logoColor=black)
+
+A production-quality full-stack personal finance management application built with **Java, Spring Boot, React, TypeScript, and MySQL**.
+
+> **Note:** This project uses fictional/demo financial data only. It does **not** connect to real banks, process real financial transactions, or provide financial advice.
+
+---
+
+## Tech Stack
+
+### Backend
+
+- Java 21
+- Spring Boot
+- Spring Web MVC
+- Spring Data JPA _(coming soon)_
+- Spring Security _(coming soon)_
+- JWT Authentication _(coming soon)_
+- Maven
+
+### Database
+
+- MySQL
+
+### Frontend
+
+- React
+- TypeScript
+- Vite
+- Custom CSS
+
+### Testing
+
+- JUnit 5
+- Mockito
+- Spring Boot Test
+
+### Deployment
+
+- Railway (Backend + MySQL)
+- Vercel (Frontend)
+
+---
+
+## Current Features
+
+- Spring Boot application setup
+- Health endpoint
+- Swagger / OpenAPI documentation
+
+---
+
+## Running the Application
+
+Clone the repository:
+
+```bash
+git clone <repository-url>
+cd finance-operations-dashboard
+```
+
+Run the application:
+
+```bash
+./mvnw spring-boot:run
+```
+
+Application:
+
+```
+http://localhost:8080
+```
+
+Swagger UI:
+
+```
+http://localhost:8080/swagger-ui/index.html
+```
+
+Health Endpoint:
+
+```
+http://localhost:8080/api/health
+```
+
+---
+
+## Planned Features
+
+- User Registration
+- Authentication & JWT
+- Income & Expense Tracking
+- Categories
+- Monthly Budgets
+- Dashboard Analytics
+- Search, Filtering & Sorting
+- Responsive React Frontend
+- Automated Backend Testing
+- Production Deployment
+
+---
+
+## Development Roadmap
+
+- ✅ Day 1 – Project Setup & Architecture
+- ⬜ Day 2 – MySQL & Database Foundation
+- ⬜ Day 3 – User Registration
+- ⬜ Day 4 – Authentication & JWT
+- ⬜ Day 5 – Transactions
+- ⬜ Day 6 – Transaction CRUD
+- ⬜ Day 7 – Categories
+- ⬜ Day 8 – Search & Filtering
+- ⬜ Day 9 – Budgets
+- ⬜ Day 10 – Budget Business Logic
+- ⬜ Day 11 – Dashboard API
+- ⬜ Day 12 – Testing Foundation
+- ⬜ Day 13 – Complete Backend Testing
+- ⬜ Day 14 – React + TypeScript
+- ⬜ Day 15 – Frontend Authentication
+- ⬜ Day 16 – Dashboard UI
+- ⬜ Day 17 – Transaction Management
+- ⬜ Day 18 – Budget UI
+- ⬜ Day 19 – Deployment
+- ⬜ Day 20 – Documentation & Portfolio Polish
+
+---
+
+## License
+
+This project is licensed under the MIT License.
