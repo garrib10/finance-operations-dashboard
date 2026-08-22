@@ -28,8 +28,8 @@ A production-quality full-stack personal finance management application built wi
 - Hibernate
 - Bean Validation
 - BCrypt Password Hashing
-- Spring Security _(coming soon)_
-- JWT Authentication _(coming soon)_
+- Spring Security
+- JWT Authentication
 - Maven
 
 ### Database
@@ -67,15 +67,22 @@ A production-quality full-stack personal finance management application built wi
 - Swagger / OpenAPI documentation
 - RESTful API architecture
 - Health endpoint
+- User login
+- JWT-based authentication
+- Protected API endpoints
+- Stateless Spring Security configuration
+- Custom authentication error responses
 
 ---
 
 ## Current API Endpoints
 
-| Method | Endpoint             | Description              |
-| ------ | -------------------- | ------------------------ |
-| GET    | `/api/health`        | Application health check |
-| POST   | `/api/auth/register` | Register a new user      |
+| Method | Endpoint             | Description                             |
+| ------ | -------------------- | --------------------------------------- |
+| GET    | `/api/health`        | Application health check                |
+| POST   | `/api/auth/register` | Register a new user                     |
+| POST   | `/api/auth/login`    | Authenticate user and return a JWT      |
+| GET    | `/api/auth/me`       | Return the currently authenticated user |
 
 ---
 
@@ -89,6 +96,7 @@ src
 ├── entity
 ├── exception
 ├── repository
+├── security
 ├── service
 └── FinanceOperationsDashboardApplication
 ```
@@ -147,6 +155,8 @@ Swagger UI:
 http://localhost:8080/swagger-ui/index.html
 ```
 
+> **Authentication:** Use `POST /api/auth/login` to obtain a JWT, then click the **Authorize** button in Swagger and paste the token to test protected endpoints.
+
 Health Check:
 
 ```
@@ -157,9 +167,6 @@ http://localhost:8080/api/health
 
 ## Planned Features
 
-- JWT Authentication
-- Login
-- Protected API endpoints
 - Income & Expense Tracking
 - Categories
 - Monthly Budgets
@@ -176,7 +183,7 @@ http://localhost:8080/api/health
 - ✅ Day 1 – Project Setup & Architecture
 - ✅ Day 2 – MySQL & Database Foundation
 - ✅ Day 3 – User Registration
-- ⬜ Day 4 – Authentication & JWT
+- ✅ Day 4 – Authentication & JWT
 - ⬜ Day 5 – Transactions
 - ⬜ Day 6 – Transaction CRUD
 - ⬜ Day 7 – Categories

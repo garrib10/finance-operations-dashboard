@@ -4,7 +4,7 @@ import java.util.Locale;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import dev.portfolio.finance.exception.DuplicateEmailException;
+import dev.portfolio.finance.exception.auth.DuplicateEmailException;
 import dev.portfolio.finance.dto.auth.RegisterRequest;
 import dev.portfolio.finance.dto.auth.UserResponse;
 import dev.portfolio.finance.entity.User;

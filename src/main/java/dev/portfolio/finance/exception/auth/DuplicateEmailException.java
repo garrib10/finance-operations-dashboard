@@ -1,4 +1,4 @@
-package dev.portfolio.finance.exception;
+package dev.portfolio.finance.exception.auth;
 
 public class DuplicateEmailException extends RuntimeException {
 
