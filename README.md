@@ -58,31 +58,46 @@ A production-quality full-stack personal finance management application built wi
 
 ## Current Features
 
+### Authentication
+
 - User registration API
+- User login
+- JWT-based authentication
+- Stateless Spring Security configuration
+- Protected API endpoints
 - Secure password hashing with BCrypt
+- Custom authentication error responses
+
+### Transactions
+
+- Create income and expense transactions
+- Retrieve all transactions for the authenticated user
+- Retrieve an individual transaction
+- User ownership enforcement for all transaction data
+
+### Backend
+
 - Spring Data JPA persistence
 - Bean Validation
 - Duplicate email prevention
 - Global exception handling
-- Swagger / OpenAPI documentation
 - RESTful API architecture
+- Swagger / OpenAPI documentation
 - Health endpoint
-- User login
-- JWT-based authentication
-- Protected API endpoints
-- Stateless Spring Security configuration
-- Custom authentication error responses
 
 ---
 
 ## Current API Endpoints
 
-| Method | Endpoint             | Description                             |
-| ------ | -------------------- | --------------------------------------- |
-| GET    | `/api/health`        | Application health check                |
-| POST   | `/api/auth/register` | Register a new user                     |
-| POST   | `/api/auth/login`    | Authenticate user and return a JWT      |
-| GET    | `/api/auth/me`       | Return the currently authenticated user |
+| Method | Endpoint                 | Description                                          |
+| ------ | ------------------------ | ---------------------------------------------------- |
+| GET    | `/api/health`            | Application health check                             |
+| POST   | `/api/auth/register`     | Register a new user                                  |
+| POST   | `/api/auth/login`        | Authenticate user and return a JWT                   |
+| GET    | `/api/auth/me`           | Return the currently authenticated user              |
+| POST   | `/api/transactions`      | Create a new transaction                             |
+| GET    | `/api/transactions`      | Retrieve all authenticated user's transactions       |
+| GET    | `/api/transactions/{id}` | Retrieve a specific authenticated user's transaction |
 
 ---
 
@@ -93,8 +108,13 @@ src
 ├── config
 ├── controller
 ├── dto
+│   ├── auth
+│   ├── error
+│   └── transaction
 ├── entity
 ├── exception
+│   ├── auth
+│   └── transaction
 ├── repository
 ├── security
 ├── service
@@ -167,7 +187,6 @@ http://localhost:8080/api/health
 
 ## Planned Features
 
-- Income & Expense Tracking
 - Categories
 - Monthly Budgets
 - Dashboard Analytics
@@ -184,7 +203,7 @@ http://localhost:8080/api/health
 - ✅ Day 2 – MySQL & Database Foundation
 - ✅ Day 3 – User Registration
 - ✅ Day 4 – Authentication & JWT
-- ⬜ Day 5 – Transactions
+- ✅ Day 5 – Transactions
 - ⬜ Day 6 – Transaction CRUD
 - ⬜ Day 7 – Categories
 - ⬜ Day 8 – Search & Filtering
