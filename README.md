@@ -24,7 +24,10 @@ A production-quality full-stack personal finance management application built wi
 - Java 21
 - Spring Boot
 - Spring Web MVC
-- Spring Data JPA _(coming soon)_
+- Spring Data JPA
+- Hibernate
+- Bean Validation
+- BCrypt Password Hashing
 - Spring Security _(coming soon)_
 - JWT Authentication _(coming soon)_
 - Maven
@@ -55,9 +58,51 @@ A production-quality full-stack personal finance management application built wi
 
 ## Current Features
 
-- Spring Boot application setup
-- Health endpoint
+- User registration API
+- Secure password hashing with BCrypt
+- Spring Data JPA persistence
+- Bean Validation
+- Duplicate email prevention
+- Global exception handling
 - Swagger / OpenAPI documentation
+- RESTful API architecture
+- Health endpoint
+
+---
+
+## Current API Endpoints
+
+| Method | Endpoint             | Description              |
+| ------ | -------------------- | ------------------------ |
+| GET    | `/api/health`        | Application health check |
+| POST   | `/api/auth/register` | Register a new user      |
+
+---
+
+## Project Structure
+
+```text
+src
+├── config
+├── controller
+├── dto
+├── entity
+├── exception
+├── repository
+├── service
+└── FinanceOperationsDashboardApplication
+```
+
+---
+
+## Prerequisites
+
+Before running the project, make sure you have installed:
+
+- Java 21
+- Maven
+- MySQL 9+
+- Git
 
 ---
 
@@ -66,14 +111,28 @@ A production-quality full-stack personal finance management application built wi
 Clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/garrib10/finance-operations-dashboard.git
 cd finance-operations-dashboard
+```
+
+Configure your environment variables by creating a `.env` file:
+
+```env
+DB_URL=jdbc:mysql://localhost:3306/finance_operations_dashboard
+DB_USERNAME=finance_user
+DB_PASSWORD=your_password
 ```
 
 Run the application:
 
 ```bash
-./mvnw spring-boot:run
+./scripts/run-local.sh
+```
+
+Or manually:
+
+```bash
+mvn spring-boot:run
 ```
 
 Application:
@@ -88,7 +147,7 @@ Swagger UI:
 http://localhost:8080/swagger-ui/index.html
 ```
 
-Health Endpoint:
+Health Check:
 
 ```
 http://localhost:8080/api/health
@@ -98,8 +157,9 @@ http://localhost:8080/api/health
 
 ## Planned Features
 
-- User Registration
-- Authentication & JWT
+- JWT Authentication
+- Login
+- Protected API endpoints
 - Income & Expense Tracking
 - Categories
 - Monthly Budgets
@@ -111,11 +171,11 @@ http://localhost:8080/api/health
 
 ---
 
-## Development Roadmap
+## Project Progress
 
 - ✅ Day 1 – Project Setup & Architecture
-- ⬜ Day 2 – MySQL & Database Foundation
-- ⬜ Day 3 – User Registration
+- ✅ Day 2 – MySQL & Database Foundation
+- ✅ Day 3 – User Registration
 - ⬜ Day 4 – Authentication & JWT
 - ⬜ Day 5 – Transactions
 - ⬜ Day 6 – Transaction CRUD
@@ -133,6 +193,12 @@ http://localhost:8080/api/health
 - ⬜ Day 18 – Budget UI
 - ⬜ Day 19 – Deployment
 - ⬜ Day 20 – Documentation & Portfolio Polish
+
+---
+
+## Screenshots
+
+Coming soon...
 
 ---
 
