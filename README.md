@@ -73,6 +73,9 @@ A production-quality full-stack personal finance management application built wi
 - Create income and expense transactions
 - Retrieve all transactions for the authenticated user
 - Retrieve an individual transaction
+- Update existing transactions
+- Delete transactions
+- JWT-protected transaction endpoints
 - User ownership enforcement for all transaction data
 
 ### Backend
@@ -98,6 +101,8 @@ A production-quality full-stack personal finance management application built wi
 | POST   | `/api/transactions`      | Create a new transaction                             |
 | GET    | `/api/transactions`      | Retrieve all authenticated user's transactions       |
 | GET    | `/api/transactions/{id}` | Retrieve a specific authenticated user's transaction |
+| PUT    | `/api/transactions/{id}` | Update a specific authenticated user's transaction   |
+| DELETE | `/api/transactions/{id}` | Delete a specific authenticated user's transaction   |
 
 ---
 
@@ -119,6 +124,9 @@ src
 ├── security
 ├── service
 └── FinanceOperationsDashboardApplication
+
+docs
+└── sql
 ```
 
 ---
@@ -204,7 +212,7 @@ http://localhost:8080/api/health
 - ✅ Day 3 – User Registration
 - ✅ Day 4 – Authentication & JWT
 - ✅ Day 5 – Transactions
-- ⬜ Day 6 – Transaction CRUD
+- ✅ Day 6 – Transaction CRUD
 - ⬜ Day 7 – Categories
 - ⬜ Day 8 – Search & Filtering
 - ⬜ Day 9 – Budgets

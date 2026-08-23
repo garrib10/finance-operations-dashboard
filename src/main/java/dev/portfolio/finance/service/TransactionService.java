@@ -5,11 +5,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import dev.portfolio.finance.dto.transaction.CreateTransactionRequest;
 import dev.portfolio.finance.dto.transaction.TransactionResponse;
+import dev.portfolio.finance.dto.transaction.UpdateTransactionRequest;
 import dev.portfolio.finance.entity.Transaction;
 import dev.portfolio.finance.entity.User;
+import dev.portfolio.finance.exception.transaction.TransactionNotFoundException;
 import dev.portfolio.finance.repository.TransactionRepository;
 import dev.portfolio.finance.repository.UserRepository;
-import dev.portfolio.finance.exception.transaction.TransactionNotFoundException;
 
 @Service
 public class TransactionService {
@@ -77,11 +78,70 @@ public class TransactionService {
                         transactionId,
                         user.getId()
                 )
-                .orElseThrow(() -> new TransactionNotFoundException(
-                        "Transaction not found"
-                ));
+                .orElseThrow(() ->
+                        new TransactionNotFoundException(
+                                "Transaction not found"
+                        )
+                );
 
         return mapToResponse(transaction);
+    }
+
+    @Transactional
+    public TransactionResponse updateTransaction(
+            String authenticatedEmail,
+            Long transactionId,
+            UpdateTransactionRequest request
+    ) {
+        User user = userRepository
+                .findByEmail(authenticatedEmail)
+                .orElseThrow();
+
+        Transaction transaction = transactionRepository
+                .findByIdAndUserId(
+                        transactionId,
+                        user.getId()
+                )
+                .orElseThrow(() ->
+                        new TransactionNotFoundException(
+                                "Transaction not found"
+                        )
+                );
+
+        transaction.update(
+                request.type(),
+                request.amount(),
+                request.description().trim(),
+                request.transactionDate()
+        );
+
+        Transaction savedTransaction =
+                transactionRepository.save(transaction);
+
+        return mapToResponse(savedTransaction);
+    }
+
+    @Transactional
+    public void deleteTransaction(
+            String authenticatedEmail,
+            Long transactionId
+    ) {
+        User user = userRepository
+                .findByEmail(authenticatedEmail)
+                .orElseThrow();
+
+        Transaction transaction = transactionRepository
+                .findByIdAndUserId(
+                        transactionId,
+                        user.getId()
+                )
+                .orElseThrow(() ->
+                        new TransactionNotFoundException(
+                                "Transaction not found"
+                        )
+                );
+
+        transactionRepository.delete(transaction);
     }
 
     private TransactionResponse mapToResponse(

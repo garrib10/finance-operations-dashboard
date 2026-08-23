@@ -68,4 +68,16 @@ public class Transaction extends BaseEntity {
     public LocalDate getTransactionDate() {
         return transactionDate;
     }
+
+    public void update(
+            TransactionType type,
+            BigDecimal amount,
+            String description,
+            LocalDate transactionDate
+    ) {
+        this.type = type;
+        this.amount = amount;
+        this.description = description;
+        this.transactionDate = transactionDate;
+    }
 }
