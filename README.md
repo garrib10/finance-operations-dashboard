@@ -78,6 +78,17 @@ A production-quality full-stack personal finance management application built wi
 - JWT-protected transaction endpoints
 - User ownership enforcement for all transaction data
 
+### Categories
+
+- Create custom categories
+- Retrieve all categories for the authenticated user
+- Retrieve an individual category
+- Update existing categories
+- Delete categories
+- Automatic default category creation for newly registered users
+- User ownership enforcement for all category data
+- Duplicate category name prevention (per user)
+
 ### Backend
 
 - Spring Data JPA persistence
@@ -103,6 +114,11 @@ A production-quality full-stack personal finance management application built wi
 | GET    | `/api/transactions/{id}` | Retrieve a specific authenticated user's transaction |
 | PUT    | `/api/transactions/{id}` | Update a specific authenticated user's transaction   |
 | DELETE | `/api/transactions/{id}` | Delete a specific authenticated user's transaction   |
+| POST   | `/api/categories`        | Create a new category                                |
+| GET    | `/api/categories`        | Retrieve all authenticated user's categories         |
+| GET    | `/api/categories/{id}`   | Retrieve a specific authenticated user's category    |
+| PUT    | `/api/categories/{id}`   | Update a specific authenticated user's category      |
+| DELETE | `/api/categories/{id}`   | Delete a specific authenticated user's category      |
 
 ---
 
@@ -114,11 +130,13 @@ src
 ├── controller
 ├── dto
 │   ├── auth
+│   ├── category
 │   ├── error
 │   └── transaction
 ├── entity
 ├── exception
 │   ├── auth
+│   ├── category
 │   └── transaction
 ├── repository
 ├── security
@@ -126,7 +144,9 @@ src
 └── FinanceOperationsDashboardApplication
 
 docs
-└── sql
+├── sql
+├── finance-testing.md
+└── future-enhancements.md
 ```
 
 ---
@@ -195,7 +215,6 @@ http://localhost:8080/api/health
 
 ## Planned Features
 
-- Categories
 - Monthly Budgets
 - Dashboard Analytics
 - Search, Filtering & Sorting
@@ -213,7 +232,7 @@ http://localhost:8080/api/health
 - ✅ Day 4 – Authentication & JWT
 - ✅ Day 5 – Transactions
 - ✅ Day 6 – Transaction CRUD
-- ⬜ Day 7 – Categories
+- ✅ Day 7 – Categories
 - ⬜ Day 8 – Search & Filtering
 - ⬜ Day 9 – Budgets
 - ⬜ Day 10 – Budget Business Logic

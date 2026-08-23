@@ -13,6 +13,8 @@ import dev.portfolio.finance.dto.error.ValidationErrorResponse;
 import dev.portfolio.finance.exception.auth.DuplicateEmailException;
 import dev.portfolio.finance.exception.auth.InvalidCredentialsException;
 import dev.portfolio.finance.exception.transaction.TransactionNotFoundException;
+import dev.portfolio.finance.exception.category.DuplicateCategoryException;
+import dev.portfolio.finance.exception.category.CategoryNotFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -91,4 +93,36 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.BAD_REQUEST)
                 .body(response);
     }
+
+        @ExceptionHandler(DuplicateCategoryException.class)
+        public ResponseEntity<ApiErrorResponse> handleDuplicateCategory(
+                DuplicateCategoryException ex
+        ) {
+            ApiErrorResponse response = new ApiErrorResponse(
+                    LocalDateTime.now(),
+                    HttpStatus.CONFLICT.value(),
+                    "Conflict",
+                    ex.getMessage()
+            );
+
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(response);
+        }
+
+        @ExceptionHandler(CategoryNotFoundException.class)
+        public ResponseEntity<ApiErrorResponse> handleCategoryNotFound(
+                CategoryNotFoundException ex
+        ) {
+            ApiErrorResponse response = new ApiErrorResponse(
+                    LocalDateTime.now(),
+                    HttpStatus.NOT_FOUND.value(),
+                    "Not Found",
+                    ex.getMessage()
+            );
+
+            return ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .body(response);
+        }
 }

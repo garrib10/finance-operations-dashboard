@@ -1,10 +1,8 @@
 package dev.portfolio.finance.service;
 
 import java.util.Locale;
-
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
 import dev.portfolio.finance.dto.auth.LoginRequest;
 import dev.portfolio.finance.entity.User;
 import dev.portfolio.finance.exception.auth.InvalidCredentialsException;
