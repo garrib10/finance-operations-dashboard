@@ -41,13 +41,11 @@ A production-quality full-stack personal finance management application built wi
 - React
 - TypeScript
 - Vite
-- Custom CSS
 
 ### Testing
 
 - JUnit 5
 - Mockito
-- Spring Boot Test
 
 ### Deployment
 
@@ -75,8 +73,15 @@ A production-quality full-stack personal finance management application built wi
 - Retrieve an individual transaction
 - Update existing transactions
 - Delete transactions
+- Search transactions by description
+- Filter transactions by type
+- Filter transactions by amount range
+- Filter transactions by date range
+- Sort transactions by amount, transaction date, or creation date
+- Paginated transaction responses
 - JWT-protected transaction endpoints
 - User ownership enforcement for all transaction data
+- Transaction filter validation
 
 ### Categories
 
@@ -86,8 +91,9 @@ A production-quality full-stack personal finance management application built wi
 - Update existing categories
 - Delete categories
 - Automatic default category creation for newly registered users
-- User ownership enforcement for all category data
 - Duplicate category name prevention (per user)
+- JWT-protected category endpoints
+- User ownership enforcement for all category data
 
 ### Backend
 
@@ -145,8 +151,6 @@ src
 
 docs
 ├── sql
-├── finance-testing.md
-└── future-enhancements.md
 ```
 
 ---
@@ -217,7 +221,6 @@ http://localhost:8080/api/health
 
 - Monthly Budgets
 - Dashboard Analytics
-- Search, Filtering & Sorting
 - Responsive React Frontend
 - Automated Backend Testing
 - Production Deployment
@@ -233,7 +236,7 @@ http://localhost:8080/api/health
 - ✅ Day 5 – Transactions
 - ✅ Day 6 – Transaction CRUD
 - ✅ Day 7 – Categories
-- ⬜ Day 8 – Search & Filtering
+- ✅ Day 8 – Search Filtering & Sorting
 - ⬜ Day 9 – Budgets
 - ⬜ Day 10 – Budget Business Logic
 - ⬜ Day 11 – Dashboard API

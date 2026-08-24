@@ -15,6 +15,7 @@ import dev.portfolio.finance.exception.auth.InvalidCredentialsException;
 import dev.portfolio.finance.exception.transaction.TransactionNotFoundException;
 import dev.portfolio.finance.exception.category.DuplicateCategoryException;
 import dev.portfolio.finance.exception.category.CategoryNotFoundException;
+import dev.portfolio.finance.exception.transaction.InvalidTransactionFilterException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -124,5 +125,22 @@ public class GlobalExceptionHandler {
             return ResponseEntity
                     .status(HttpStatus.NOT_FOUND)
                     .body(response);
+        }
+
+        @ExceptionHandler(InvalidTransactionFilterException.class)
+        public ResponseEntity<ApiErrorResponse> handleInvalidTransactionFilter(
+                InvalidTransactionFilterException ex
+        ) {
+            ApiErrorResponse response = new ApiErrorResponse(
+                    LocalDateTime.now(),
+                    HttpStatus.BAD_REQUEST.value(),
+                    "Bad Request",
+                    ex.getMessage()
+            );
+
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(response);
+        
         }
 }

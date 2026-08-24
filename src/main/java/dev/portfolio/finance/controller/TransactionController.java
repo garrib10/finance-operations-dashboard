@@ -1,6 +1,8 @@
 package dev.portfolio.finance.controller;
 
-import java.util.List;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -11,10 +13,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import dev.portfolio.finance.dto.transaction.CreateTransactionRequest;
+import dev.portfolio.finance.dto.transaction.PagedTransactionResponse;
+import dev.portfolio.finance.dto.transaction.TransactionFilterRequest;
 import dev.portfolio.finance.dto.transaction.TransactionResponse;
 import dev.portfolio.finance.dto.transaction.UpdateTransactionRequest;
+import dev.portfolio.finance.entity.TransactionType;
 import dev.portfolio.finance.service.TransactionService;
 import jakarta.validation.Valid;
 
@@ -47,12 +53,59 @@ public class TransactionController {
     }
 
     @GetMapping
-    public ResponseEntity<List<TransactionResponse>> getAllTransactions(
-            Authentication authentication
+    public ResponseEntity<PagedTransactionResponse> getTransactions(
+            Authentication authentication,
+
+            @RequestParam(required = false)
+            TransactionType type,
+
+            @RequestParam(required = false)
+            String search,
+
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate startDate,
+
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate endDate,
+
+            @RequestParam(required = false)
+            BigDecimal minAmount,
+
+            @RequestParam(required = false)
+            BigDecimal maxAmount,
+
+            @RequestParam(required = false)
+            String sortBy,
+
+            @RequestParam(required = false)
+            String sortDirection,
+
+            @RequestParam(required = false)
+            Integer page,
+
+            @RequestParam(required = false)
+            Integer size
     ) {
-        List<TransactionResponse> response =
-                transactionService.getAllTransactions(
-                        authentication.getName()
+        TransactionFilterRequest filters =
+                new TransactionFilterRequest(
+                        type,
+                        search,
+                        startDate,
+                        endDate,
+                        minAmount,
+                        maxAmount,
+                        sortBy,
+                        sortDirection,
+                        page,
+                        size
+                );
+
+        PagedTransactionResponse response =
+                transactionService.searchTransactions(
+                        authentication.getName(),
+                        filters
                 );
 
         return ResponseEntity.ok(response);
