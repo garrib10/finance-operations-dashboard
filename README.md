@@ -95,6 +95,18 @@ A production-quality full-stack personal finance management application built wi
 - JWT-protected category endpoints
 - User ownership enforcement for all category data
 
+### Budgets
+
+- Create monthly budgets by category
+- Retrieve all budgets for the authenticated user
+- Retrieve an individual budget
+- Update existing budgets
+- Delete budgets
+- Prevent duplicate budgets for the same category and month
+- Validate monthly limits, month, and year
+- JWT-protected budget endpoints
+- User and category ownership enforcement
+
 ### Backend
 
 - Spring Data JPA persistence
@@ -112,19 +124,32 @@ A production-quality full-stack personal finance management application built wi
 | Method | Endpoint                 | Description                                          |
 | ------ | ------------------------ | ---------------------------------------------------- |
 | GET    | `/api/health`            | Application health check                             |
+|        |                          |                                                      |
+|        | **Authentication**       |                                                      |
 | POST   | `/api/auth/register`     | Register a new user                                  |
 | POST   | `/api/auth/login`        | Authenticate user and return a JWT                   |
 | GET    | `/api/auth/me`           | Return the currently authenticated user              |
+|        |                          |                                                      |
+|        | **Transactions**         |                                                      |
 | POST   | `/api/transactions`      | Create a new transaction                             |
 | GET    | `/api/transactions`      | Retrieve all authenticated user's transactions       |
 | GET    | `/api/transactions/{id}` | Retrieve a specific authenticated user's transaction |
 | PUT    | `/api/transactions/{id}` | Update a specific authenticated user's transaction   |
 | DELETE | `/api/transactions/{id}` | Delete a specific authenticated user's transaction   |
+|        |                          |                                                      |
+|        | **Categories**           |                                                      |
 | POST   | `/api/categories`        | Create a new category                                |
 | GET    | `/api/categories`        | Retrieve all authenticated user's categories         |
 | GET    | `/api/categories/{id}`   | Retrieve a specific authenticated user's category    |
 | PUT    | `/api/categories/{id}`   | Update a specific authenticated user's category      |
 | DELETE | `/api/categories/{id}`   | Delete a specific authenticated user's category      |
+|        |                          |                                                      |
+|        | **Budgets**              |                                                      |
+| POST   | `/api/budgets`           | Create a monthly budget                              |
+| GET    | `/api/budgets`           | Retrieve all authenticated user's budgets            |
+| GET    | `/api/budgets/{id}`      | Retrieve a specific authenticated user's budget      |
+| PUT    | `/api/budgets/{id}`      | Update a specific authenticated user's budget        |
+| DELETE | `/api/budgets/{id}`      | Delete a specific authenticated user's budget        |
 
 ---
 
@@ -136,12 +161,14 @@ src
 ├── controller
 ├── dto
 │   ├── auth
+│   ├── budget
 │   ├── category
 │   ├── error
 │   └── transaction
 ├── entity
 ├── exception
 │   ├── auth
+│   ├── budget
 │   ├── category
 │   └── transaction
 ├── repository
@@ -219,7 +246,6 @@ http://localhost:8080/api/health
 
 ## Planned Features
 
-- Monthly Budgets
 - Dashboard Analytics
 - Responsive React Frontend
 - Automated Backend Testing
@@ -237,7 +263,7 @@ http://localhost:8080/api/health
 - ✅ Day 6 – Transaction CRUD
 - ✅ Day 7 – Categories
 - ✅ Day 8 – Search Filtering & Sorting
-- ⬜ Day 9 – Budgets
+- ✅ Day 9 – Budgets
 - ⬜ Day 10 – Budget Business Logic
 - ⬜ Day 11 – Dashboard API
 - ⬜ Day 12 – Testing Foundation

@@ -16,6 +16,8 @@ import dev.portfolio.finance.exception.transaction.TransactionNotFoundException;
 import dev.portfolio.finance.exception.category.DuplicateCategoryException;
 import dev.portfolio.finance.exception.category.CategoryNotFoundException;
 import dev.portfolio.finance.exception.transaction.InvalidTransactionFilterException;
+import dev.portfolio.finance.exception.budget.BudgetNotFoundException;
+import dev.portfolio.finance.exception.budget.DuplicateBudgetException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -142,5 +144,37 @@ public class GlobalExceptionHandler {
                     .status(HttpStatus.BAD_REQUEST)
                     .body(response);
         
+        }
+
+        @ExceptionHandler(BudgetNotFoundException.class)
+        public ResponseEntity<ApiErrorResponse> handleBudgetNotFound(
+                BudgetNotFoundException ex
+        ) {
+            ApiErrorResponse response = new ApiErrorResponse(
+                    LocalDateTime.now(),
+                    HttpStatus.NOT_FOUND.value(),
+                    "Not Found",
+                    ex.getMessage()
+            );
+
+            return ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .body(response);
+        }
+
+        @ExceptionHandler(DuplicateBudgetException.class)
+        public ResponseEntity<ApiErrorResponse> handleDuplicateBudget(
+                DuplicateBudgetException ex
+        ) {
+            ApiErrorResponse response = new ApiErrorResponse(
+                    LocalDateTime.now(),
+                    HttpStatus.CONFLICT.value(),
+                    "Conflict",
+                    ex.getMessage()
+            );
+
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(response);
         }
 }
