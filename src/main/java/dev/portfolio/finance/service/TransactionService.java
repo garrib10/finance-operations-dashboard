@@ -14,10 +14,13 @@ import dev.portfolio.finance.dto.transaction.PagedTransactionResponse;
 import dev.portfolio.finance.dto.transaction.TransactionFilterRequest;
 import dev.portfolio.finance.dto.transaction.TransactionResponse;
 import dev.portfolio.finance.dto.transaction.UpdateTransactionRequest;
+import dev.portfolio.finance.entity.Category;
 import dev.portfolio.finance.entity.Transaction;
 import dev.portfolio.finance.entity.User;
+import dev.portfolio.finance.exception.category.CategoryNotFoundException;
 import dev.portfolio.finance.exception.transaction.InvalidTransactionFilterException;
 import dev.portfolio.finance.exception.transaction.TransactionNotFoundException;
+import dev.portfolio.finance.repository.CategoryRepository;
 import dev.portfolio.finance.repository.TransactionRepository;
 import dev.portfolio.finance.repository.UserRepository;
 import dev.portfolio.finance.specification.TransactionSpecification;
@@ -27,13 +30,16 @@ public class TransactionService {
 
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
+    private final CategoryRepository categoryRepository;
 
     public TransactionService(
             TransactionRepository transactionRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            CategoryRepository categoryRepository
     ) {
         this.transactionRepository = transactionRepository;
         this.userRepository = userRepository;
+        this.categoryRepository = categoryRepository;
     }
 
     @Transactional
@@ -45,8 +51,20 @@ public class TransactionService {
                 .findByEmail(authenticatedEmail)
                 .orElseThrow();
 
+        Category category = categoryRepository
+                .findByIdAndUserId(
+                        request.categoryId(),
+                        user.getId()
+                )
+                .orElseThrow(() ->
+                        new CategoryNotFoundException(
+                                "Category not found"
+                        )
+                );
+
         Transaction transaction = new Transaction(
                 user,
+                category,
                 request.type(),
                 request.amount(),
                 request.description().trim(),
@@ -118,7 +136,19 @@ public class TransactionService {
                         )
                 );
 
+        Category category = categoryRepository
+                .findByIdAndUserId(
+                        request.categoryId(),
+                        user.getId()
+                )
+                .orElseThrow(() ->
+                        new CategoryNotFoundException(
+                                "Category not found"
+                        )
+                );
+
         transaction.update(
+                category,
                 request.type(),
                 request.amount(),
                 request.description().trim(),
@@ -312,6 +342,8 @@ public class TransactionService {
     ) {
         return new TransactionResponse(
                 transaction.getId(),
+                transaction.getCategory().getId(),
+                transaction.getCategory().getName(),
                 transaction.getType(),
                 transaction.getAmount(),
                 transaction.getDescription(),

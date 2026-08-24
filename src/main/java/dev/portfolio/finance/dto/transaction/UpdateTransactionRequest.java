@@ -10,6 +10,9 @@ import jakarta.validation.constraints.Size;
 
 public record UpdateTransactionRequest(
 
+        @NotNull(message = "Category ID is required")
+        Long categoryId,
+
         @NotNull(message = "Transaction type is required")
         TransactionType type,
 

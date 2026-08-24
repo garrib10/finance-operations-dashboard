@@ -10,6 +10,9 @@ import jakarta.validation.constraints.Size;
 
 public record CreateTransactionRequest(
 
+        @NotNull(message = "Category ID is required")
+        Long categoryId,
+
         @NotNull(message = "Transaction type is required")
         TransactionType type,
 
@@ -29,5 +32,6 @@ public record CreateTransactionRequest(
 
         @NotNull(message = "Transaction date is required")
         LocalDate transactionDate
+
 ) {
 }

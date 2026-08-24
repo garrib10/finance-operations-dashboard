@@ -7,6 +7,8 @@ import dev.portfolio.finance.entity.TransactionType;
 
 public record TransactionResponse(
         Long id,
+        Long categoryId,
+        String categoryName,
         TransactionType type,
         BigDecimal amount,
         String description,

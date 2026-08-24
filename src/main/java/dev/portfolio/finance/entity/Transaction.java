@@ -19,6 +19,10 @@ public class Transaction extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "category_id", nullable = false)
+    private Category category;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private TransactionType type;
@@ -37,12 +41,14 @@ public class Transaction extends BaseEntity {
 
     public Transaction(
             User user,
+            Category category,
             TransactionType type,
             BigDecimal amount,
             String description,
             LocalDate transactionDate
     ) {
         this.user = user;
+        this.category = category;
         this.type = type;
         this.amount = amount;
         this.description = description;
@@ -51,6 +57,10 @@ public class Transaction extends BaseEntity {
 
     public User getUser() {
         return user;
+    }
+
+    public Category getCategory() {
+        return category;
     }
 
     public TransactionType getType() {
@@ -70,11 +80,13 @@ public class Transaction extends BaseEntity {
     }
 
     public void update(
+            Category category,
             TransactionType type,
             BigDecimal amount,
             String description,
             LocalDate transactionDate
     ) {
+        this.category = category;
         this.type = type;
         this.amount = amount;
         this.description = description;
