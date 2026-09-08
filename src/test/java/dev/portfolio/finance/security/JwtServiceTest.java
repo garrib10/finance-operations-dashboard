@@ -2,54 +2,163 @@ package dev.portfolio.finance.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.when;
+import java.util.Base64;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import dev.portfolio.finance.entity.User;
-import dev.portfolio.finance.support.TestDataFactory;
 
+@ExtendWith(MockitoExtension.class)
 class JwtServiceTest {
 
-    private static final String TEST_SECRET =
-            "0123456789012345678901234567890123456789012345678901234567890123";
+    private static final String TEST_EMAIL =
+            "test@example.com";
 
-    private static final long TEST_EXPIRATION_MS = 3_600_000L;
+    private static final Long TEST_USER_ID =
+            1L;
+
+    private static final long EXPIRATION_MS =
+            3600000L;
+
+    @Mock
+    private User user;
 
     private JwtService jwtService;
 
     @BeforeEach
     void setUp() {
-        jwtService = new JwtService(
-                TEST_SECRET,
-                TEST_EXPIRATION_MS
-        );
+        String secret =
+                Base64.getEncoder()
+                        .encodeToString(
+                                new byte[32]
+                        );
+
+        jwtService =
+                new JwtService(
+                        secret,
+                        EXPIRATION_MS
+                );
     }
 
     @Test
-    void shouldGenerateValidTokenAndExtractEmail() {
+    void shouldGenerateValidToken() {
+
         // Arrange
-        User user = TestDataFactory.createUser();
+        when(user.getEmail())
+                .thenReturn(TEST_EMAIL);
+
+        when(user.getId())
+                .thenReturn(TEST_USER_ID);
 
         // Act
-        String token = jwtService.generateToken(user);
+        String token =
+                jwtService.generateToken(user);
 
         // Assert
-        assertNotNull(token);
-        assertTrue(jwtService.isTokenValid(token));
-        assertEquals(
-                user.getEmail(),
-                jwtService.extractEmail(token)
+        assertTrue(
+                jwtService.isTokenValid(token)
         );
     }
 
     @Test
-    void shouldReturnFalseForInvalidToken() {
+    void shouldExtractEmailFromToken() {
+
         // Arrange
-        String invalidToken = "not-a-valid-jwt";
+        when(user.getEmail())
+                .thenReturn(TEST_EMAIL);
+
+        when(user.getId())
+                .thenReturn(TEST_USER_ID);
+
+        String token =
+                jwtService.generateToken(user);
 
         // Act
-        boolean valid = jwtService.isTokenValid(invalidToken);
+        String email =
+                jwtService.extractEmail(token);
+
+        // Assert
+        assertEquals(
+                TEST_EMAIL,
+                email
+        );
+    }
+
+    @Test
+    void shouldExtractUserIdFromToken() {
+
+        // Arrange
+        when(user.getEmail())
+                .thenReturn(TEST_EMAIL);
+
+        when(user.getId())
+                .thenReturn(TEST_USER_ID);
+
+        String token =
+                jwtService.generateToken(user);
+
+        // Act
+        Long userId =
+                jwtService.extractUserId(token);
+
+        // Assert
+        assertEquals(
+                TEST_USER_ID,
+                userId
+        );
+    }
+
+    @Test
+    void shouldReturnFalseForMalformedToken() {
+
+        // Act
+        boolean valid =
+                jwtService.isTokenValid(
+                        "not-a-valid-jwt"
+                );
+
+        // Assert
+        assertFalse(valid);
+    }
+
+    @Test
+    void shouldReturnFalseWhenTokenUsesDifferentSigningKey() {
+
+        // Arrange
+        when(user.getEmail())
+                .thenReturn(TEST_EMAIL);
+
+        when(user.getId())
+                .thenReturn(TEST_USER_ID);
+
+        String token =
+                jwtService.generateToken(user);
+
+        byte[] differentKeyBytes =
+                new byte[32];
+
+        differentKeyBytes[0] = 1;
+
+        String differentSecret =
+                Base64.getEncoder()
+                        .encodeToString(
+                                differentKeyBytes
+                        );
+
+        JwtService differentJwtService =
+                new JwtService(
+                        differentSecret,
+                        EXPIRATION_MS
+                );
+
+        // Act
+        boolean valid =
+                differentJwtService
+                        .isTokenValid(token);
 
         // Assert
         assertFalse(valid);
@@ -57,13 +166,10 @@ class JwtServiceTest {
 
     @Test
     void shouldReturnConfiguredExpirationTime() {
-        // Act
-        long expirationMs = jwtService.getExpirationMs();
 
-        // Assert
         assertEquals(
-                TEST_EXPIRATION_MS,
-                expirationMs
+                EXPIRATION_MS,
+                jwtService.getExpirationMs()
         );
     }
 }

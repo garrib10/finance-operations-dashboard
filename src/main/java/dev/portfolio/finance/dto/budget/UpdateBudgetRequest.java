@@ -1,7 +1,6 @@
 package dev.portfolio.finance.dto.budget;
 
 import java.math.BigDecimal;
-
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;

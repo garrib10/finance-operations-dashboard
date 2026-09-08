@@ -52,6 +52,7 @@ The application includes an aggregated dashboard API that combines transaction t
 - MockMvc
 - Spring Security Test
 - H2 in-memory test database
+- JaCoCo
 
 ### Deployment
 
@@ -276,33 +277,75 @@ http://localhost:8080/api/health
 
 ## Automated Testing
 
-The backend includes an automated test suite built with JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, and H2.
+The backend includes a comprehensive automated test suite built with **JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, and JaCoCo**.
 
-The test suite currently establishes coverage patterns for:
+### Test Results
 
-- Spring application context loading
+- **152 automated backend tests**
+- **98% instruction coverage**
+- **94% branch coverage**
+
+Test coverage is measured with **JaCoCo**.
+
+### Testing Strategy
+
+The test suite focuses on meaningful application behavior and business-critical functionality rather than targeting 100% code coverage for its own sake.
+
+Testing includes:
+
 - Service-layer unit testing with Mockito
-- User-scoped transaction ownership behavior
-- Controller behavior with MockMvc
-- JWT generation, validation, and claim extraction
-- Budget analytics and status business logic
+- Controller and request-validation testing with MockMvc
+- Repository and custom JPQL query testing
+- Transaction search, filtering, sorting, and pagination testing
+- JPA Specification testing
+- JWT generation, validation, and authentication testing
+- Spring Security configuration testing
+- User ownership and cross-user resource isolation testing
+- Category initialization and duplicate-prevention testing
+- Budget CRUD, analytics, calculations, and status testing
+- Dashboard aggregation and financial summary testing
+- Full backend integration workflows
 
-Automated tests use a dedicated `test` Spring profile and an H2 in-memory database, allowing the test suite to run independently from the local MySQL development database.
+Integration tests verify complete application flows including user registration, login, JWT-protected requests, transaction creation, dashboard calculations, and cross-user resource isolation.
+
+Automated tests use a dedicated `test` Spring profile and an **H2 in-memory database configured for MySQL compatibility**, allowing the test suite to run independently from the local MySQL development database.
 
 ### Run All Tests
 
 ```bash
-./mvnw test
+./mvnw clean test
+```
+
+### View the Coverage Report
+
+After running the test suite, JaCoCo generates an HTML coverage report in:
+
+```text
+target/site/jacoco/
+```
+
+To serve the report locally:
+
+```bash
+python3 -m http.server 8000 --directory target/site/jacoco
+```
+
+Then open:
+
+```text
+http://localhost:8000
 ```
 
 ---
 
 ## Planned Features
 
-- Dashboard Analytics
-- Responsive React Frontend
-- Automated Backend Testing
-- Production Deployment
+- Responsive React + TypeScript frontend
+- Frontend authentication and protected routes
+- Dashboard user interface
+- Transaction management interface
+- Budget management interface
+- Production deployment
 
 ---
 
@@ -320,7 +363,7 @@ Automated tests use a dedicated `test` Spring profile and an H2 in-memory databa
 - ✅ Day 10 – Budget Business Logic
 - ✅ Day 11 – Dashboard API
 - ✅ Day 12 – Testing Foundation
-- ⬜ Day 13 – Complete Backend Testing
+- ✅ Day 13 – Complete Backend Testing
 - ⬜ Day 14 – React + TypeScript
 - ⬜ Day 15 – Frontend Authentication
 - ⬜ Day 16 – Dashboard UI
