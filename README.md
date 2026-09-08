@@ -48,6 +48,10 @@ The application includes an aggregated dashboard API that combines transaction t
 
 - JUnit 5
 - Mockito
+- Spring Boot Test
+- MockMvc
+- Spring Security Test
+- H2 in-memory test database
 
 ### Deployment
 
@@ -140,36 +144,36 @@ The application includes an aggregated dashboard API that combines transaction t
 
 ## Current API Endpoints
 
-| Method | Endpoint                     | Description                                          |
-| ------ | ---------------------------- | ---------------------------------------------------- |
-| GET    | `/api/health`                | Application health check                             |
-|        |                              |                                                      |
-|        | **Authentication**           |                                                      |
-| POST   | `/api/auth/register`         | Register a new user                                  |
-| POST   | `/api/auth/login`            | Authenticate user and return a JWT                   |
-| GET    | `/api/auth/me`               | Return the currently authenticated user              |
-|        |                              |                                                      |
-|        | **Transactions**             |                                                      |
-| POST   | `/api/transactions`          | Create a new transaction                             |
-| GET    | `/api/transactions`          | Retrieve all authenticated user's transactions       |
-| GET    | `/api/transactions/{id}`     | Retrieve a specific authenticated user's transaction |
-| PUT    | `/api/transactions/{id}`     | Update a specific authenticated user's transaction   |
-| DELETE | `/api/transactions/{id}`     | Delete a specific authenticated user's transaction   |
-|        |                              |                                                      |
-|        | **Categories**               |                                                      |
-| POST   | `/api/categories`            | Create a new category                                |
-| GET    | `/api/categories`            | Retrieve all authenticated user's categories         |
-| GET    | `/api/categories/{id}`       | Retrieve a specific authenticated user's category    |
-| PUT    | `/api/categories/{id}`       | Update a specific authenticated user's category      |
-| DELETE | `/api/categories/{id}`       | Delete a specific authenticated user's category      |
-|        |                              |                                                      |
-|        | **Budgets**                  |                                                      |
-| POST   | `/api/budgets`               | Create a monthly budget                              |
-| GET    | `/api/budgets`               | Retrieve all authenticated user's budgets            |
-| GET    | `/api/budgets/{id}`          | Retrieve a specific authenticated user's budget      |
-| GET    | `/api/budgets/{id}analytics` | Retrieve spending analytics for a specific budget    |
-| PUT    | `/api/budgets/{id}`          | Update a specific authenticated user's budget        |
-| DELETE | `/api/budgets/{id}`          | Delete a specific authenticated user's budget        |
+| Method | Endpoint                      | Description                                          |
+| ------ | ----------------------------- | ---------------------------------------------------- |
+| GET    | `/api/health`                 | Application health check                             |
+|        |                               |                                                      |
+|        | **Authentication**            |                                                      |
+| POST   | `/api/auth/register`          | Register a new user                                  |
+| POST   | `/api/auth/login`             | Authenticate user and return a JWT                   |
+| GET    | `/api/auth/me`                | Return the currently authenticated user              |
+|        |                               |                                                      |
+|        | **Transactions**              |                                                      |
+| POST   | `/api/transactions`           | Create a new transaction                             |
+| GET    | `/api/transactions`           | Retrieve all authenticated user's transactions       |
+| GET    | `/api/transactions/{id}`      | Retrieve a specific authenticated user's transaction |
+| PUT    | `/api/transactions/{id}`      | Update a specific authenticated user's transaction   |
+| DELETE | `/api/transactions/{id}`      | Delete a specific authenticated user's transaction   |
+|        |                               |                                                      |
+|        | **Categories**                |                                                      |
+| POST   | `/api/categories`             | Create a new category                                |
+| GET    | `/api/categories`             | Retrieve all authenticated user's categories         |
+| GET    | `/api/categories/{id}`        | Retrieve a specific authenticated user's category    |
+| PUT    | `/api/categories/{id}`        | Update a specific authenticated user's category      |
+| DELETE | `/api/categories/{id}`        | Delete a specific authenticated user's category      |
+|        |                               |                                                      |
+|        | **Budgets**                   |                                                      |
+| POST   | `/api/budgets`                | Create a monthly budget                              |
+| GET    | `/api/budgets`                | Retrieve all authenticated user's budgets            |
+| GET    | `/api/budgets/{id}`           | Retrieve a specific authenticated user's budget      |
+| GET    | `/api/budgets/{id}/analytics` | Retrieve spending analytics for a specific budget    |
+| PUT    | `/api/budgets/{id}`           | Update a specific authenticated user's budget        |
+| DELETE | `/api/budgets/{id}`           | Delete a specific authenticated user's budget        |
 
 ### Dashboard
 
@@ -270,6 +274,29 @@ http://localhost:8080/api/health
 
 ---
 
+## Automated Testing
+
+The backend includes an automated test suite built with JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, and H2.
+
+The test suite currently establishes coverage patterns for:
+
+- Spring application context loading
+- Service-layer unit testing with Mockito
+- User-scoped transaction ownership behavior
+- Controller behavior with MockMvc
+- JWT generation, validation, and claim extraction
+- Budget analytics and status business logic
+
+Automated tests use a dedicated `test` Spring profile and an H2 in-memory database, allowing the test suite to run independently from the local MySQL development database.
+
+### Run All Tests
+
+```bash
+./mvnw test
+```
+
+---
+
 ## Planned Features
 
 - Dashboard Analytics
@@ -292,7 +319,7 @@ http://localhost:8080/api/health
 - ✅ Day 9 – Budgets
 - ✅ Day 10 – Budget Business Logic
 - ✅ Day 11 – Dashboard API
-- ⬜ Day 12 – Testing Foundation
+- ✅ Day 12 – Testing Foundation
 - ⬜ Day 13 – Complete Backend Testing
 - ⬜ Day 14 – React + TypeScript
 - ⬜ Day 15 – Frontend Authentication
@@ -313,3 +340,7 @@ Coming soon...
 ## License
 
 This project is licensed under the MIT License.
+
+```
+
+```
