@@ -13,6 +13,8 @@
 
 A production-quality full-stack personal finance management application built with **Java, Spring Boot, React, TypeScript, and MySQL**.
 
+The application includes an aggregated dashboard API that combines transaction totals, monthly spending, recent activity, category breakdowns, and budget analytics into a single authenticated response.
+
 > **Note:** This project uses fictional/demo financial data only. It does **not** connect to real banks, process real financial transactions, or provide financial advice.
 
 ---
@@ -122,6 +124,18 @@ A production-quality full-stack personal finance management application built wi
 - Swagger / OpenAPI documentation
 - Health endpoint
 
+### Dashboard
+
+- Authenticated dashboard summary endpoint
+- All-time income and expense totals
+- Calculated current balance
+- Current-month income and expense totals
+- Five most recent transactions
+- Current-month spending grouped by category
+- Current-month budget summaries with analytics and status
+- User-scoped dashboard data based on JWT authentication
+- Graceful empty-state responses for users with no financial activity
+
 ---
 
 ## Current API Endpoints
@@ -156,6 +170,12 @@ A production-quality full-stack personal finance management application built wi
 | GET    | `/api/budgets/{id}analytics` | Retrieve spending analytics for a specific budget    |
 | PUT    | `/api/budgets/{id}`          | Update a specific authenticated user's budget        |
 | DELETE | `/api/budgets/{id}`          | Delete a specific authenticated user's budget        |
+
+### Dashboard
+
+| Method | Endpoint         | Description                                                  |
+| ------ | ---------------- | ------------------------------------------------------------ |
+| GET    | `/api/dashboard` | Returns the authenticated user's financial dashboard summary |
 
 ---
 
@@ -271,7 +291,7 @@ http://localhost:8080/api/health
 - ✅ Day 8 – Search Filtering & Sorting
 - ✅ Day 9 – Budgets
 - ✅ Day 10 – Budget Business Logic
-- ⬜ Day 11 – Dashboard API
+- ✅ Day 11 – Dashboard API
 - ⬜ Day 12 – Testing Foundation
 - ⬜ Day 13 – Complete Backend Testing
 - ⬜ Day 14 – React + TypeScript
