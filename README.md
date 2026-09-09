@@ -141,6 +141,20 @@ The application includes an aggregated dashboard API that combines transaction t
 - User-scoped dashboard data based on JWT authentication
 - Graceful empty-state responses for users with no financial activity
 
+### Frontend
+
+- React 19 + TypeScript frontend created with Vite
+- Organized frontend architecture for components, pages, services, types, hooks, context, utilities, and assets
+- TypeScript API contracts matching Spring Boot authentication, category, transaction, budget, dashboard, and error DTOs
+- Centralized API configuration using environment variables
+- Reusable typed API request service
+- Backend health service for API connectivity verification
+- React-to-Spring Boot communication verified
+- CORS configured for local Vite development
+- Basic application shell with navigation
+- Placeholder Dashboard, Login, Transactions, and Budgets pages
+- Responsive CSS foundation with reusable design variables
+
 ---
 
 ## Current API Endpoints
@@ -187,28 +201,46 @@ The application includes an aggregated dashboard API that combines transaction t
 ## Project Structure
 
 ```text
-src
-├── config
-├── controller
-├── dto
-│   ├── auth
-│   ├── budget
-│   ├── category
-│   ├── error
-│   └── transaction
-├── entity
-├── exception
-│   ├── auth
-│   ├── budget
-│   ├── category
-│   └── transaction
-├── repository
-├── security
-├── service
-└── FinanceOperationsDashboardApplication
-
-docs
-├── sql
+finance-operations-dashboard/
+├── src/
+│   ├── main/
+│   │   └── java/dev/portfolio/finance/
+│   │       ├── config/
+│   │       ├── controller/
+│   │       ├── dto/
+│   │       │   ├── auth/
+│   │       │   ├── budget/
+│   │       │   ├── category/
+│   │       │   ├── dashboard/
+│   │       │   ├── error/
+│   │       │   └── transaction/
+│   │       ├── entity/
+│   │       ├── exception/
+│   │       ├── repository/
+│   │       ├── security/
+│   │       ├── service/
+│   │       └── specification/
+│   └── test/
+├── frontend/
+│   ├── public/
+│   └── src/
+│       ├── assets/
+│       ├── components/
+│       ├── context/
+│       ├── hooks/
+│       ├── pages/
+│       ├── services/
+│       ├── types/
+│       ├── utils/
+│       ├── App.css
+│       ├── App.tsx
+│       ├── index.css
+│       └── main.tsx
+├── docs/
+│   └── sql/
+├── scripts/
+├── pom.xml
+└── README.md
 ```
 
 ---
@@ -220,6 +252,8 @@ Before running the project, make sure you have installed:
 - Java 21
 - Maven
 - MySQL 9+
+- Node.js
+- npm
 - Git
 
 ---
@@ -274,6 +308,43 @@ http://localhost:8080/api/health
 ```
 
 ---
+
+### Run the Frontend
+
+From the project root:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The Vite development server runs at:
+
+```text
+http://localhost:5173
+```
+
+The frontend uses the following environment variable:
+
+```env
+VITE_API_BASE_URL=http://localhost:8080
+```
+
+The local Spring Boot CORS configuration allows requests from the Vite development server at `http://localhost:5173`.
+
+### Build the Frontend
+
+```bash
+cd frontend
+npm run build
+```
+
+Vite generates the production build in:
+
+```text
+frontend/dist/
+```
 
 ## Automated Testing
 
@@ -340,12 +411,14 @@ http://localhost:8000
 
 ## Planned Features
 
-- Responsive React + TypeScript frontend
 - Frontend authentication and protected routes
-- Dashboard user interface
+- Dashboard data visualization
 - Transaction management interface
-- Budget management interface
+- Budget management and analytics interface
+- Frontend automated testing with Vitest and React Testing Library
 - Production deployment
+- Accessibility and Lighthouse review
+- Final responsive UI polish
 
 ---
 
@@ -358,14 +431,14 @@ http://localhost:8000
 - ✅ Day 5 – Transactions
 - ✅ Day 6 – Transaction CRUD
 - ✅ Day 7 – Categories
-- ✅ Day 8 – Search Filtering & Sorting
+- ✅ Day 8 – Search, Filtering & Sorting
 - ✅ Day 9 – Budgets
-- ✅ Day 10 – Budget Business Logic
+- ✅ Day 10 – Budget Business Logic & Analytics
 - ✅ Day 11 – Dashboard API
 - ✅ Day 12 – Testing Foundation
 - ✅ Day 13 – Complete Backend Testing
-- ⬜ Day 14 – React + TypeScript
-- ⬜ Day 15 – Frontend Authentication
+- ✅ Day 14 – React + TypeScript Foundation
+- ⬜ Day 15 – Frontend Authentication & Testing
 - ⬜ Day 16 – Dashboard UI
 - ⬜ Day 17 – Transaction Management
 - ⬜ Day 18 – Budget UI
@@ -383,7 +456,3 @@ Coming soon...
 ## License
 
 This project is licensed under the MIT License.
-
-```
-
-```
