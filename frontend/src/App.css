@@ -84,4 +84,102 @@
   .app-main section {
     padding: 1.5rem;
   }
+
+  .auth-card {
+    max-width: 520px;
+    margin: 2rem auto;
+  }
+
+  .auth-card__header {
+    margin-bottom: 1.5rem;
+  }
+
+  .auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-field label {
+    font-weight: 600;
+  }
+
+  .form-field input {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.75rem;
+
+    background-color: var(--color-surface);
+    color: var(--color-text);
+
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .form-field input:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  .button {
+    min-height: 44px;
+    padding: 0.75rem 1rem;
+
+    border: 0;
+    border-radius: var(--radius-sm);
+
+    font-weight: 600;
+  }
+
+  .button--primary {
+    background-color: var(--color-primary);
+    color: #ffffff;
+  }
+
+  .button--primary:hover:not(:disabled) {
+    background-color: var(--color-primary-dark);
+  }
+
+  .button:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+
+  .form-error,
+  .field-error {
+    color: var(--color-danger);
+  }
+
+  .field-error {
+    margin-bottom: 0;
+    font-size: 0.875rem;
+  }
+
+  .app-user {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .app-user__name {
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  .button--secondary {
+    background-color: var(--color-background);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+  }
+
+  .button--secondary:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
 }

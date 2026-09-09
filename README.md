@@ -46,6 +46,8 @@ The application includes an aggregated dashboard API that combines transaction t
 
 ### Testing
 
+**Backend**
+
 - JUnit 5
 - Mockito
 - Spring Boot Test
@@ -53,6 +55,13 @@ The application includes an aggregated dashboard API that combines transaction t
 - Spring Security Test
 - H2 in-memory test database
 - JaCoCo
+
+**Frontend**
+
+- Vitest
+- React Testing Library
+- jest-dom
+- jsdom
 
 ### Deployment
 
@@ -148,12 +157,21 @@ The application includes an aggregated dashboard API that combines transaction t
 - TypeScript API contracts matching Spring Boot authentication, category, transaction, budget, dashboard, and error DTOs
 - Centralized API configuration using environment variables
 - Reusable typed API request service
+- JWT authentication integrated with the Spring Boot backend
+- Authentication service for registration, login, and current-user requests
+- JWT token storage using browser local storage
+- Automatic Bearer token attachment for authenticated API requests
+- React Context-based authentication state management
+- Authentication session restoration using `/api/auth/me`
+- Login and registration forms
+- Protected routes using React Router
+- Authenticated navigation for Dashboard, Transactions, and Budgets
+- Authenticated user display and logout functionality
 - Backend health service for API connectivity verification
 - React-to-Spring Boot communication verified
 - CORS configured for local Vite development
-- Basic application shell with navigation
-- Placeholder Dashboard, Login, Transactions, and Budgets pages
 - Responsive CSS foundation with reusable design variables
+- Frontend automated testing with Vitest and React Testing Library
 
 ---
 
@@ -346,6 +364,32 @@ Vite generates the production build in:
 frontend/dist/
 ```
 
+### Frontend Testing
+
+The React frontend includes focused automated tests built with **Vitest, React Testing Library, jest-dom, and jsdom**.
+
+Current frontend test suite:
+
+- **11 automated frontend tests**
+- **4 test files**
+- JWT token storage, retrieval, and removal
+- Protected route loading behavior
+- Unauthenticated route redirection
+- Authenticated protected-route access
+- Login form submission
+- Login error handling
+- Authenticated navigation rendering
+- Logout behavior
+
+Frontend tests focus on authentication and routing behavior that is critical to the application's user experience.
+
+To run the frontend test suite:
+
+```bash
+cd frontend
+npm test -- --run
+```
+
 ## Automated Testing
 
 The backend includes a comprehensive automated test suite built with **JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, and JaCoCo**.
@@ -411,11 +455,9 @@ http://localhost:8000
 
 ## Planned Features
 
-- Frontend authentication and protected routes
 - Dashboard data visualization
 - Transaction management interface
 - Budget management and analytics interface
-- Frontend automated testing with Vitest and React Testing Library
 - Production deployment
 - Accessibility and Lighthouse review
 - Final responsive UI polish
@@ -438,7 +480,7 @@ http://localhost:8000
 - ✅ Day 12 – Testing Foundation
 - ✅ Day 13 – Complete Backend Testing
 - ✅ Day 14 – React + TypeScript Foundation
-- ⬜ Day 15 – Frontend Authentication & Testing
+- ✅ Day 15 – Frontend Authentication & Testing
 - ⬜ Day 16 – Dashboard UI
 - ⬜ Day 17 – Transaction Management
 - ⬜ Day 18 – Budget UI

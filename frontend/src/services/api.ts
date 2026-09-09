@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "./apiConfig";
+import { getAuthToken } from "../utils/authToken";
 import type { ApiErrorResponse, ValidationErrorResponse } from "../types/api";
 
 export class ApiError extends Error {
@@ -22,10 +23,17 @@ export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const token = getAuthToken();
+
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(token
+        ? {
+            Authorization: `Bearer ${token}`,
+          }
+        : {}),
       ...options.headers,
     },
   });
