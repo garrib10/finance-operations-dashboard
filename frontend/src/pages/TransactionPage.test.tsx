@@ -170,6 +170,111 @@ describe("TransactionPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("updates a transaction after editing", async () => {
+    const user = userEvent.setup();
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Edit",
+      }),
+    );
+
+    const descriptionInput = screen.getByLabelText("Description");
+
+    await user.clear(descriptionInput);
+    await user.type(descriptionInput, "Updated Grocery Store");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Update Transaction",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(transactionService.updateTransaction).toHaveBeenCalledWith(1, {
+        categoryId: 1,
+        type: "EXPENSE",
+        amount: 75.5,
+        description: "Updated Grocery Store",
+        transactionDate: "2026-09-10",
+      });
+    });
+  });
+
+  it("deletes a transaction after confirmation", async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Delete",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(transactionService.deleteTransaction).toHaveBeenCalledWith(1);
+    });
+
+    await waitFor(() => {
+      expect(transactionService.getTransactions).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("does not delete a transaction when confirmation is cancelled", async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Delete",
+      }),
+    );
+
+    expect(transactionService.deleteTransaction).not.toHaveBeenCalled();
+    expect(screen.getByText("Food Lion")).toBeInTheDocument();
+  });
+
+  it("shows an error when creating a transaction fails", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(transactionService.createTransaction).mockRejectedValue(
+      new Error("Request failed"),
+    );
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+
+    await user.selectOptions(screen.getByLabelText("Category"), "1");
+    await user.type(screen.getByLabelText("Amount"), "75.50");
+    await user.type(screen.getByLabelText("Description"), "Grocery Store");
+    await user.type(screen.getByLabelText("Date"), "2026-09-10");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Add Transaction",
+      }),
+    );
+
+    expect(
+      await screen.findByText("Unable to save transaction. Please try again."),
+    ).toBeInTheDocument();
+  });
+
   it("applies transaction filters", async () => {
     const user = userEvent.setup();
 

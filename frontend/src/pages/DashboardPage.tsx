@@ -1,9 +1,27 @@
 import { useEffect, useState } from "react";
-
 import { ApiError } from "../services/api";
 import { getDashboard } from "../services/dashboardService";
 import type { DashboardResponse } from "../types/dashboard";
 import { formatCurrency, formatDate } from "../utils/formatters";
+
+function formatBudgetStatus(status: string): string {
+  switch (status) {
+    case "ON_TRACK":
+      return "On Track";
+
+    case "CAUTION":
+      return "Caution";
+
+    case "WARNING":
+      return "Warning";
+
+    case "OVER_BUDGET":
+      return "Over Budget";
+
+    default:
+      return status;
+  }
+}
 
 function DashboardPage() {
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
@@ -210,30 +228,34 @@ function DashboardPage() {
                 <div className="budget-summary-card__header">
                   <h3>{budget.categoryName}</h3>
 
-                  <span className="budget-status">{budget.status}</span>
+                  <span
+                    className={`budget-status budget-status--${budget.status.toLowerCase()}`}
+                  >
+                    {formatBudgetStatus(budget.status)}
+                  </span>
                 </div>
 
                 <dl className="budget-details">
                   <div>
-                    <dt>Monthly Limit</dt>
+                    <dt>Monthly Limit:</dt>
 
                     <dd>{formatCurrency(budget.monthlyLimit)}</dd>
                   </div>
 
                   <div>
-                    <dt>Spent</dt>
+                    <dt>Spent:</dt>
 
                     <dd>{formatCurrency(budget.amountSpent)}</dd>
                   </div>
 
                   <div>
-                    <dt>Remaining</dt>
+                    <dt>Remaining:</dt>
 
                     <dd>{formatCurrency(budget.amountRemaining)}</dd>
                   </div>
 
                   <div>
-                    <dt>Used</dt>
+                    <dt>Used:</dt>
 
                     <dd>{budget.percentageUsed.toFixed(1)}%</dd>
                   </div>

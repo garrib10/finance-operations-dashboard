@@ -43,6 +43,7 @@ The application includes secure JWT authentication, transaction and budget manag
 - React
 - TypeScript
 - Vite
+- Recharts
 
 ### Testing
 
@@ -162,8 +163,12 @@ The application includes secure JWT authentication, transaction and budget manag
 - Financial dashboard with summary cards, recent transactions, category spending, and monthly budget analytics
 - Transaction management with create, edit, delete, and category integration
 - Backend-powered transaction search, filtering, sorting, and pagination
+- Budget management with create, edit, delete, and category integration
+- Month and year budget filtering with period-specific empty states
+- Budget analytics with spending, remaining balance, utilization percentage, and status tracking
+- Budget vs. Spending and Budget Utilization visualizations built with Recharts
 - Reusable currency and date formatting utilities
-- Loading, empty-state, validation, and API error handling
+- Loading, empty-state, validation, business-rule, and API error handling
 - Responsive layouts for desktop, tablet, and mobile
 - Automated frontend testing with Vitest and React Testing Library
 
@@ -358,35 +363,22 @@ Vite generates the production build in:
 frontend/dist/
 ```
 
-### Frontend Testing
+## Frontend Testing
 
-The React frontend includes focused automated tests built with **Vitest, React Testing Library, jest-dom, and jsdom**.
+The React + TypeScript frontend is tested with Vitest and React Testing Library.
 
-Current frontend test suite:
+Current frontend test coverage includes:
 
-- **22 automated frontend tests**
-- **6 test files**
-- JWT token storage, retrieval, and removal
-- Protected route loading behavior
-- Unauthenticated route redirection
-- Authenticated protected-route access
-- Login form submission
-- Login error handling
-- Authenticated navigation rendering
-- Logout behavior
-- Dashboard loading state
-- Successful dashboard data rendering
-- Dashboard empty-state behavior
-- Dashboard API failure handling
-- Transaction loading state
-- Successful transaction data rendering
-- Transaction empty-state behavior
-- Transaction creation
-- Transaction edit-mode behavior
-- Transaction search and filtering
-- Transaction pagination with active filter and sort preservation
+- Authentication and protected-route behavior
+- Dashboard loading, success, empty, and error states
+- Budget status rendering for On Track, Caution, Warning, and Over Budget
+- Transaction loading, CRUD interactions, filtering, pagination, and error handling
+- Budget creation, editing, deletion, filtering, analytics, chart rendering, duplicate-budget errors, and empty states
+- Local storage token utilities
 
-Frontend tests focus on authentication, protected routing, dashboard data rendering, transaction management, filtering, pagination, empty states, and user-visible error handling.
+**Current frontend suite: 37 tests across 7 test files.**
+
+Frontend tests focus on authentication, protected routing, dashboard data rendering, transaction and budget management, filtering, pagination, analytics, business-rule handling, empty states, and user-visible error handling.
 
 To run the frontend test suite:
 
@@ -460,7 +452,6 @@ http://localhost:8000
 
 ## Planned Features
 
-- Budget management and analytics interface
 - Production deployment
 - Accessibility and Lighthouse review
 - Final responsive UI polish
@@ -486,7 +477,7 @@ http://localhost:8000
 - ✅ Day 15 – Frontend Authentication & Testing
 - ✅ Day 16 – Dashboard UI
 - ✅ Day 17 – Transaction Management
-- ⬜ Day 18 – Budget UI
+- ✅ Day 18 – Budget UI
 - ⬜ Day 19 – Deployment
 - ⬜ Day 20 – Documentation & Portfolio Polish
 

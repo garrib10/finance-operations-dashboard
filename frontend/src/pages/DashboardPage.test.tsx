@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import DashboardPage from "./DashboardPage";
 import * as DashboardService from "../services/dashboardService";
@@ -41,6 +41,10 @@ const dashboardResponse: DashboardResponse = {
 };
 
 describe("DashboardPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("shows a loading state while dashboard data is loading", () => {
     mockedGetDashboard.mockReturnValue(new Promise(() => {}));
 
@@ -88,6 +92,64 @@ describe("DashboardPage", () => {
     ).toBeInTheDocument();
 
     expect(screen.getAllByText("$0.00")).toHaveLength(5);
+  });
+
+  it("renders every budget status with a human-readable label", async () => {
+    mockedGetDashboard.mockResolvedValue({
+      ...dashboardResponse,
+      budgetSummaries: [
+        {
+          budgetId: 1,
+          categoryId: 1,
+          categoryName: "Groceries",
+          monthlyLimit: 500,
+          amountSpent: 50,
+          amountRemaining: 450,
+          percentageUsed: 10,
+          status: "ON_TRACK",
+        },
+        {
+          budgetId: 2,
+          categoryId: 2,
+          categoryName: "Dining",
+          monthlyLimit: 100,
+          amountSpent: 75,
+          amountRemaining: 25,
+          percentageUsed: 75,
+          status: "CAUTION",
+        },
+        {
+          budgetId: 3,
+          categoryId: 3,
+          categoryName: "Entertainment",
+          monthlyLimit: 100,
+          amountSpent: 90,
+          amountRemaining: 10,
+          percentageUsed: 90,
+          status: "WARNING",
+        },
+        {
+          budgetId: 4,
+          categoryId: 4,
+          categoryName: "Shopping",
+          monthlyLimit: 100,
+          amountSpent: 125,
+          amountRemaining: -25,
+          percentageUsed: 125,
+          status: "OVER_BUDGET",
+        },
+      ],
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("On Track")).toBeInTheDocument();
+    expect(screen.getByText("Caution")).toBeInTheDocument();
+    expect(screen.getByText("Warning")).toBeInTheDocument();
+    expect(screen.getByText("Over Budget")).toBeInTheDocument();
+
+    expect(screen.queryByText("ON_TRACK")).not.toBeInTheDocument();
+    expect(screen.queryByText("OVER_BUDGET")).not.toBeInTheDocument();
   });
 
   it("shows an error when dashboard loading fails", async () => {
