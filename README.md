@@ -172,8 +172,15 @@ The application includes an aggregated dashboard API that combines transaction t
 - CORS configured for local Vite development
 - Responsive CSS foundation with reusable design variables
 - Frontend automated testing with Vitest and React Testing Library
-
----
+- Authenticated dashboard data loading from `/api/dashboard`
+- Financial summary cards for current balance, total income, total expenses, monthly income, and monthly expenses
+- Recent transactions dashboard section with empty-state handling
+- Current-month spending by category display
+- Current-month budget summaries with utilization percentage and status
+- Reusable currency and date formatting utilities
+- Dashboard loading, success, empty-state, and error handling
+- Responsive dashboard layout for desktop, tablet, and mobile
+- Automated dashboard testing with Vitest and React Testing Library
 
 ## Current API Endpoints
 
@@ -370,8 +377,8 @@ The React frontend includes focused automated tests built with **Vitest, React T
 
 Current frontend test suite:
 
-- **11 automated frontend tests**
-- **4 test files**
+- **15 automated frontend tests**
+- **5 test files**
 - JWT token storage, retrieval, and removal
 - Protected route loading behavior
 - Unauthenticated route redirection
@@ -380,8 +387,12 @@ Current frontend test suite:
 - Login error handling
 - Authenticated navigation rendering
 - Logout behavior
+- Dashboard loading state
+- Successful dashboard data rendering
+- Dashboard empty-state behavior
+- Dashboard API failure handling
 
-Frontend tests focus on authentication and routing behavior that is critical to the application's user experience.
+Frontend tests focus on authentication, protected routing, dashboard data rendering, empty states, and user-visible error handling.
 
 To run the frontend test suite:
 
@@ -455,7 +466,6 @@ http://localhost:8000
 
 ## Planned Features
 
-- Dashboard data visualization
 - Transaction management interface
 - Budget management and analytics interface
 - Production deployment
@@ -481,7 +491,7 @@ http://localhost:8000
 - ✅ Day 13 – Complete Backend Testing
 - ✅ Day 14 – React + TypeScript Foundation
 - ✅ Day 15 – Frontend Authentication & Testing
-- ⬜ Day 16 – Dashboard UI
+- ✅ Day 16 – Dashboard UI
 - ⬜ Day 17 – Transaction Management
 - ⬜ Day 18 – Budget UI
 - ⬜ Day 19 – Deployment
