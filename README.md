@@ -13,7 +13,7 @@
 
 A production-quality full-stack personal finance management application built with **Java, Spring Boot, React, TypeScript, and MySQL**.
 
-The application includes an aggregated dashboard API that combines transaction totals, monthly spending, recent activity, category breakdowns, and budget analytics into a single authenticated response.
+The application includes secure JWT authentication, transaction and budget management, search and filtering, financial analytics, and an aggregated dashboard that combines transaction totals, monthly spending, recent activity, category breakdowns, and budget analytics.
 
 > **Note:** This project uses fictional/demo financial data only. It does **not** connect to real banks, process real financial transactions, or provide financial advice.
 
@@ -152,35 +152,22 @@ The application includes an aggregated dashboard API that combines transaction t
 
 ### Frontend
 
-- React 19 + TypeScript frontend created with Vite
-- Organized frontend architecture for components, pages, services, types, hooks, context, utilities, and assets
-- TypeScript API contracts matching Spring Boot authentication, category, transaction, budget, dashboard, and error DTOs
-- Centralized API configuration using environment variables
-- Reusable typed API request service
-- JWT authentication integrated with the Spring Boot backend
-- Authentication service for registration, login, and current-user requests
-- JWT token storage using browser local storage
-- Automatic Bearer token attachment for authenticated API requests
-- React Context-based authentication state management
-- Authentication session restoration using `/api/auth/me`
-- Login and registration forms
-- Protected routes using React Router
+- React 19 + TypeScript frontend built with Vite
+- Organized component, page, service, type, context, and utility architecture
+- Type-safe API integration with the Spring Boot backend
+- JWT authentication with login, registration, session restoration, protected routes, and logout
 - Authenticated navigation for Dashboard, Transactions, and Budgets
-- Authenticated user display and logout functionality
-- Backend health service for API connectivity verification
-- React-to-Spring Boot communication verified
-- CORS configured for local Vite development
-- Responsive CSS foundation with reusable design variables
-- Frontend automated testing with Vitest and React Testing Library
-- Authenticated dashboard data loading from `/api/dashboard`
-- Financial summary cards for current balance, total income, total expenses, monthly income, and monthly expenses
-- Recent transactions dashboard section with empty-state handling
-- Current-month spending by category display
-- Current-month budget summaries with utilization percentage and status
+- Centralized API request handling with automatic Bearer token authentication
+- Responsive UI built with reusable custom CSS and design variables
+- Financial dashboard with summary cards, recent transactions, category spending, and monthly budget analytics
+- Transaction management with create, edit, delete, and category integration
+- Backend-powered transaction search, filtering, sorting, and pagination
 - Reusable currency and date formatting utilities
-- Dashboard loading, success, empty-state, and error handling
-- Responsive dashboard layout for desktop, tablet, and mobile
-- Automated dashboard testing with Vitest and React Testing Library
+- Loading, empty-state, validation, and API error handling
+- Responsive layouts for desktop, tablet, and mobile
+- Automated frontend testing with Vitest and React Testing Library
+
+---
 
 ## Current API Endpoints
 
@@ -377,8 +364,8 @@ The React frontend includes focused automated tests built with **Vitest, React T
 
 Current frontend test suite:
 
-- **15 automated frontend tests**
-- **5 test files**
+- **22 automated frontend tests**
+- **6 test files**
 - JWT token storage, retrieval, and removal
 - Protected route loading behavior
 - Unauthenticated route redirection
@@ -391,8 +378,15 @@ Current frontend test suite:
 - Successful dashboard data rendering
 - Dashboard empty-state behavior
 - Dashboard API failure handling
+- Transaction loading state
+- Successful transaction data rendering
+- Transaction empty-state behavior
+- Transaction creation
+- Transaction edit-mode behavior
+- Transaction search and filtering
+- Transaction pagination with active filter and sort preservation
 
-Frontend tests focus on authentication, protected routing, dashboard data rendering, empty states, and user-visible error handling.
+Frontend tests focus on authentication, protected routing, dashboard data rendering, transaction management, filtering, pagination, empty states, and user-visible error handling.
 
 To run the frontend test suite:
 
@@ -466,7 +460,6 @@ http://localhost:8000
 
 ## Planned Features
 
-- Transaction management interface
 - Budget management and analytics interface
 - Production deployment
 - Accessibility and Lighthouse review
@@ -492,7 +485,7 @@ http://localhost:8000
 - ✅ Day 14 – React + TypeScript Foundation
 - ✅ Day 15 – Frontend Authentication & Testing
 - ✅ Day 16 – Dashboard UI
-- ⬜ Day 17 – Transaction Management
+- ✅ Day 17 – Transaction Management
 - ⬜ Day 18 – Budget UI
 - ⬜ Day 19 – Deployment
 - ⬜ Day 20 – Documentation & Portfolio Polish

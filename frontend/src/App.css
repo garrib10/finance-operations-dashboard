@@ -2,6 +2,16 @@
   min-height: 100vh;
 }
 
+/* Page headers */
+
+.app-main > section > div:first-child {
+  margin-bottom: 1.5rem;
+}
+
+.app-main > section > section + section {
+  margin-top: 1.5rem;
+}
+
 .app-header {
   background-color: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
@@ -11,7 +21,6 @@
   width: min(100% - 2rem, var(--content-width));
   min-height: 64px;
   margin: 0 auto;
-
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -94,10 +103,8 @@
   width: 100%;
   min-height: 44px;
   padding: 0.75rem;
-
   background-color: var(--color-surface);
   color: var(--color-text);
-
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
 }
@@ -110,10 +117,8 @@
 .button {
   min-height: 44px;
   padding: 0.75rem 1rem;
-
   border: 0;
   border-radius: var(--radius-sm);
-
   font-weight: 600;
 }
 
@@ -177,10 +182,8 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 1.25rem;
-
   border: 1px solid var(--color-border);
   border-radius: 0.75rem;
-
   background-color: var(--color-surface);
   box-shadow: var(--shadow-sm);
 }
@@ -204,10 +207,8 @@
 
 .dashboard-panel {
   padding: 1.5rem;
-
   border: 1px solid var(--color-border);
   border-radius: 0.75rem;
-
   background-color: var(--color-surface);
   box-shadow: var(--shadow-sm);
 }
@@ -267,7 +268,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-
   padding: 0.85rem 0;
   border-bottom: 1px solid var(--color-border);
 }
@@ -284,7 +284,6 @@
 
 .budget-summary-card {
   padding: 1.25rem;
-
   border: 1px solid var(--color-border);
   border-radius: 0.75rem;
 }
@@ -294,7 +293,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-
   margin-bottom: 1rem;
 }
 
@@ -305,9 +303,7 @@
 .budget-status {
   padding: 0.25rem 0.5rem;
   border-radius: 999px;
-
   background-color: var(--color-background);
-
   font-size: 0.8rem;
   font-weight: 600;
 }
@@ -316,7 +312,6 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
-
   margin: 0 0 1rem;
 }
 
@@ -339,9 +334,7 @@
 .budget-progress {
   width: 100%;
   height: 0.6rem;
-
   overflow: hidden;
-
   border-radius: 999px;
   background-color: var(--color-background);
 }
@@ -350,6 +343,73 @@
   height: 100%;
   border-radius: inherit;
   background-color: var(--color-primary);
+}
+
+/* Transactions */
+
+.transaction-form,
+.transaction-filters {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.transaction-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.transaction-filters {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.transaction-form .form-field,
+.transaction-filters .form-field {
+  min-width: 0;
+}
+
+.transaction-form select,
+.transaction-filters select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.75rem;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.transaction-form select:focus,
+.transaction-filters select:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.transaction-form > div:last-child,
+.transaction-filters > div:last-child {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.data-table td:last-child {
+  white-space: nowrap;
+}
+
+.data-table td:last-child .button + .button {
+  margin-left: 0.5rem;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.pagination__status {
+  color: var(--color-text-muted);
+  font-weight: 600;
 }
 
 /* Tablet */
@@ -361,6 +421,10 @@
 
   .dashboard-grid {
     grid-template-columns: 1fr;
+  }
+
+  .transaction-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -377,6 +441,21 @@
 
   .budget-details {
     grid-template-columns: 1fr;
+  }
+
+  .transaction-form,
+  .transaction-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-form > div:last-child,
+  .transaction-filters > div:last-child {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pagination {
+    justify-content: space-between;
   }
 }
 

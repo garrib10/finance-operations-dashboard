@@ -1,5 +1,9 @@
 export type TransactionType = "INCOME" | "EXPENSE";
 
+export type TransactionSortField = "amount" | "transactionDate" | "createdAt";
+
+export type SortDirection = "asc" | "desc";
+
 export interface CreateTransactionRequest {
   categoryId: number;
   type: TransactionType;
@@ -35,8 +39,8 @@ export interface TransactionFilterRequest {
   endDate?: string;
   minAmount?: number;
   maxAmount?: number;
-  sortBy?: string;
-  sortDirection?: string;
+  sortBy?: TransactionSortField;
+  sortDirection?: SortDirection;
   page?: number;
   size?: number;
 }
