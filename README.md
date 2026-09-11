@@ -478,7 +478,7 @@ http://localhost:8000
 - ✅ Day 16 – Dashboard UI
 - ✅ Day 17 – Transaction Management
 - ✅ Day 18 – Budget UI
-- ⬜ Day 19 – Deployment
+- ⬜ Day 19 – Deployment - In Progress
 - ⬜ Day 20 – Documentation & Portfolio Polish
 
 ---
