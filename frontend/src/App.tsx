@@ -13,19 +13,20 @@ import TransactionPage from "./pages/TransactionPage";
 function App() {
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
+
       <AppHeader />
 
-      <main className="app-main">
+      <main id="main-content" className="app-main" tabIndex={-1}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-
           <Route path="/register" element={<RegisterPage />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<DashboardPage />} />
-
             <Route path="/transactions" element={<TransactionPage />} />
-
             <Route path="/budgets" element={<BudgetPage />} />
           </Route>
 
