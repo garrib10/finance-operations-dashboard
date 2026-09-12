@@ -407,10 +407,14 @@ The frontend runs at `http://localhost:5173`.
 - Add database migrations with Flyway or Liquibase
 - Add refresh-token support and token revocation
 - Add a custom-category workflow where selecting `Other` displays a field for entering and saving a new category
-- Add automated CI/CD quality gates with GitHub Actions
+- Add an accessible user-account menu with an initials avatar, profile, account settings, and logout options
+- Add optional profile-photo upload with secure file validation and object storage
+- Add profile management, password-change controls, and account preferences
+- Automatically scroll to and focus the transaction or budget form when a user selects a record to edit
+- Improve budget progress-bar accessibility with proper progress-bar roles, values, and assistive-technology support
+- Add backend and frontend coverage reporting with enforceable quality thresholds
 - Add production monitoring and structured application metrics
 - Build a separate Selenium end-to-end automation suite covering deployed FinTrack workflows
-- Automatically scroll to and focus the transaction form when a user selects a transaction to edit
 
 ---
 
