@@ -75,3 +75,30 @@ p {
 button {
   cursor: pointer;
 }
+
+/* Provide a visible focus indicator for keyboard navigation. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+
+/* Hide the skip link until it receives keyboard focus. */
+.skip-link {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 1000;
+  padding: 0.75rem 1rem;
+  color: #ffffff;
+  background: #1f2937;
+  border-radius: 0.375rem;
+  transform: translateY(-200%);
+  transition: transform 0.15s ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
