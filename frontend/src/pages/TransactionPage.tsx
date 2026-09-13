@@ -690,7 +690,10 @@ function TransactionPage() {
 
               <tbody>
                 {transactionData?.transactions.map((transaction) => (
-                  <tr key={transaction.id}>
+                  <tr
+                    key={transaction.id}
+                    data-testid={`transaction-row-${transaction.id}`}
+                  >
                     <td>{formatDate(transaction.transactionDate)}</td>
 
                     <td>{transaction.description}</td>

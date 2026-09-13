@@ -40,6 +40,49 @@ const dashboardResponse: DashboardResponse = {
   budgetSummaries: [],
 };
 
+const budgetSummaries: DashboardResponse["budgetSummaries"] = [
+  {
+    budgetId: 1,
+    categoryId: 1,
+    categoryName: "Groceries",
+    monthlyLimit: 500,
+    amountSpent: 50,
+    amountRemaining: 450,
+    percentageUsed: 10,
+    status: "ON_TRACK",
+  },
+  {
+    budgetId: 2,
+    categoryId: 2,
+    categoryName: "Dining",
+    monthlyLimit: 100,
+    amountSpent: 75,
+    amountRemaining: 25,
+    percentageUsed: 75,
+    status: "CAUTION",
+  },
+  {
+    budgetId: 3,
+    categoryId: 3,
+    categoryName: "Entertainment",
+    monthlyLimit: 100,
+    amountSpent: 90,
+    amountRemaining: 10,
+    percentageUsed: 90,
+    status: "WARNING",
+  },
+  {
+    budgetId: 4,
+    categoryId: 4,
+    categoryName: "Shopping",
+    monthlyLimit: 100,
+    amountSpent: 125,
+    amountRemaining: -25,
+    percentageUsed: 125,
+    status: "OVER_BUDGET",
+  },
+];
+
 describe("DashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -59,6 +102,26 @@ describe("DashboardPage", () => {
     render(<DashboardPage />);
 
     expect(await screen.findByText("$3,250.00")).toBeInTheDocument();
+
+    expect(screen.getByTestId("summary-current-balance")).toHaveTextContent(
+      "$3,250.00",
+    );
+
+    expect(screen.getByTestId("summary-total-income")).toHaveTextContent(
+      "$5,000.00",
+    );
+
+    expect(screen.getByTestId("summary-total-expenses")).toHaveTextContent(
+      "$1,750.00",
+    );
+
+    expect(screen.getByTestId("summary-monthly-income")).toHaveTextContent(
+      "$3,000.00",
+    );
+
+    expect(screen.getByTestId("summary-monthly-expenses")).toHaveTextContent(
+      "$950.00",
+    );
 
     expect(screen.getByText("Grocery Store")).toBeInTheDocument();
 
@@ -97,48 +160,7 @@ describe("DashboardPage", () => {
   it("renders every budget status with a human-readable label", async () => {
     mockedGetDashboard.mockResolvedValue({
       ...dashboardResponse,
-      budgetSummaries: [
-        {
-          budgetId: 1,
-          categoryId: 1,
-          categoryName: "Groceries",
-          monthlyLimit: 500,
-          amountSpent: 50,
-          amountRemaining: 450,
-          percentageUsed: 10,
-          status: "ON_TRACK",
-        },
-        {
-          budgetId: 2,
-          categoryId: 2,
-          categoryName: "Dining",
-          monthlyLimit: 100,
-          amountSpent: 75,
-          amountRemaining: 25,
-          percentageUsed: 75,
-          status: "CAUTION",
-        },
-        {
-          budgetId: 3,
-          categoryId: 3,
-          categoryName: "Entertainment",
-          monthlyLimit: 100,
-          amountSpent: 90,
-          amountRemaining: 10,
-          percentageUsed: 90,
-          status: "WARNING",
-        },
-        {
-          budgetId: 4,
-          categoryId: 4,
-          categoryName: "Shopping",
-          monthlyLimit: 100,
-          amountSpent: 125,
-          amountRemaining: -25,
-          percentageUsed: 125,
-          status: "OVER_BUDGET",
-        },
-      ],
+      budgetSummaries,
     });
 
     render(<DashboardPage />);
@@ -150,6 +172,47 @@ describe("DashboardPage", () => {
 
     expect(screen.queryByText("ON_TRACK")).not.toBeInTheDocument();
     expect(screen.queryByText("OVER_BUDGET")).not.toBeInTheDocument();
+  });
+
+  it("exposes accessible budget progress values and caps over-budget progress", async () => {
+    mockedGetDashboard.mockResolvedValue({
+      ...dashboardResponse,
+      budgetSummaries,
+    });
+
+    render(<DashboardPage />);
+
+    const groceriesProgress = await screen.findByRole("progressbar", {
+      name: "Groceries budget utilization",
+    });
+
+    expect(groceriesProgress).toHaveAttribute("aria-valuemin", "0");
+    expect(groceriesProgress).toHaveAttribute("aria-valuemax", "100");
+    expect(groceriesProgress).toHaveAttribute("aria-valuenow", "10");
+    expect(groceriesProgress).toHaveAttribute("aria-valuetext", "10.0% used");
+
+    const groceriesBar = groceriesProgress.querySelector(
+      ".budget-progress__bar",
+    );
+
+    expect(groceriesBar).not.toBeNull();
+    expect(groceriesBar).toHaveStyle({ width: "10%" });
+
+    const shoppingProgress = screen.getByRole("progressbar", {
+      name: "Shopping budget utilization",
+    });
+
+    expect(shoppingProgress).toHaveAttribute("aria-valuemin", "0");
+    expect(shoppingProgress).toHaveAttribute("aria-valuemax", "100");
+    expect(shoppingProgress).toHaveAttribute("aria-valuenow", "100");
+    expect(shoppingProgress).toHaveAttribute("aria-valuetext", "125.0% used");
+
+    const shoppingBar = shoppingProgress.querySelector(".budget-progress__bar");
+
+    expect(shoppingBar).not.toBeNull();
+    expect(shoppingBar).toHaveStyle({ width: "100%" });
+
+    expect(screen.getAllByRole("progressbar")).toHaveLength(4);
   });
 
   it("shows an error when dashboard loading fails", async () => {

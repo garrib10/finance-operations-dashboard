@@ -23,6 +23,10 @@ function formatBudgetStatus(status: string): string {
   }
 }
 
+function clampProgressPercentage(percentage: number): number {
+  return Math.min(Math.max(percentage, 0), 100);
+}
+
 function DashboardPage() {
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
 
@@ -96,8 +100,10 @@ function DashboardPage() {
       <section className="dashboard-summary" aria-label="Financial summary">
         <article className="summary-card">
           <span className="summary-card__label">Current Balance</span>
-
-          <strong className="summary-card__value">
+          <strong
+            className="summary-card__value"
+            data-testid="summary-current-balance"
+          >
             {formatCurrency(dashboard.currentBalance)}
           </strong>
         </article>
@@ -105,7 +111,10 @@ function DashboardPage() {
         <article className="summary-card">
           <span className="summary-card__label">Total Income</span>
 
-          <strong className="summary-card__value">
+          <strong
+            className="summary-card__value"
+            data-testid="summary-total-income"
+          >
             {formatCurrency(dashboard.totalIncome)}
           </strong>
         </article>
@@ -113,7 +122,10 @@ function DashboardPage() {
         <article className="summary-card">
           <span className="summary-card__label">Total Expenses</span>
 
-          <strong className="summary-card__value">
+          <strong
+            className="summary-card__value"
+            data-testid="summary-total-expenses"
+          >
             {formatCurrency(dashboard.totalExpenses)}
           </strong>
         </article>
@@ -121,7 +133,10 @@ function DashboardPage() {
         <article className="summary-card">
           <span className="summary-card__label">Monthly Income</span>
 
-          <strong className="summary-card__value">
+          <strong
+            className="summary-card__value"
+            data-testid="summary-monthly-income"
+          >
             {formatCurrency(dashboard.monthlyIncome)}
           </strong>
         </article>
@@ -129,7 +144,10 @@ function DashboardPage() {
         <article className="summary-card">
           <span className="summary-card__label">Monthly Expenses</span>
 
-          <strong className="summary-card__value">
+          <strong
+            className="summary-card__value"
+            data-testid="summary-monthly-expenses"
+          >
             {formatCurrency(dashboard.monthlyExpenses)}
           </strong>
         </article>
@@ -263,12 +281,19 @@ function DashboardPage() {
 
                 <div
                   className="budget-progress"
+                  role="progressbar"
                   aria-label={`${budget.categoryName} budget utilization`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={clampProgressPercentage(budget.percentageUsed)}
+                  aria-valuetext={`${budget.percentageUsed.toFixed(1)}% used`}
                 >
                   <div
                     className="budget-progress__bar"
                     style={{
-                      width: `${Math.min(budget.percentageUsed, 100)}%`,
+                      width: `${clampProgressPercentage(
+                        budget.percentageUsed,
+                      )}%`,
                     }}
                   />
                 </div>
