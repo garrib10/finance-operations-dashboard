@@ -499,7 +499,11 @@ function BudgetPage() {
           <p>View budgets for a specific month.</p>
         </div>
 
-        <div className="budget-period-filter">
+        <div
+          className="budget-period-filter"
+          data-testid="budget-period-filter"
+        >
+          {" "}
           <label className="form-field">
             <span>Month</span>
 
@@ -514,7 +518,6 @@ function BudgetPage() {
               ))}
             </select>
           </label>
-
           <label className="form-field">
             <span>Year</span>
 
@@ -635,7 +638,12 @@ function BudgetPage() {
               const budgetAnalytics = analytics[budget.id];
 
               return (
-                <article key={budget.id} className="budget-card">
+                <article
+                  key={budget.id}
+                  className="budget-card"
+                  data-testid={`budget-card-${budget.id}`}
+                >
+                  {" "}
                   <div className="budget-card__header">
                     <div>
                       <h3>{budget.categoryName}</h3>
@@ -653,7 +661,6 @@ function BudgetPage() {
                       </span>
                     )}
                   </div>
-
                   <div className="budget-card__content">
                     <div>
                       <span>Monthly Limit:</span>
@@ -689,7 +696,6 @@ function BudgetPage() {
                       </>
                     )}
                   </div>
-
                   <div className="budget-card__actions">
                     <button
                       type="button"

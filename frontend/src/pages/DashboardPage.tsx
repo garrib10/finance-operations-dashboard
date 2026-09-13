@@ -100,8 +100,10 @@ function DashboardPage() {
       <section className="dashboard-summary" aria-label="Financial summary">
         <article className="summary-card">
           <span className="summary-card__label">Current Balance</span>
-
-          <strong className="summary-card__value">
+          <strong
+            className="summary-card__value"
+            data-testid="summary-current-balance"
+          >
             {formatCurrency(dashboard.currentBalance)}
           </strong>
         </article>
@@ -109,7 +111,10 @@ function DashboardPage() {
         <article className="summary-card">
           <span className="summary-card__label">Total Income</span>
 
-          <strong className="summary-card__value">
+          <strong
+            className="summary-card__value"
+            data-testid="summary-total-income"
+          >
             {formatCurrency(dashboard.totalIncome)}
           </strong>
         </article>
@@ -117,7 +122,10 @@ function DashboardPage() {
         <article className="summary-card">
           <span className="summary-card__label">Total Expenses</span>
 
-          <strong className="summary-card__value">
+          <strong
+            className="summary-card__value"
+            data-testid="summary-total-expenses"
+          >
             {formatCurrency(dashboard.totalExpenses)}
           </strong>
         </article>
@@ -125,7 +133,10 @@ function DashboardPage() {
         <article className="summary-card">
           <span className="summary-card__label">Monthly Income</span>
 
-          <strong className="summary-card__value">
+          <strong
+            className="summary-card__value"
+            data-testid="summary-monthly-income"
+          >
             {formatCurrency(dashboard.monthlyIncome)}
           </strong>
         </article>
@@ -133,7 +144,10 @@ function DashboardPage() {
         <article className="summary-card">
           <span className="summary-card__label">Monthly Expenses</span>
 
-          <strong className="summary-card__value">
+          <strong
+            className="summary-card__value"
+            data-testid="summary-monthly-expenses"
+          >
             {formatCurrency(dashboard.monthlyExpenses)}
           </strong>
         </article>
