@@ -91,6 +91,13 @@ describe("TransactionPage", () => {
 
     expect(await screen.findByText("Food Lion")).toBeInTheDocument();
 
+    const transactionRow = screen.getByTestId("transaction-row-1");
+
+    expect(transactionRow).toBeInTheDocument();
+    expect(transactionRow).toHaveTextContent("Food Lion");
+    expect(transactionRow).toHaveTextContent("Groceries");
+    expect(transactionRow).toHaveTextContent("$75.50");
+
     expect(screen.getAllByText("Groceries")).toHaveLength(2);
 
     expect(screen.getByText("$75.50")).toBeInTheDocument();

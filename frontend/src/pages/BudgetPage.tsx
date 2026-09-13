@@ -58,7 +58,7 @@ const monthOptions = Array.from({ length: 12 }, (_, index) => ({
 
 const currentYear = new Date().getFullYear();
 
-const yearOptions = Array.from(
+const defaultYearOptions = Array.from(
   { length: 7 },
   (_, index) => currentYear - 3 + index,
 );
@@ -99,6 +99,10 @@ function formatBudgetStatus(status: BudgetStatus): string {
 
 function BudgetPage() {
   const [budgets, setBudgets] = useState<BudgetResponse[]>([]);
+
+  const yearOptions = Array.from(
+    new Set([...defaultYearOptions, ...budgets.map((budget) => budget.year)]),
+  ).sort((firstYear, secondYear) => firstYear - secondYear);
 
   const [analytics, setAnalytics] = useState<
     Record<number, BudgetAnalyticsResponse>
@@ -495,7 +499,11 @@ function BudgetPage() {
           <p>View budgets for a specific month.</p>
         </div>
 
-        <div className="budget-period-filter">
+        <div
+          className="budget-period-filter"
+          data-testid="budget-period-filter"
+        >
+          {" "}
           <label className="form-field">
             <span>Month</span>
 
@@ -510,7 +518,6 @@ function BudgetPage() {
               ))}
             </select>
           </label>
-
           <label className="form-field">
             <span>Year</span>
 
@@ -631,7 +638,12 @@ function BudgetPage() {
               const budgetAnalytics = analytics[budget.id];
 
               return (
-                <article key={budget.id} className="budget-card">
+                <article
+                  key={budget.id}
+                  className="budget-card"
+                  data-testid={`budget-card-${budget.id}`}
+                >
+                  {" "}
                   <div className="budget-card__header">
                     <div>
                       <h3>{budget.categoryName}</h3>
@@ -649,7 +661,6 @@ function BudgetPage() {
                       </span>
                     )}
                   </div>
-
                   <div className="budget-card__content">
                     <div>
                       <span>Monthly Limit:</span>
@@ -685,7 +696,6 @@ function BudgetPage() {
                       </>
                     )}
                   </div>
-
                   <div className="budget-card__actions">
                     <button
                       type="button"

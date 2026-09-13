@@ -172,6 +172,17 @@ describe("BudgetPage", () => {
 
     expect(screen.getByRole("heading", { name: "Dining" })).toBeInTheDocument();
 
+    expect(screen.getByTestId("budget-period-filter")).toBeInTheDocument();
+
+    const groceriesCard = screen.getByTestId("budget-card-1");
+    const diningCard = screen.getByTestId("budget-card-2");
+
+    expect(groceriesCard).toBeInTheDocument();
+    expect(groceriesCard).toHaveTextContent("Groceries");
+
+    expect(diningCard).toBeInTheDocument();
+    expect(diningCard).toHaveTextContent("Dining");
+
     expect(screen.getAllByText("On Track")).toHaveLength(2);
 
     expect(screen.getByText("$500.00")).toBeInTheDocument();
@@ -218,6 +229,50 @@ describe("BudgetPage", () => {
     expect(
       screen.queryByRole("heading", { name: "Budget Utilization" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("includes years from saved budgets outside the default year range", async () => {
+    const user = userEvent.setup();
+    const savedBudgetYear = currentYear - 10;
+
+    const archivedBudget: BudgetResponse = {
+      ...groceriesBudget,
+      id: 99,
+      year: savedBudgetYear,
+      createdAt: `${savedBudgetYear}-01-01T12:00:00`,
+      updatedAt: `${savedBudgetYear}-01-01T12:00:00`,
+    };
+
+    const archivedAnalytics: BudgetAnalyticsResponse = {
+      ...groceriesAnalytics,
+      budgetId: archivedBudget.id,
+      year: savedBudgetYear,
+    };
+
+    mockGetBudgets.mockResolvedValue([archivedBudget]);
+    mockGetBudgetAnalytics.mockResolvedValue(archivedAnalytics);
+
+    render(<BudgetPage />);
+
+    await screen.findByRole("heading", { name: "Create Budget" });
+
+    const filterYearSelect = screen.getAllByLabelText("Year")[1];
+
+    expect(
+      screen.getByRole("option", {
+        name: String(savedBudgetYear),
+      }),
+    ).toBeInTheDocument();
+
+    await user.selectOptions(filterYearSelect, String(savedBudgetYear));
+
+    expect(filterYearSelect).toHaveValue(String(savedBudgetYear));
+
+    expect(
+      await screen.findByRole("heading", {
+        name: archivedBudget.categoryName,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("creates a budget and reloads the budget data", async () => {
