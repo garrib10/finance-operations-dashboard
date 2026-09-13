@@ -58,7 +58,7 @@ const monthOptions = Array.from({ length: 12 }, (_, index) => ({
 
 const currentYear = new Date().getFullYear();
 
-const yearOptions = Array.from(
+const defaultYearOptions = Array.from(
   { length: 7 },
   (_, index) => currentYear - 3 + index,
 );
@@ -99,6 +99,10 @@ function formatBudgetStatus(status: BudgetStatus): string {
 
 function BudgetPage() {
   const [budgets, setBudgets] = useState<BudgetResponse[]>([]);
+
+  const yearOptions = Array.from(
+    new Set([...defaultYearOptions, ...budgets.map((budget) => budget.year)]),
+  ).sort((firstYear, secondYear) => firstYear - secondYear);
 
   const [analytics, setAnalytics] = useState<
     Record<number, BudgetAnalyticsResponse>
