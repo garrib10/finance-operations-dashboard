@@ -56,9 +56,9 @@ const budgetSummaries: DashboardResponse["budgetSummaries"] = [
     categoryId: 2,
     categoryName: "Dining",
     monthlyLimit: 100,
-    amountSpent: 75,
-    amountRemaining: 25,
-    percentageUsed: 75,
+    amountSpent: 60,
+    amountRemaining: 40,
+    percentageUsed: 60,
     status: "CAUTION",
   },
   {
