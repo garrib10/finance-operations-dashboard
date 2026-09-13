@@ -103,6 +103,26 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("$3,250.00")).toBeInTheDocument();
 
+    expect(screen.getByTestId("summary-current-balance")).toHaveTextContent(
+      "$3,250.00",
+    );
+
+    expect(screen.getByTestId("summary-total-income")).toHaveTextContent(
+      "$5,000.00",
+    );
+
+    expect(screen.getByTestId("summary-total-expenses")).toHaveTextContent(
+      "$1,750.00",
+    );
+
+    expect(screen.getByTestId("summary-monthly-income")).toHaveTextContent(
+      "$3,000.00",
+    );
+
+    expect(screen.getByTestId("summary-monthly-expenses")).toHaveTextContent(
+      "$950.00",
+    );
+
     expect(screen.getByText("Grocery Store")).toBeInTheDocument();
 
     expect(screen.getAllByText("Groceries").length).toBeGreaterThan(0);

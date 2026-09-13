@@ -172,6 +172,17 @@ describe("BudgetPage", () => {
 
     expect(screen.getByRole("heading", { name: "Dining" })).toBeInTheDocument();
 
+    expect(screen.getByTestId("budget-period-filter")).toBeInTheDocument();
+
+    const groceriesCard = screen.getByTestId("budget-card-1");
+    const diningCard = screen.getByTestId("budget-card-2");
+
+    expect(groceriesCard).toBeInTheDocument();
+    expect(groceriesCard).toHaveTextContent("Groceries");
+
+    expect(diningCard).toBeInTheDocument();
+    expect(diningCard).toHaveTextContent("Dining");
+
     expect(screen.getAllByText("On Track")).toHaveLength(2);
 
     expect(screen.getByText("$500.00")).toBeInTheDocument();
