@@ -23,6 +23,10 @@ function formatBudgetStatus(status: string): string {
   }
 }
 
+function clampProgressPercentage(percentage: number): number {
+  return Math.min(Math.max(percentage, 0), 100);
+}
+
 function DashboardPage() {
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
 
@@ -263,12 +267,19 @@ function DashboardPage() {
 
                 <div
                   className="budget-progress"
+                  role="progressbar"
                   aria-label={`${budget.categoryName} budget utilization`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={clampProgressPercentage(budget.percentageUsed)}
+                  aria-valuetext={`${budget.percentageUsed.toFixed(1)}% used`}
                 >
                   <div
                     className="budget-progress__bar"
                     style={{
-                      width: `${Math.min(budget.percentageUsed, 100)}%`,
+                      width: `${clampProgressPercentage(
+                        budget.percentageUsed,
+                      )}%`,
                     }}
                   />
                 </div>
