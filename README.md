@@ -36,7 +36,7 @@ The project demonstrates layered backend architecture, stateless JWT authenticat
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
 - **152 passing backend tests** with **98% instruction coverage** and **94% branch coverage**
-- **37 passing frontend tests** across **7 test files**
+- **39 passing frontend tests** across **7 test files**
 
 ---
 
@@ -151,7 +151,9 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 | ---------------- | ------------------------------------------------- |
 | Backend          | **152 tests passing**                             |
 | Backend Coverage | **98% instruction coverage, 94% branch coverage** |
-| Frontend         | **37 tests passing across 7 test files**          |
+| Frontend         | **39 tests passing across 7 test files**          |
+
+For deployed routes, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
 ### Backend Testing
 
