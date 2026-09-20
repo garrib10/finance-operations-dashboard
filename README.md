@@ -131,6 +131,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 ## Security
 
 - Stateless authentication using signed JWT access tokens
+- Documented [CSRF security decision for stateless JWT authentication](docs/security-csrf.md)
 - Password hashing with BCrypt
 - Protected frontend routes and backend API endpoints
 - Authenticated-user ownership enforcement for transactions, categories, budgets, and dashboard data
