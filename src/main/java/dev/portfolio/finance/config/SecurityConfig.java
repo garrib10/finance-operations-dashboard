@@ -2,7 +2,6 @@ package dev.portfolio.finance.config;
 
 import java.util.Arrays;
 import java.util.List;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,7 +19,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-
 import dev.portfolio.finance.security.JwtAuthenticationFilter;
 import dev.portfolio.finance.security.RestAuthenticationEntryPoint;
 
@@ -53,6 +51,9 @@ public class SecurityConfig {
         http
                 .cors(Customizer.withDefaults())
 
+                // FinTrack uses stateless JWT authentication. The frontend
+                // explicitly sends the token through the Authorization header;
+                // authentication cookies and server-side sessions are not used.
                 .csrf(csrf -> csrf.disable())
 
                 .sessionManagement(session ->
@@ -105,6 +106,9 @@ public class SecurityConfig {
                 .toList();
 
         configuration.setAllowedOrigins(allowedOrigins);
+
+        // FinTrack does not use cookies for cross-origin authentication.
+        configuration.setAllowCredentials(false);
 
         configuration.setAllowedMethods(
                 List.of(
