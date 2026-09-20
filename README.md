@@ -93,6 +93,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 - Filter by type, amount, and date
 - Sort by amount, transaction date, or creation date
 - Paginated transaction results
+- Deterministic pagination: transactions with equal values in the selected sort field are ordered by transaction ID in the same direction.
 
 ### Categories
 
@@ -150,7 +151,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 
 | Test Suite       | Results                                           |
 | ---------------- | ------------------------------------------------- |
-| Backend          | **152 tests passing**                             |
+| Backend          | **167 tests passing**                             |
 | Backend Coverage | **98% instruction coverage, 94% branch coverage** |
 | Frontend         | **39 tests passing across 7 test files**          |
 
