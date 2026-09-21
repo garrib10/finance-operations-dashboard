@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { AuthContextValue } from "../context/AuthContext";
 import {
   MemoryRouter,
   Route,
@@ -7,10 +8,12 @@ import {
   useLocation,
   type Location,
 } from "react-router-dom";
+
 import { describe, expect, it, vi } from "vitest";
-import LoginPage from "./LoginPage";
+
 import * as AuthContextModule from "../context/AuthContext";
 import { ApiError } from "../services/api";
+import LoginPage from "./LoginPage";
 
 vi.mock("../context/AuthContext", async () => {
   const actual = await vi.importActual<typeof AuthContextModule>(
@@ -56,17 +59,22 @@ async function submitLoginForm(
   );
 }
 
+function mockLoggedOutContext(login: AuthContextValue["login"]) {
+  mockedUseAuth.mockReturnValue({
+    user: null,
+    isAuthenticated: false,
+    isLoading: false,
+    restorationError: null,
+    login,
+    logout: vi.fn(),
+    retrySessionRestore: vi.fn(async () => undefined),
+  });
+}
+
 describe("LoginPage", () => {
   it("submits credentials and navigates to the dashboard by default", async () => {
     const login = vi.fn().mockResolvedValue(undefined);
-
-    mockedUseAuth.mockReturnValue({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      login,
-      logout: vi.fn(),
-    });
+    mockLoggedOutContext(login);
 
     render(
       <MemoryRouter initialEntries={["/login"]}>
@@ -89,14 +97,7 @@ describe("LoginPage", () => {
 
   it("returns to the preserved route after a successful login", async () => {
     const login = vi.fn().mockResolvedValue(undefined);
-
-    mockedUseAuth.mockReturnValue({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      login,
-      logout: vi.fn(),
-    });
+    mockLoggedOutContext(login);
 
     const attemptedRoute: Location = {
       pathname: "/transactions",
@@ -121,7 +122,6 @@ describe("LoginPage", () => {
       >
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-
           <Route path="/transactions" element={<TransactionDestination />} />
         </Routes>
       </MemoryRouter>,
@@ -139,13 +139,7 @@ describe("LoginPage", () => {
       .fn()
       .mockRejectedValue(new ApiError("Invalid email or password.", 401));
 
-    mockedUseAuth.mockReturnValue({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      login,
-      logout: vi.fn(),
-    });
+    mockLoggedOutContext(login);
 
     render(
       <MemoryRouter initialEntries={["/login"]}>
@@ -170,14 +164,7 @@ describe("LoginPage", () => {
 
   it("does not redirect back to Login after a successful login", async () => {
     const login = vi.fn().mockResolvedValue(undefined);
-
-    mockedUseAuth.mockReturnValue({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      login,
-      logout: vi.fn(),
-    });
+    mockLoggedOutContext(login);
 
     const loginRoute: Location = {
       pathname: "/login",

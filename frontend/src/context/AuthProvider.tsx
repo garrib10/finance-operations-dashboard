@@ -1,4 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+
+import { ApiError } from "../services/api";
 import { getCurrentUser, login as loginRequest } from "../services/authService";
 import { subscribeToSessionInvalidation } from "../services/authSession";
 
@@ -15,39 +17,64 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+const SESSION_RESTORATION_ERROR =
+  "We couldn’t restore your session. Check your connection and try again.";
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<UserResponse | null>(null);
-
   const [isLoading, setIsLoading] = useState(true);
+  const [restorationError, setRestorationError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const unsubscribe = subscribeToSessionInvalidation(() => {
+  const restoreSession = useCallback(async (): Promise<void> => {
+    const token = getAuthToken();
+
+    if (!token) {
       setUser(null);
-    });
-
-    async function restoreSession() {
-      const token = getAuthToken();
-
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const currentUser = await getCurrentUser();
-        setUser(currentUser);
-      } catch {
-        removeAuthToken();
-        setUser(null);
-      } finally {
-        setIsLoading(false);
-      }
+      setRestorationError(null);
+      setIsLoading(false);
+      return;
     }
 
-    void restoreSession();
+    setIsLoading(true);
 
-    return unsubscribe;
+    try {
+      const currentUser = await getCurrentUser();
+
+      setUser(currentUser);
+      setRestorationError(null);
+    } catch (error) {
+      setUser(null);
+
+      if (error instanceof ApiError && error.status === 401) {
+        setRestorationError(null);
+      } else {
+        setRestorationError(SESSION_RESTORATION_ERROR);
+      }
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const unsubscribe = subscribeToSessionInvalidation(() => {
+      setUser(null);
+      setRestorationError(null);
+      setIsLoading(false);
+    });
+
+    queueMicrotask(() => {
+      if (!isCancelled) {
+        void restoreSession();
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      unsubscribe();
+    };
+  }, [restoreSession]);
 
   async function login(request: LoginRequest): Promise<void> {
     const response = await loginRequest(request);
@@ -56,7 +83,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     try {
       const currentUser = await getCurrentUser();
+
       setUser(currentUser);
+      setRestorationError(null);
     } catch (error) {
       removeAuthToken();
       setUser(null);
@@ -67,14 +96,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   function logout(): void {
     removeAuthToken();
     setUser(null);
+    setRestorationError(null);
   }
 
   const value: AuthContextValue = {
     user,
     isAuthenticated: user !== null,
     isLoading,
+    restorationError,
     login,
     logout,
+    retrySessionRestore: restoreSession,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

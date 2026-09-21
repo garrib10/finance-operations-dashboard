@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import {
   MemoryRouter,
   Route,
@@ -7,8 +8,8 @@ import {
   type Location,
 } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import ProtectedRoute from "./ProtectedRoute";
 import * as AuthContextModule from "../context/AuthContext";
+import ProtectedRoute from "./ProtectedRoute";
 
 vi.mock("../context/AuthContext", async () => {
   const actual = await vi.importActual<typeof AuthContextModule>(
@@ -44,27 +45,35 @@ function LoginPageProbe() {
   );
 }
 
+function renderProtectedRoute() {
+  return render(
+    <MemoryRouter initialEntries={["/protected"]}>
+      <Routes>
+        <Route element={<ProtectedRoute />}>
+          <Route path="/protected" element={<p>Protected Content</p>} />
+        </Route>
+
+        <Route path="/login" element={<LoginPageProbe />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
 describe("ProtectedRoute", () => {
   it("shows loading state while authentication is loading", () => {
     mockedUseAuth.mockReturnValue({
       user: null,
       isAuthenticated: false,
       isLoading: true,
+      restorationError: null,
       login: vi.fn(),
       logout: vi.fn(),
+      retrySessionRestore: vi.fn(async () => undefined),
     });
 
-    render(
-      <MemoryRouter initialEntries={["/protected"]}>
-        <Routes>
-          <Route element={<ProtectedRoute />}>
-            <Route path="/protected" element={<p>Protected Content</p>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderProtectedRoute();
 
-    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Loading...");
     expect(screen.queryByText("Protected Content")).not.toBeInTheDocument();
   });
 
@@ -73,8 +82,10 @@ describe("ProtectedRoute", () => {
       user: null,
       isAuthenticated: false,
       isLoading: false,
+      restorationError: null,
       login: vi.fn(),
       logout: vi.fn(),
+      retrySessionRestore: vi.fn(async () => undefined),
     });
 
     render(
@@ -109,20 +120,97 @@ describe("ProtectedRoute", () => {
       },
       isAuthenticated: true,
       isLoading: false,
+      restorationError: null,
       login: vi.fn(),
       logout: vi.fn(),
+      retrySessionRestore: vi.fn(async () => undefined),
     });
 
-    render(
-      <MemoryRouter initialEntries={["/protected"]}>
-        <Routes>
-          <Route element={<ProtectedRoute />}>
-            <Route path="/protected" element={<p>Protected Content</p>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderProtectedRoute();
 
     expect(screen.getByText("Protected Content")).toBeInTheDocument();
+  });
+
+  it("shows an accessible recovery screen after a temporary failure", () => {
+    mockedUseAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      restorationError:
+        "We couldn’t restore your session. Check your connection and try again.",
+      login: vi.fn(),
+      logout: vi.fn(),
+      retrySessionRestore: vi.fn(async () => undefined),
+    });
+
+    renderProtectedRoute();
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Unable to restore session",
+      }),
+    ).toBeInTheDocument();
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "We couldn’t restore your session. Check your connection and try again.",
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Retry",
+      }),
+    ).toBeEnabled();
+
+    expect(screen.queryByText("Protected Content")).not.toBeInTheDocument();
+    expect(screen.queryByText("Login Page")).not.toBeInTheDocument();
+  });
+
+  it("retries session restoration when Retry is clicked", async () => {
+    const user = userEvent.setup();
+    const retrySessionRestore = vi.fn(async () => undefined);
+
+    mockedUseAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      restorationError:
+        "We couldn’t restore your session. Check your connection and try again.",
+      login: vi.fn(),
+      logout: vi.fn(),
+      retrySessionRestore,
+    });
+
+    renderProtectedRoute();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Retry",
+      }),
+    );
+
+    expect(retrySessionRestore).toHaveBeenCalledOnce();
+  });
+
+  it("disables the recovery action while restoration is retrying", () => {
+    mockedUseAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isLoading: true,
+      restorationError:
+        "We couldn’t restore your session. Check your connection and try again.",
+      login: vi.fn(),
+      logout: vi.fn(),
+      retrySessionRestore: vi.fn(async () => undefined),
+    });
+
+    renderProtectedRoute();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Retrying...",
+      }),
+    ).toBeDisabled();
+
+    expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 });

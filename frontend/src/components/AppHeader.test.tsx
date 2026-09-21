@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import AppHeader from "./AppHeader";
+import { MemoryRouter } from "react-router-dom";
+import { describe, expect, it, vi } from "vitest";
 import * as AuthContextModule from "../context/AuthContext";
+import AppHeader from "./AppHeader";
 
 vi.mock("../context/AuthContext", async () => {
   const actual = await vi.importActual<typeof AuthContextModule>(
@@ -30,8 +30,10 @@ describe("AppHeader", () => {
       },
       isAuthenticated: true,
       isLoading: false,
+      restorationError: null,
       login: vi.fn(),
       logout: vi.fn(),
+      retrySessionRestore: vi.fn(async () => undefined),
     });
 
     render(
@@ -41,15 +43,13 @@ describe("AppHeader", () => {
     );
 
     expect(screen.getByText("Demo")).toBeInTheDocument();
-
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
-
     expect(screen.getByText("Transactions")).toBeInTheDocument();
-
     expect(screen.getByText("Budgets")).toBeInTheDocument();
   });
 
   it("calls logout when the logout button is clicked", async () => {
+    const user = userEvent.setup();
     const logout = vi.fn();
 
     mockedUseAuth.mockReturnValue({
@@ -62,11 +62,11 @@ describe("AppHeader", () => {
       },
       isAuthenticated: true,
       isLoading: false,
+      restorationError: null,
       login: vi.fn(),
       logout,
+      retrySessionRestore: vi.fn(async () => undefined),
     });
-
-    const user = userEvent.setup();
 
     render(
       <MemoryRouter>

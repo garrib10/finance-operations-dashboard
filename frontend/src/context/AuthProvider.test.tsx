@@ -1,10 +1,12 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AuthProvider } from "./AuthProvider";
-import { useAuth } from "./AuthContext";
-import { invalidateAuthSession } from "../services/authSession";
+import { ApiError } from "../services/api";
 import * as AuthService from "../services/authService";
+import { invalidateAuthSession } from "../services/authSession";
 import { getAuthToken, setAuthToken } from "../utils/authToken";
+import { useAuth } from "./AuthContext";
+import { AuthProvider } from "./AuthProvider";
 
 vi.mock("../services/authService", async () => {
   const actual = await vi.importActual<typeof AuthService>(
@@ -20,8 +22,38 @@ vi.mock("../services/authService", async () => {
 
 const mockedGetCurrentUser = vi.mocked(AuthService.getCurrentUser);
 
+const currentUser = {
+  id: 1,
+  firstName: "Demo",
+  lastName: "User",
+  email: "demo@fintrack.dev",
+  createdAt: "2026-09-09T00:00:00",
+};
+
 function AuthStateProbe() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const {
+    user,
+    isAuthenticated,
+    isLoading,
+    restorationError,
+    retrySessionRestore,
+  } = useAuth();
+
+  if (restorationError) {
+    return (
+      <>
+        <p role="alert">{restorationError}</p>
+
+        <button
+          type="button"
+          disabled={isLoading}
+          onClick={() => void retrySessionRestore()}
+        >
+          {isLoading ? "Retrying restoration" : "Retry restoration"}
+        </button>
+      </>
+    );
+  }
 
   if (isLoading) {
     return <p>Loading authentication</p>;
@@ -43,14 +75,7 @@ beforeEach(() => {
 describe("AuthProvider", () => {
   it("restores an existing session and clears it after invalidation", async () => {
     setAuthToken("valid-token");
-
-    mockedGetCurrentUser.mockResolvedValue({
-      id: 1,
-      firstName: "Demo",
-      lastName: "User",
-      email: "demo@fintrack.dev",
-      createdAt: "2026-09-09T00:00:00",
-    });
+    mockedGetCurrentUser.mockResolvedValue(currentUser);
 
     render(
       <AuthProvider>
@@ -59,7 +84,6 @@ describe("AuthProvider", () => {
     );
 
     expect(await screen.findByText("demo@fintrack.dev")).toBeInTheDocument();
-
     expect(screen.getByText("Authenticated")).toBeInTheDocument();
     expect(getAuthToken()).toBe("valid-token");
 
@@ -84,8 +108,119 @@ describe("AuthProvider", () => {
     );
 
     expect(await screen.findByText("Unauthenticated")).toBeInTheDocument();
-
     expect(screen.getByText("No user")).toBeInTheDocument();
     expect(mockedGetCurrentUser).not.toHaveBeenCalled();
+  });
+
+  it("preserves the token when restoration fails temporarily", async () => {
+    setAuthToken("recoverable-token");
+
+    mockedGetCurrentUser.mockRejectedValue(
+      new TypeError("Unable to reach the server"),
+    );
+
+    render(
+      <AuthProvider>
+        <AuthStateProbe />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We couldn’t restore your session. Check your connection and try again.",
+    );
+
+    expect(getAuthToken()).toBe("recoverable-token");
+    expect(
+      screen.getByRole("button", {
+        name: "Retry restoration",
+      }),
+    ).toBeEnabled();
+  });
+
+  it("restores the user after retrying a temporary failure", async () => {
+    const user = userEvent.setup();
+
+    setAuthToken("recoverable-token");
+
+    mockedGetCurrentUser
+      .mockRejectedValueOnce(new TypeError("Unable to reach the server"))
+      .mockResolvedValueOnce(currentUser);
+
+    render(
+      <AuthProvider>
+        <AuthStateProbe />
+      </AuthProvider>,
+    );
+
+    await screen.findByRole("alert");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Retry restoration",
+      }),
+    );
+
+    expect(await screen.findByText("Authenticated")).toBeInTheDocument();
+    expect(screen.getByText("demo@fintrack.dev")).toBeInTheDocument();
+    expect(mockedGetCurrentUser).toHaveBeenCalledTimes(2);
+    expect(getAuthToken()).toBe("recoverable-token");
+  });
+
+  it("remains recoverable when another retry fails temporarily", async () => {
+    const user = userEvent.setup();
+
+    setAuthToken("recoverable-token");
+
+    mockedGetCurrentUser
+      .mockRejectedValueOnce(new TypeError("Initial network failure"))
+      .mockRejectedValueOnce(new ApiError("Service unavailable.", 503));
+
+    render(
+      <AuthProvider>
+        <AuthStateProbe />
+      </AuthProvider>,
+    );
+
+    await screen.findByRole("alert");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Retry restoration",
+      }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We couldn’t restore your session. Check your connection and try again.",
+    );
+
+    expect(mockedGetCurrentUser).toHaveBeenCalledTimes(2);
+    expect(getAuthToken()).toBe("recoverable-token");
+
+    expect(
+      screen.getByRole("button", {
+        name: "Retry restoration",
+      }),
+    ).toBeEnabled();
+  });
+
+  it("clears an expired session when restoration returns 401", async () => {
+    setAuthToken("expired-token");
+
+    mockedGetCurrentUser.mockImplementation(async () => {
+      invalidateAuthSession();
+      throw new ApiError("Unauthorized.", 401);
+    });
+
+    render(
+      <AuthProvider>
+        <AuthStateProbe />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByText("Unauthenticated")).toBeInTheDocument();
+
+    expect(screen.getByText("No user")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(getAuthToken()).toBeNull();
   });
 });
