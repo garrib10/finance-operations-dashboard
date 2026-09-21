@@ -37,7 +37,7 @@ The project demonstrates layered backend architecture, stateless JWT authenticat
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
 - **170 passing backend tests** with **98% instruction coverage** and **94% branch coverage**
-- **39 passing frontend tests** across **7 test files**
+- **64 passing frontend tests** across **9 test files**
 
 ---
 
@@ -98,6 +98,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 - Sort by amount, transaction date, or creation date
 - Paginated transaction results
 - Deterministic pagination: transactions with equal values in the selected sort field are ordered by transaction ID in the same direction.
+- Preserve completed saves and show separate warnings when a follow-up list refresh fails
 
 ### Categories
 
@@ -114,6 +115,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 - Prevent duplicate budgets for the same category and period
 - Calculate spending, remaining balance, and utilization
 - Display On Track, Caution, Warning, and Over Budget statuses
+- Preserve completed saves and show separate warnings when a follow-up list or analytics refresh fails
 
 ### Dashboard
 
@@ -157,7 +159,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 | ---------------- | ------------------------------------------------- |
 | Backend          | **170 tests passing**                             |
 | Backend Coverage | **98% instruction coverage, 94% branch coverage** |
-| Frontend         | **57 tests passing across 9 test files**          |
+| Frontend         | **64 tests passing across 9 test files**          |
 
 For deployed routes, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 

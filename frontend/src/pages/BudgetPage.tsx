@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { SubmitEvent as ReactSubmitEvent } from "react";
-
 import {
   Bar,
   BarChart,
@@ -12,7 +11,6 @@ import {
 } from "recharts";
 
 import { ApiError } from "../services/api";
-
 import {
   createBudget,
   deleteBudget,
@@ -22,7 +20,6 @@ import {
 } from "../services/budgetService";
 
 import { getCategories } from "../services/categoryService";
-
 import type {
   BudgetAnalyticsResponse,
   BudgetResponse,
@@ -32,7 +29,6 @@ import type {
 } from "../types/budget";
 
 import type { CategoryResponse } from "../types/category";
-
 import { formatCurrency } from "../utils/formatters";
 
 interface BudgetFormState {
@@ -115,6 +111,7 @@ function BudgetPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [formErrorMessage, setFormErrorMessage] = useState("");
+  const [refreshWarning, setRefreshWarning] = useState("");
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
@@ -148,9 +145,8 @@ function BudgetPage() {
   async function loadBudgetData(): Promise<void> {
     const budgetResponse = await getBudgets();
 
-    setBudgets(budgetResponse);
-
     if (budgetResponse.length === 0) {
+      setBudgets([]);
       setAnalytics({});
       return;
     }
@@ -167,6 +163,7 @@ function BudgetPage() {
       return result;
     }, {});
 
+    setBudgets(budgetResponse);
     setAnalytics(analyticsByBudgetId);
   }
 
@@ -254,7 +251,11 @@ function BudgetPage() {
   ): Promise<void> {
     event.preventDefault();
 
+    const isEditing = editingBudgetId !== null;
+
     setFormErrorMessage("");
+
+    setRefreshWarning("");
 
     setValidationErrors({});
 
@@ -277,27 +278,14 @@ function BudgetPage() {
       year: Number(form.year),
     };
 
-    try {
-      setIsSubmitting(true);
+    setIsSubmitting(true);
 
+    try {
       if (editingBudgetId !== null) {
         await updateBudget(editingBudgetId, request);
       } else {
         await createBudget(request);
       }
-
-      /*
-       * Move the displayed budget period
-       * to the month/year that was just
-       * created or updated.
-       */
-      setViewMonth(String(request.month));
-
-      setViewYear(String(request.year));
-
-      resetForm();
-
-      await loadBudgetData();
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.validationErrors) {
@@ -307,11 +295,32 @@ function BudgetPage() {
         }
       } else {
         setFormErrorMessage(
-          editingBudgetId !== null
+          isEditing
             ? "Unable to update the budget. Please try again."
             : "Unable to create the budget. Please try again.",
         );
       }
+
+      setIsSubmitting(false);
+      return;
+    }
+
+    /*
+     * Move the displayed budget period to the month/year
+     * that was successfully created or updated.
+     */
+    setViewMonth(String(request.month));
+
+    setViewYear(String(request.year));
+
+    resetForm();
+
+    try {
+      await loadBudgetData();
+    } catch {
+      setRefreshWarning(
+        "Budget saved, but the budget list could not be refreshed. Reload the page to see the latest data.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -364,6 +373,12 @@ function BudgetPage() {
       </div>
 
       {errorMessage && <p role="alert">{errorMessage}</p>}
+
+      {refreshWarning && (
+        <p className="form-error" role="status">
+          {refreshWarning}
+        </p>
+      )}
 
       <section>
         <h2>{editingBudgetId !== null ? "Edit Budget" : "Create Budget"}</h2>

@@ -1,7 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import TransactionPage from "./TransactionPage";
 import * as categoryService from "../services/categoryService";
 import * as transactionService from "../services/transactionService";
 import type { CategoryResponse } from "../types/category";
@@ -9,6 +8,7 @@ import type {
   PagedTransactionResponse,
   TransactionResponse,
 } from "../types/transaction";
+import TransactionPage from "./TransactionPage";
 
 vi.mock("../services/categoryService");
 vi.mock("../services/transactionService");
@@ -47,6 +47,17 @@ function createPagedResponse(
     totalElements: transactions.length,
     totalPages,
   };
+}
+
+async function completeTransactionForm(
+  description = "Grocery Store",
+): Promise<void> {
+  const user = userEvent.setup();
+
+  await user.selectOptions(screen.getByLabelText("Category"), "1");
+  await user.type(screen.getByLabelText("Amount"), "75.50");
+  await user.type(screen.getByLabelText("Description"), description);
+  await user.type(screen.getByLabelText("Date"), "2026-09-10");
 }
 
 describe("TransactionPage", () => {
@@ -97,11 +108,8 @@ describe("TransactionPage", () => {
     expect(transactionRow).toHaveTextContent("Food Lion");
     expect(transactionRow).toHaveTextContent("Groceries");
     expect(transactionRow).toHaveTextContent("$75.50");
-
     expect(screen.getAllByText("Groceries")).toHaveLength(2);
-
     expect(screen.getByText("$75.50")).toBeInTheDocument();
-
     expect(screen.getByText("Sep 10, 2026")).toBeInTheDocument();
   });
 
@@ -123,14 +131,7 @@ describe("TransactionPage", () => {
     render(<TransactionPage />);
 
     await screen.findByText("Food Lion");
-
-    await user.selectOptions(screen.getByLabelText("Category"), "1");
-
-    await user.type(screen.getByLabelText("Amount"), "75.50");
-
-    await user.type(screen.getByLabelText("Description"), "Grocery Store");
-
-    await user.type(screen.getByLabelText("Date"), "2026-09-10");
+    await completeTransactionForm();
 
     await user.click(
       screen.getByRole("button", {
@@ -156,11 +157,7 @@ describe("TransactionPage", () => {
 
     await screen.findByText("Food Lion");
 
-    await user.click(
-      screen.getByRole("button", {
-        name: "Edit",
-      }),
-    );
+    await user.click(screen.getByRole("button", { name: "Edit" }));
 
     expect(
       screen.getByRole("heading", {
@@ -183,12 +180,7 @@ describe("TransactionPage", () => {
     render(<TransactionPage />);
 
     await screen.findByText("Food Lion");
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "Edit",
-      }),
-    );
+    await user.click(screen.getByRole("button", { name: "Edit" }));
 
     const descriptionInput = screen.getByLabelText("Description");
 
@@ -212,6 +204,139 @@ describe("TransactionPage", () => {
     });
   });
 
+  it("preserves the create form and skips refresh when creation fails", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(transactionService.createTransaction).mockRejectedValue(
+      new Error("Request failed"),
+    );
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await completeTransactionForm();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Add Transaction",
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        "Unable to create the transaction. Please try again.",
+      ),
+    ).toBeInTheDocument();
+
+    expect(transactionService.getTransactions).toHaveBeenCalledOnce();
+    expect(screen.getByLabelText("Category")).toHaveValue("1");
+    expect(screen.getByLabelText("Amount")).toHaveValue(75.5);
+    expect(screen.getByLabelText("Description")).toHaveValue("Grocery Store");
+  });
+
+  it("preserves edit mode and skips refresh when updating fails", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(transactionService.updateTransaction).mockRejectedValue(
+      new Error("Request failed"),
+    );
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const descriptionInput = screen.getByLabelText("Description");
+    await user.clear(descriptionInput);
+    await user.type(descriptionInput, "Updated Grocery Store");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Update Transaction",
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        "Unable to update the transaction. Please try again.",
+      ),
+    ).toBeInTheDocument();
+
+    expect(transactionService.getTransactions).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole("heading", { name: "Edit Transaction" }),
+    ).toBeInTheDocument();
+    expect(descriptionInput).toHaveValue("Updated Grocery Store");
+  });
+
+  it("reports a refresh warning after a successful create", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(transactionService.getTransactions)
+      .mockResolvedValueOnce(createPagedResponse())
+      .mockRejectedValueOnce(new Error("Refresh failed"));
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await completeTransactionForm();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Add Transaction",
+      }),
+    );
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Transaction saved, but the transaction list could not be refreshed.",
+    );
+
+    expect(transactionService.createTransaction).toHaveBeenCalledOnce();
+    expect(screen.getByText("Food Lion")).toBeInTheDocument();
+    expect(screen.getByLabelText("Category")).toHaveValue("");
+    expect(screen.getByLabelText("Amount")).toHaveValue(null);
+    expect(screen.getByLabelText("Description")).toHaveValue("");
+    expect(
+      screen.queryByText(/Unable to create the transaction/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("exits edit mode and reports a refresh warning after a successful update", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(transactionService.getTransactions)
+      .mockResolvedValueOnce(createPagedResponse())
+      .mockRejectedValueOnce(new Error("Refresh failed"));
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const descriptionInput = screen.getByLabelText("Description");
+    await user.clear(descriptionInput);
+    await user.type(descriptionInput, "Updated Grocery Store");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Update Transaction",
+      }),
+    );
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Transaction saved, but the transaction list could not be refreshed.",
+    );
+
+    expect(transactionService.updateTransaction).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole("heading", { name: "Add Transaction" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cancel" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Food Lion")).toBeInTheDocument();
+  });
+
   it("deletes a transaction after confirmation", async () => {
     const user = userEvent.setup();
 
@@ -220,12 +345,7 @@ describe("TransactionPage", () => {
     render(<TransactionPage />);
 
     await screen.findByText("Food Lion");
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "Delete",
-      }),
-    );
+    await user.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => {
       expect(transactionService.deleteTransaction).toHaveBeenCalledWith(1);
@@ -244,42 +364,10 @@ describe("TransactionPage", () => {
     render(<TransactionPage />);
 
     await screen.findByText("Food Lion");
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "Delete",
-      }),
-    );
+    await user.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(transactionService.deleteTransaction).not.toHaveBeenCalled();
     expect(screen.getByText("Food Lion")).toBeInTheDocument();
-  });
-
-  it("shows an error when creating a transaction fails", async () => {
-    const user = userEvent.setup();
-
-    vi.mocked(transactionService.createTransaction).mockRejectedValue(
-      new Error("Request failed"),
-    );
-
-    render(<TransactionPage />);
-
-    await screen.findByText("Food Lion");
-
-    await user.selectOptions(screen.getByLabelText("Category"), "1");
-    await user.type(screen.getByLabelText("Amount"), "75.50");
-    await user.type(screen.getByLabelText("Description"), "Grocery Store");
-    await user.type(screen.getByLabelText("Date"), "2026-09-10");
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "Add Transaction",
-      }),
-    );
-
-    expect(
-      await screen.findByText("Unable to save transaction. Please try again."),
-    ).toBeInTheDocument();
   });
 
   it("applies transaction filters", async () => {
@@ -288,7 +376,6 @@ describe("TransactionPage", () => {
     render(<TransactionPage />);
 
     await screen.findByText("Food Lion");
-
     await user.type(screen.getByLabelText("Search"), "Food");
 
     await user.selectOptions(

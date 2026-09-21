@@ -81,6 +81,8 @@ function TransactionPage() {
 
   const [formErrorMessage, setFormErrorMessage] = useState("");
 
+  const [refreshWarning, setRefreshWarning] = useState("");
+
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
@@ -184,8 +186,11 @@ function TransactionPage() {
   ): Promise<void> {
     event.preventDefault();
 
+    const isEditing = editingTransactionId !== null;
+
     setIsSubmitting(true);
     setFormErrorMessage("");
+    setRefreshWarning("");
     setValidationErrors({});
 
     const request: CreateTransactionRequest = {
@@ -202,10 +207,6 @@ function TransactionPage() {
       } else {
         await createTransaction(request);
       }
-
-      resetForm();
-
-      await loadTransactions(buildFilters(0));
     } catch (error) {
       if (error instanceof ApiError) {
         setFormErrorMessage(error.message);
@@ -214,8 +215,25 @@ function TransactionPage() {
           setValidationErrors(error.validationErrors);
         }
       } else {
-        setFormErrorMessage("Unable to save transaction. Please try again.");
+        setFormErrorMessage(
+          isEditing
+            ? "Unable to update the transaction. Please try again."
+            : "Unable to create the transaction. Please try again.",
+        );
       }
+
+      setIsSubmitting(false);
+      return;
+    }
+
+    resetForm();
+
+    try {
+      await loadTransactions(buildFilters(0));
+    } catch {
+      setRefreshWarning(
+        "Transaction saved, but the transaction list could not be refreshed. Reload the page to see the latest data.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -330,6 +348,12 @@ function TransactionPage() {
       </div>
 
       {errorMessage && <p className="form-error">{errorMessage}</p>}
+
+      {refreshWarning && (
+        <p className="form-error" role="status">
+          {refreshWarning}
+        </p>
+      )}
 
       <section>
         <div>
