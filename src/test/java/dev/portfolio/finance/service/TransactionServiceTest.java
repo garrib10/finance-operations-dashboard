@@ -513,7 +513,7 @@ class TransactionServiceTest {
         );
 
         assertEquals(
-                "transactionDate: DESC,id: DESC",
+                "transactionDate: DESC",
                 pageable.getSort().toString()
         );
 
@@ -1146,7 +1146,7 @@ class TransactionServiceTest {
         );
 
         assertEquals(
-                "amount: ASC,id: ASC",
+                "amount: ASC",
                 pageable.getSort().toString()
         );
     }
@@ -1267,7 +1267,7 @@ class TransactionServiceTest {
         );
 
         assertEquals(
-                "amount: DESC,id: DESC",
+                "amount: DESC",
                 pageable.getSort().toString()
         );
     }

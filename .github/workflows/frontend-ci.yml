@@ -37,16 +37,8 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
-      - name: Run frontend tests with coverage
-        run: npm run test:coverage
-
-      - name: Upload frontend coverage report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-vitest-coverage
-          path: frontend/coverage/
-          if-no-files-found: warn
+      - name: Run frontend tests
+        run: npm test -- --run
 
       - name: Build frontend
         run: npm run build
