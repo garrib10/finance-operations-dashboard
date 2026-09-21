@@ -85,6 +85,9 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 - User registration and login
 - Session restoration after browser refresh
 - Protected application routes
+- Centralized handling for expired or invalid authenticated sessions
+- Attempted-route restoration after signing in again
+- Temporary restoration failures preserve the stored session and provide a manual retry action
 - Logout and session clearing
 
 ### Transactions
@@ -154,7 +157,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 | ---------------- | ------------------------------------------------- |
 | Backend          | **170 tests passing**                             |
 | Backend Coverage | **98% instruction coverage, 94% branch coverage** |
-| Frontend         | **50 tests passing across 9 test files**          |
+| Frontend         | **57 tests passing across 9 test files**          |
 
 For deployed routes, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
@@ -422,7 +425,6 @@ The frontend runs at `http://localhost:5173`.
 - Add profile management, password-change controls, and account preferences
 - Automatically scroll to and focus the transaction or budget form when a user selects a record to edit
 - Improve budget progress-bar accessibility with proper progress-bar roles, values, and assistive-technology support
-- Add backend and frontend coverage reporting with enforceable quality thresholds
 - Add production monitoring and structured application metrics
 
 ---
