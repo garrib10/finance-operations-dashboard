@@ -1,12 +1,16 @@
 import { useState, type SubmitEvent } from "react";
-
-import { useNavigate } from "react-router-dom";
-import { ApiError } from "../services/api";
+import { useLocation, useNavigate, type Location } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { ApiError } from "../services/api";
+
+interface LoginLocationState {
+  from?: Location;
+}
 
 function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +29,17 @@ function LoginPage() {
         password,
       });
 
-      navigate("/");
+      const state = location.state as LoginLocationState | null;
+      const from = state?.from;
+
+      const destination =
+        from && from.pathname !== "/login"
+          ? `${from.pathname}${from.search}${from.hash}`
+          : "/";
+
+      navigate(destination, {
+        replace: true,
+      });
     } catch (error) {
       if (error instanceof ApiError) {
         setErrorMessage(error.message);

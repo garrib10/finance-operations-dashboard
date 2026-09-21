@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-
 import { getCurrentUser, login as loginRequest } from "../services/authService";
+import { subscribeToSessionInvalidation } from "../services/authSession";
 
 import {
   getAuthToken,
@@ -9,7 +9,6 @@ import {
 } from "../utils/authToken";
 
 import type { LoginRequest, UserResponse } from "../types/auth";
-
 import { AuthContext, type AuthContextValue } from "./AuthContext";
 
 interface AuthProviderProps {
@@ -22,6 +21,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    const unsubscribe = subscribeToSessionInvalidation(() => {
+      setUser(null);
+    });
+
     async function restoreSession() {
       const token = getAuthToken();
 
@@ -41,7 +44,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     }
 
-    restoreSession();
+    void restoreSession();
+
+    return unsubscribe;
   }, []);
 
   async function login(request: LoginRequest): Promise<void> {

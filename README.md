@@ -154,30 +154,11 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 | ---------------- | ------------------------------------------------- |
 | Backend          | **170 tests passing**                             |
 | Backend Coverage | **98% instruction coverage, 94% branch coverage** |
-| Frontend         | **39 tests passing across 7 test files**          |
+| Frontend         | **50 tests passing across 9 test files**          |
 
 For deployed routes, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
 For schema versioning, migration conventions, existing-database adoption, and backup expectations, see [Database Migrations](docs/database-migrations.md).
-
----
-
-### Coverage quality gates
-
-Coverage thresholds are enforced during local verification and CI:
-
-| Application | Tool           | Instructions/Statements | Branches | Functions | Lines |
-| ----------- | -------------- | ----------------------: | -------: | --------: | ----: |
-| Backend     | JaCoCo         |                     90% |      85% |         — |     — |
-| Frontend    | Vitest with V8 |                     70% |      55% |       70% |   70% |
-
-Run the backend coverage gate:
-
-```bash
-./mvnw clean verify
-```
-
----
 
 ### Backend Testing
 

@@ -6,5 +6,7 @@ export interface HealthResponse {
 }
 
 export function getHealth(): Promise<HealthResponse> {
-  return apiRequest<HealthResponse>("/api/health");
+  return apiRequest<HealthResponse>("/api/health", {
+    authenticated: false,
+  });
 }
