@@ -1,9 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  type Location,
+} from "react-router-dom";
+import { describe, expect, it, vi } from "vitest";
 import LoginPage from "./LoginPage";
 import * as AuthContextModule from "../context/AuthContext";
+import { ApiError } from "../services/api";
 
 vi.mock("../context/AuthContext", async () => {
   const actual = await vi.importActual<typeof AuthContextModule>(
@@ -18,8 +25,39 @@ vi.mock("../context/AuthContext", async () => {
 
 const mockedUseAuth = vi.mocked(AuthContextModule.useAuth);
 
+interface LoginLocationState {
+  from?: Location;
+}
+
+function TransactionDestination() {
+  const location = useLocation();
+
+  return (
+    <p>
+      Transaction Page
+      {`${location.search}${location.hash}`}
+    </p>
+  );
+}
+
+async function submitLoginForm(
+  email = "demo@fintrack.dev",
+  password = "FinTrackDemo123!",
+) {
+  const user = userEvent.setup();
+
+  await user.type(screen.getByLabelText("Email"), email);
+  await user.type(screen.getByLabelText("Password"), password);
+
+  await user.click(
+    screen.getByRole("button", {
+      name: "Sign In",
+    }),
+  );
+}
+
 describe("LoginPage", () => {
-  it("submits email and password", async () => {
+  it("submits credentials and navigates to the dashboard by default", async () => {
     const login = vi.fn().mockResolvedValue(undefined);
 
     mockedUseAuth.mockReturnValue({
@@ -30,32 +68,27 @@ describe("LoginPage", () => {
       logout: vi.fn(),
     });
 
-    const user = userEvent.setup();
-
     render(
-      <MemoryRouter>
-        <LoginPage />
+      <MemoryRouter initialEntries={["/login"]}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<p>Dashboard Page</p>} />
+        </Routes>
       </MemoryRouter>,
     );
 
-    await user.type(screen.getByLabelText("Email"), "demo@fintrack.dev");
-
-    await user.type(screen.getByLabelText("Password"), "FinTrackDemo123!");
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "Sign In",
-      }),
-    );
+    await submitLoginForm();
 
     expect(login).toHaveBeenCalledWith({
       email: "demo@fintrack.dev",
       password: "FinTrackDemo123!",
     });
+
+    expect(await screen.findByText("Dashboard Page")).toBeInTheDocument();
   });
 
-  it("shows an error when login fails", async () => {
-    const login = vi.fn().mockRejectedValue(new Error("Login failed"));
+  it("returns to the preserved route after a successful login", async () => {
+    const login = vi.fn().mockResolvedValue(undefined);
 
     mockedUseAuth.mockReturnValue({
       user: null,
@@ -65,26 +98,121 @@ describe("LoginPage", () => {
       logout: vi.fn(),
     });
 
-    const user = userEvent.setup();
+    const attemptedRoute: Location = {
+      pathname: "/transactions",
+      search: "?page=2",
+      hash: "#recent",
+      state: null,
+      key: "transactions",
+    };
+
+    const loginState: LoginLocationState = {
+      from: attemptedRoute,
+    };
 
     render(
-      <MemoryRouter>
-        <LoginPage />
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/login",
+            state: loginState,
+          },
+        ]}
+      >
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+
+          <Route path="/transactions" element={<TransactionDestination />} />
+        </Routes>
       </MemoryRouter>,
     );
 
-    await user.type(screen.getByLabelText("Email"), "wrong@example.com");
+    await submitLoginForm();
 
-    await user.type(screen.getByLabelText("Password"), "wrong-password");
+    expect(
+      await screen.findByText("Transaction Page?page=2#recent"),
+    ).toBeInTheDocument();
+  });
 
-    await user.click(
-      screen.getByRole("button", {
-        name: "Sign In",
-      }),
+  it("keeps invalid credentials as an inline form error", async () => {
+    const login = vi
+      .fn()
+      .mockRejectedValue(new ApiError("Invalid email or password.", 401));
+
+    mockedUseAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      login,
+      logout: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/login"]}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+        </Routes>
+      </MemoryRouter>,
     );
+
+    await submitLoginForm("wrong@example.com", "wrong-password");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Unable to log in. Please try again.",
+      "Invalid email or password.",
     );
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Login",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not redirect back to Login after a successful login", async () => {
+    const login = vi.fn().mockResolvedValue(undefined);
+
+    mockedUseAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      login,
+      logout: vi.fn(),
+    });
+
+    const loginRoute: Location = {
+      pathname: "/login",
+      search: "",
+      hash: "",
+      state: null,
+      key: "login",
+    };
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/login",
+            state: {
+              from: loginRoute,
+            } satisfies LoginLocationState,
+          },
+        ]}
+      >
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<p>Dashboard Page</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await submitLoginForm();
+
+    expect(await screen.findByText("Dashboard Page")).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("heading", {
+        name: "Login",
+      }),
+    ).not.toBeInTheDocument();
   });
 });
