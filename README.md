@@ -160,6 +160,25 @@ For deployed routes, validation rules, stable automation selectors, test-data ow
 
 For schema versioning, migration conventions, existing-database adoption, and backup expectations, see [Database Migrations](docs/database-migrations.md).
 
+---
+
+### Coverage quality gates
+
+Coverage thresholds are enforced during local verification and CI:
+
+| Application | Tool           | Instructions/Statements | Branches | Functions | Lines |
+| ----------- | -------------- | ----------------------: | -------: | --------: | ----: |
+| Backend     | JaCoCo         |                     90% |      85% |         — |     — |
+| Frontend    | Vitest with V8 |                     70% |      55% |       70% |   70% |
+
+Run the backend coverage gate:
+
+```bash
+./mvnw clean verify
+```
+
+---
+
 ### Backend Testing
 
 The backend test suite uses JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, Flyway and JaCoCo.
