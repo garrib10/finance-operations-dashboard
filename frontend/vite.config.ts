@@ -12,5 +12,16 @@ export default defineConfig({
       Number(process.versions.node.split(".")[0]) >= 25
         ? ["--no-webstorage"]
         : [],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html", "json-summary", "lcov"],
+      reportsDirectory: "./coverage",
+      thresholds: {
+        statements: 70,
+        branches: 55,
+        functions: 70,
+        lines: 70,
+      },
+    },
   },
 });
