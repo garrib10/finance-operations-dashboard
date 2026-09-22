@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import BudgetPage from "./BudgetPage";
 import { ApiError } from "../services/api";
 import {
@@ -12,6 +13,7 @@ import {
   updateBudget,
 } from "../services/budgetService";
 import { getCategories } from "../services/categoryService";
+
 import type { BudgetAnalyticsResponse, BudgetResponse } from "../types/budget";
 import type { CategoryResponse } from "../types/category";
 
@@ -52,6 +54,7 @@ const mockCreateBudget = vi.mocked(createBudget);
 const mockUpdateBudget = vi.mocked(updateBudget);
 const mockDeleteBudget = vi.mocked(deleteBudget);
 const mockGetCategories = vi.mocked(getCategories);
+const scrollIntoViewMock = vi.fn();
 
 const today = new Date();
 const currentMonth = today.getMonth() + 1;
@@ -133,6 +136,11 @@ describe("BudgetPage", () => {
     Object.defineProperty(window, "scrollTo", {
       configurable: true,
       value: vi.fn(),
+    });
+
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoViewMock,
     });
 
     mockGetCategories.mockResolvedValue(categories);
@@ -370,11 +378,25 @@ describe("BudgetPage", () => {
 
     await screen.findByRole("heading", { name: "Groceries" });
 
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const editButton = screen.getByRole("button", { name: "Edit" });
 
-    expect(
-      screen.getByRole("heading", { name: "Edit Budget" }),
-    ).toBeInTheDocument();
+    expect(editButton).toHaveAttribute("data-budget-edit-id", "1");
+
+    await user.click(editButton);
+
+    const formHeading = screen.getByRole("heading", { name: "Edit Budget" });
+
+    expect(formHeading).toBeInTheDocument();
+    expect(formHeading).toHaveAttribute("tabindex", "-1");
+
+    await waitFor(() => {
+      expect(formHeading).toHaveFocus();
+    });
+
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start",
+    });
 
     expect(screen.getByLabelText("Category")).toHaveValue("1");
     expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500);
@@ -464,7 +486,7 @@ describe("BudgetPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("cancels edit mode and resets the form", async () => {
+  it("cancels edit mode, resets the form, and restores focus", async () => {
     const user = userEvent.setup();
 
     mockGetBudgets.mockResolvedValue([groceriesBudget]);
@@ -495,6 +517,10 @@ describe("BudgetPage", () => {
     expect(
       screen.queryByRole("button", { name: "Cancel Edit" }),
     ).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Edit" })).toHaveFocus();
+    });
   });
 
   it("deletes a budget after confirmation", async () => {
