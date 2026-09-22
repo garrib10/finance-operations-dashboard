@@ -99,6 +99,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 - Paginated transaction results
 - Deterministic pagination: transactions with equal values in the selected sort field are ordered by transaction ID in the same direction.
 - Preserve completed saves and show separate warnings when a follow-up list refresh fails
+- Accessible validation errors with field associations and automatic focus management
 
 ### Categories
 
@@ -159,7 +160,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 | ---------------- | ------------------------------------------------- |
 | Backend          | **170 tests passing**                             |
 | Backend Coverage | **98% instruction coverage, 94% branch coverage** |
-| Frontend         | **64 tests passing across 9 test files**          |
+| Frontend         | **65 tests passing across 9 test files**          |
 
 For deployed routes, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
