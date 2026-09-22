@@ -1,7 +1,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import * as categoryService from "../services/categoryService";
+import { ApiError } from "../services/api";
 import * as transactionService from "../services/transactionService";
 import type { CategoryResponse } from "../types/category";
 import type {
@@ -204,6 +206,70 @@ describe("TransactionPage", () => {
     });
   });
 
+  it("associates validation errors with fields and focuses the first invalid field", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(transactionService.createTransaction).mockRejectedValue(
+      new ApiError("Validation failed.", 400, {
+        categoryId: "Category is required.",
+        amount: "Amount must be greater than zero.",
+        description: "Description is required.",
+        transactionDate: "Transaction date is required.",
+      }),
+    );
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await completeTransactionForm();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Add Transaction",
+      }),
+    );
+
+    const categoryInput = screen.getByLabelText("Category");
+    const typeInput = screen.getByLabelText("Type", {
+      selector: "#transaction-type",
+    });
+    const amountInput = screen.getByLabelText("Amount");
+    const descriptionInput = screen.getByLabelText("Description");
+    const dateInput = screen.getByLabelText("Date");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Validation failed.",
+    );
+
+    expect(categoryInput).toHaveAttribute("aria-invalid", "true");
+    expect(categoryInput).toHaveAttribute(
+      "aria-describedby",
+      "transaction-category-error",
+    );
+    expect(categoryInput).toHaveAccessibleDescription("Category is required.");
+
+    expect(amountInput).toHaveAttribute("aria-invalid", "true");
+    expect(amountInput).toHaveAccessibleDescription(
+      "Amount must be greater than zero.",
+    );
+
+    expect(descriptionInput).toHaveAttribute("aria-invalid", "true");
+    expect(descriptionInput).toHaveAccessibleDescription(
+      "Description is required.",
+    );
+
+    expect(dateInput).toHaveAttribute("aria-invalid", "true");
+    expect(dateInput).toHaveAccessibleDescription(
+      "Transaction date is required.",
+    );
+
+    expect(typeInput).not.toHaveAttribute("aria-invalid", "true");
+
+    await waitFor(() => {
+      expect(categoryInput).toHaveFocus();
+    });
+  });
+
   it("preserves the create form and skips refresh when creation fails", async () => {
     const user = userEvent.setup();
 
@@ -222,11 +288,16 @@ describe("TransactionPage", () => {
       }),
     );
 
-    expect(
-      await screen.findByText(
-        "Unable to create the transaction. Please try again.",
-      ),
-    ).toBeInTheDocument();
+    const formError = await screen.findByRole("alert");
+
+    expect(formError).toHaveTextContent(
+      "Unable to create the transaction. Please try again.",
+    );
+    expect(formError).toHaveAttribute("id", "transaction-form-error");
+
+    await waitFor(() => {
+      expect(formError).toHaveFocus();
+    });
 
     expect(transactionService.getTransactions).toHaveBeenCalledOnce();
     expect(screen.getByLabelText("Category")).toHaveValue("1");
@@ -292,6 +363,7 @@ describe("TransactionPage", () => {
     );
 
     expect(transactionService.createTransaction).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByText("Food Lion")).toBeInTheDocument();
     expect(screen.getByLabelText("Category")).toHaveValue("");
     expect(screen.getByLabelText("Amount")).toHaveValue(null);
