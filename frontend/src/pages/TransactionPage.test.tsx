@@ -15,6 +15,8 @@ import TransactionPage from "./TransactionPage";
 vi.mock("../services/categoryService");
 vi.mock("../services/transactionService");
 
+const scrollIntoViewMock = vi.fn();
+
 const categories: CategoryResponse[] = [
   {
     id: 1,
@@ -65,6 +67,11 @@ async function completeTransactionForm(
 describe("TransactionPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoViewMock,
+    });
 
     vi.mocked(categoryService.getCategories).mockResolvedValue(categories);
 
@@ -159,13 +166,27 @@ describe("TransactionPage", () => {
 
     await screen.findByText("Food Lion");
 
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const editButton = screen.getByRole("button", { name: "Edit" });
 
-    expect(
-      screen.getByRole("heading", {
-        name: "Edit Transaction",
-      }),
-    ).toBeInTheDocument();
+    expect(editButton).toHaveAttribute("data-transaction-edit-id", "1");
+
+    await user.click(editButton);
+
+    const formHeading = screen.getByRole("heading", {
+      name: "Edit Transaction",
+    });
+
+    expect(formHeading).toBeInTheDocument();
+    expect(formHeading).toHaveAttribute("tabindex", "-1");
+
+    await waitFor(() => {
+      expect(formHeading).toHaveFocus();
+    });
+
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start",
+    });
 
     expect(screen.getByDisplayValue("Food Lion")).toBeInTheDocument();
 
@@ -174,6 +195,25 @@ describe("TransactionPage", () => {
         name: "Update Transaction",
       }),
     ).toBeInTheDocument();
+  });
+
+  it("returns focus to the originating Edit button after cancelling", async () => {
+    const user = userEvent.setup();
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Add Transaction" }),
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Edit" })).toHaveFocus();
+    });
   });
 
   it("updates a transaction after editing", async () => {

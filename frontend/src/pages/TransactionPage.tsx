@@ -93,6 +93,9 @@ function TransactionPage() {
   const descriptionInputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const formErrorRef = useRef<HTMLParagraphElement>(null);
+  const formHeadingRef = useRef<HTMLHeadingElement>(null);
+  const editTriggerIdRef = useRef<number | null>(null);
+  const pendingFocusTriggerIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (validationErrors.categoryId) {
@@ -124,6 +127,40 @@ function TransactionPage() {
       formErrorRef.current?.focus();
     }
   }, [formErrorMessage, validationErrors]);
+
+  useEffect(() => {
+    if (editingTransactionId === null) {
+      return;
+    }
+
+    formHeadingRef.current?.scrollIntoView?.({
+      behavior: "smooth",
+      block: "start",
+    });
+
+    formHeadingRef.current?.focus({
+      preventScroll: true,
+    });
+  }, [editingTransactionId]);
+
+  useEffect(() => {
+    if (
+      editingTransactionId !== null ||
+      pendingFocusTriggerIdRef.current === null
+    ) {
+      return;
+    }
+
+    const triggerId = pendingFocusTriggerIdRef.current;
+
+    document
+      .querySelector<HTMLButtonElement>(
+        `[data-transaction-edit-id="${triggerId}"]`,
+      )
+      ?.focus();
+
+    pendingFocusTriggerIdRef.current = null;
+  }, [editingTransactionId]);
 
   function buildFilters(page = 0): TransactionFilterRequest {
     return {
@@ -202,9 +239,18 @@ function TransactionPage() {
     setEditingTransactionId(null);
     setFormErrorMessage("");
     setValidationErrors({});
+    editTriggerIdRef.current = null;
+  }
+
+  function handleCancelEdit(): void {
+    pendingFocusTriggerIdRef.current = editTriggerIdRef.current;
+
+    resetForm();
   }
 
   function handleEdit(transaction: TransactionResponse): void {
+    editTriggerIdRef.current = transaction.id;
+
     setEditingTransactionId(transaction.id);
 
     setForm({
@@ -395,7 +441,7 @@ function TransactionPage() {
 
       <section>
         <div>
-          <h2>
+          <h2 ref={formHeadingRef} tabIndex={-1}>
             {editingTransactionId !== null
               ? "Edit Transaction"
               : "Add Transaction"}
@@ -596,7 +642,7 @@ function TransactionPage() {
               <button
                 type="button"
                 className="button button--secondary"
-                onClick={resetForm}
+                onClick={handleCancelEdit}
               >
                 Cancel
               </button>
@@ -823,6 +869,7 @@ function TransactionPage() {
                       <button
                         type="button"
                         className="button button--secondary"
+                        data-transaction-edit-id={transaction.id}
                         onClick={() => handleEdit(transaction)}
                       >
                         Edit
