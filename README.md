@@ -37,7 +37,7 @@ The project demonstrates layered backend architecture, stateless JWT authenticat
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
 - **170 passing backend tests** with **98% instruction coverage** and **94% branch coverage**
-- **64 passing frontend tests** across **9 test files**
+- **71 passing frontend tests** across **9 test files**
 
 ---
 
@@ -89,6 +89,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 - Attempted-route restoration after signing in again
 - Temporary restoration failures preserve the stored session and provide a manual retry action
 - Logout and session clearing
+- Accessible user-account dropdown with account details, keyboard dismissal, focus restoration, and logout
 
 ### Transactions
 
@@ -160,7 +161,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 | ---------------- | ------------------------------------------------- |
 | Backend          | **170 tests passing**                             |
 | Backend Coverage | **98% instruction coverage, 94% branch coverage** |
-| Frontend         | **65 tests passing across 9 test files**          |
+| Frontend         | **71 tests passing across 9 test files**          |
 
 For deployed routes, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
@@ -422,12 +423,9 @@ The frontend runs at `http://localhost:5173`.
 ## Future Improvements
 
 - Add refresh-token support and token revocation
-- Add a custom-category workflow where selecting `Other` displays a field for entering and saving a new category
-- Add an accessible user-account menu with an initials avatar, profile, account settings, and logout options
+- Add a custom-category workflow where selecting Other displays a field for entering and saving a new category
+- Expand the user-account dropdown with profile management, account settings, password-change controls, and account preferences
 - Add optional profile-photo upload with secure file validation and object storage
-- Add profile management, password-change controls, and account preferences
-- Automatically scroll to and focus the transaction or budget form when a user selects a record to edit
-- Improve budget progress-bar accessibility with proper progress-bar roles, values, and assistive-technology support
 - Add production monitoring and structured application metrics
 
 ---

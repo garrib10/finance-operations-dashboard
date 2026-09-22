@@ -146,15 +146,81 @@
   font-size: 0.875rem;
 }
 
-.app-user {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+.account-menu {
+  position: relative;
+  flex-shrink: 0;
 }
 
-.app-user__name {
+.account-menu__trigger {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem 0.625rem;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.account-menu__trigger:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.account-menu__initials {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: #ffffff;
+  background-color: var(--color-primary);
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+}
+
+.account-menu__name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.account-menu__chevron {
   color: var(--color-text-muted);
-  font-weight: 500;
+  font-size: 0.75rem;
+}
+
+.account-menu__panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 100;
+  width: min(18rem, calc(100vw - 2rem));
+  padding: 1rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.account-menu__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.account-menu__identity span {
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.account-menu__logout {
+  width: 100%;
 }
 
 .button--secondary {
@@ -689,6 +755,21 @@
     width: 100%;
     gap: 1rem;
     overflow-x: auto;
+  }
+
+  .account-menu,
+  .account-menu__trigger {
+    width: 100%;
+  }
+
+  .account-menu__chevron {
+    margin-left: auto;
+  }
+
+  .account-menu__panel {
+    left: 0;
+    right: auto;
+    width: 100%;
   }
 
   .app-main {
