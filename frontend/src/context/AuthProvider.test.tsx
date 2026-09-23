@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,6 +22,7 @@ vi.mock("../services/authService", async () => {
 });
 
 const mockedGetCurrentUser = vi.mocked(AuthService.getCurrentUser);
+const mockedLogin = vi.mocked(AuthService.login);
 
 const currentUser = {
   id: 1,
@@ -63,6 +65,41 @@ function AuthStateProbe() {
     <>
       <p>{isAuthenticated ? "Authenticated" : "Unauthenticated"}</p>
       <p>{user?.email ?? "No user"}</p>
+    </>
+  );
+}
+
+function AuthActionsProbe() {
+  const { user, isAuthenticated, login, logout } = useAuth();
+  const [loginFailed, setLoginFailed] = useState(false);
+
+  async function handleLogin(): Promise<void> {
+    setLoginFailed(false);
+
+    try {
+      await login({
+        email: "demo@fintrack.dev",
+        password: "Password123!",
+      });
+    } catch {
+      setLoginFailed(true);
+    }
+  }
+
+  return (
+    <>
+      <p>{isAuthenticated ? "Authenticated" : "Unauthenticated"}</p>
+      <p>{user?.email ?? "No user"}</p>
+
+      {loginFailed && <p role="alert">Login initialization failed</p>}
+
+      <button type="button" onClick={() => void handleLogin()}>
+        Login through provider
+      </button>
+
+      <button type="button" onClick={logout}>
+        Logout through provider
+      </button>
     </>
   );
 }
@@ -110,6 +147,31 @@ describe("AuthProvider", () => {
     expect(await screen.findByText("Unauthenticated")).toBeInTheDocument();
     expect(screen.getByText("No user")).toBeInTheDocument();
     expect(mockedGetCurrentUser).not.toHaveBeenCalled();
+  });
+
+  it("does not restore the session after the provider unmounts", () => {
+    let queuedRestore: VoidFunction | undefined;
+
+    const queueMicrotaskSpy = vi
+      .spyOn(globalThis, "queueMicrotask")
+      .mockImplementationOnce((callback) => {
+        queuedRestore = callback;
+      });
+
+    setAuthToken("valid-token");
+
+    const { unmount } = render(
+      <AuthProvider>
+        <AuthStateProbe />
+      </AuthProvider>,
+    );
+
+    unmount();
+    queuedRestore?.();
+
+    expect(mockedGetCurrentUser).not.toHaveBeenCalled();
+
+    queueMicrotaskSpy.mockRestore();
   });
 
   it("preserves the token when restoration fails temporarily", async () => {
@@ -221,6 +283,78 @@ describe("AuthProvider", () => {
 
     expect(screen.getByText("No user")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(getAuthToken()).toBeNull();
+  });
+
+  it("logs in, loads the current user, and logs out", async () => {
+    const user = userEvent.setup();
+
+    mockedLogin.mockResolvedValue({
+      accessToken: "new-access-token",
+      tokenType: "Bearer",
+      expiresIn: 3600,
+    });
+    mockedGetCurrentUser.mockResolvedValue(currentUser);
+
+    render(
+      <AuthProvider>
+        <AuthActionsProbe />
+      </AuthProvider>,
+    );
+
+    await screen.findByText("Unauthenticated");
+
+    await user.click(
+      screen.getByRole("button", { name: "Login through provider" }),
+    );
+
+    expect(await screen.findByText("Authenticated")).toBeInTheDocument();
+    expect(screen.getByText("demo@fintrack.dev")).toBeInTheDocument();
+    expect(getAuthToken()).toBe("new-access-token");
+    expect(mockedLogin).toHaveBeenCalledWith({
+      email: "demo@fintrack.dev",
+      password: "Password123!",
+    });
+    expect(mockedGetCurrentUser).toHaveBeenCalledOnce();
+
+    await user.click(
+      screen.getByRole("button", { name: "Logout through provider" }),
+    );
+
+    expect(screen.getByText("Unauthenticated")).toBeInTheDocument();
+    expect(screen.getByText("No user")).toBeInTheDocument();
+    expect(getAuthToken()).toBeNull();
+  });
+
+  it("removes the new token when loading the user after login fails", async () => {
+    const user = userEvent.setup();
+
+    mockedLogin.mockResolvedValue({
+      accessToken: "invalid-access-token",
+      tokenType: "Bearer",
+      expiresIn: 3600,
+    });
+    mockedGetCurrentUser.mockRejectedValue(
+      new TypeError("Unable to load the current user"),
+    );
+
+    render(
+      <AuthProvider>
+        <AuthActionsProbe />
+      </AuthProvider>,
+    );
+
+    await screen.findByText("Unauthenticated");
+
+    await user.click(
+      screen.getByRole("button", { name: "Login through provider" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Login initialization failed",
+    );
+    expect(screen.getByText("Unauthenticated")).toBeInTheDocument();
+    expect(screen.getByText("No user")).toBeInTheDocument();
     expect(getAuthToken()).toBeNull();
   });
 });

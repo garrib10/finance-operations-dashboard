@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import BudgetPage from "./BudgetPage";
 import { ApiError } from "../services/api";
 import {
@@ -43,8 +42,14 @@ vi.mock("recharts", () => ({
   ),
   CartesianGrid: () => null,
   XAxis: () => null,
-  YAxis: () => null,
-  Tooltip: () => null,
+  YAxis: ({ tickFormatter }: { tickFormatter?: (value: number) => string }) => (
+    <div data-testid="y-axis-formatted-value">{tickFormatter?.(125) ?? ""}</div>
+  ),
+  Tooltip: ({ formatter }: { formatter?: (value: number) => unknown }) => (
+    <div data-testid="tooltip-formatted-value">
+      {String(formatter?.(25.5) ?? "")}
+    </div>
+  ),
   Bar: ({ name }: { name?: string }) => <div>{name}</div>,
 }));
 
@@ -205,6 +210,74 @@ describe("BudgetPage", () => {
     ).toBeInTheDocument();
 
     expect(screen.getAllByTestId("bar-chart")).toHaveLength(2);
+
+    const yAxisValues = screen.getAllByTestId("y-axis-formatted-value");
+    expect(yAxisValues[0]).toHaveTextContent("$125");
+    expect(yAxisValues[1]).toHaveTextContent("125%");
+
+    const tooltipValues = screen.getAllByTestId("tooltip-formatted-value");
+    expect(tooltipValues[0]).toHaveTextContent("$25.50");
+    expect(tooltipValues[1]).toHaveTextContent("25.5%");
+  });
+
+  it("renders caution, warning, and over-budget status labels", async () => {
+    const statusBudgets: BudgetResponse[] = [
+      {
+        ...groceriesBudget,
+        id: 11,
+        categoryName: "Caution Category",
+      },
+      {
+        ...groceriesBudget,
+        id: 12,
+        categoryName: "Warning Category",
+      },
+      {
+        ...groceriesBudget,
+        id: 13,
+        categoryName: "Over Budget Category",
+      },
+    ];
+
+    const statuses = {
+      11: "CAUTION",
+      12: "WARNING",
+      13: "OVER_BUDGET",
+    } as const;
+
+    mockGetBudgets.mockResolvedValue(statusBudgets);
+    mockGetBudgetAnalytics.mockImplementation(async (id: number) => ({
+      ...groceriesAnalytics,
+      budgetId: id,
+      categoryName:
+        statusBudgets.find((budget) => budget.id === id)?.categoryName ?? "",
+      status: statuses[id as keyof typeof statuses],
+    }));
+
+    render(<BudgetPage />);
+
+    expect(await screen.findByText("Caution")).toBeInTheDocument();
+    expect(screen.getByText("Warning")).toBeInTheDocument();
+    expect(screen.getByText("Over Budget")).toBeInTheDocument();
+  });
+
+  it("renders a budget when its analytics record is unavailable", async () => {
+    mockGetBudgets.mockResolvedValue([groceriesBudget]);
+    mockGetBudgetAnalytics.mockResolvedValue({
+      ...groceriesAnalytics,
+      budgetId: 999,
+    });
+
+    render(<BudgetPage />);
+
+    const budgetCard = await screen.findByTestId("budget-card-1");
+
+    expect(budgetCard).toHaveTextContent("Groceries");
+    expect(budgetCard).toHaveTextContent("$500.00");
+    expect(budgetCard).not.toHaveTextContent("On Track");
+    expect(
+      screen.queryByRole("heading", { name: "Budget vs. Spending" }),
+    ).not.toBeInTheDocument();
   });
 
   it("filters budgets by month and shows the empty state for a period with no budgets", async () => {
@@ -310,6 +383,78 @@ describe("BudgetPage", () => {
 
     await waitFor(() => {
       expect(mockGetBudgets).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("validates the category and monthly limit before submitting", async () => {
+    const user = userEvent.setup();
+    mockGetBudgets.mockResolvedValue([]);
+
+    render(<BudgetPage />);
+
+    await screen.findByRole("heading", { name: "Create Budget" });
+
+    const form = screen
+      .getByRole("button", { name: "Create Budget" })
+      .closest("form");
+    expect(form).not.toBeNull();
+
+    fireEvent.submit(form!);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Please select a category.",
+    );
+
+    await user.selectOptions(screen.getByLabelText("Category"), "1");
+    await user.type(screen.getByLabelText("Monthly Limit"), "0");
+    fireEvent.submit(form!);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Monthly limit must be greater than 0.",
+    );
+    expect(mockCreateBudget).not.toHaveBeenCalled();
+  });
+
+  it("displays every field validation error returned by the API", async () => {
+    const user = userEvent.setup();
+    const nextMonth = currentMonth === 12 ? 11 : currentMonth + 1;
+    const nextYear = currentYear + 1;
+
+    mockGetBudgets.mockResolvedValue([]);
+    mockCreateBudget.mockRejectedValue(
+      new ApiError("Validation failed.", 400, {
+        categoryId: "Category is invalid.",
+        monthlyLimit: "Monthly limit is invalid.",
+        month: "Month is invalid.",
+        year: "Year is invalid.",
+      }),
+    );
+
+    render(<BudgetPage />);
+
+    await screen.findByRole("heading", { name: "Create Budget" });
+
+    await user.selectOptions(screen.getByLabelText("Category"), "1");
+    await user.type(screen.getByLabelText("Monthly Limit"), "500");
+    await user.selectOptions(
+      screen.getAllByLabelText("Month")[0],
+      String(nextMonth),
+    );
+
+    const yearInput = screen.getAllByLabelText("Year")[0];
+    await user.clear(yearInput);
+    await user.type(yearInput, String(nextYear));
+    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+
+    expect(await screen.findByText("Category is invalid.")).toBeInTheDocument();
+    expect(screen.getByText("Monthly limit is invalid.")).toBeInTheDocument();
+    expect(screen.getByText("Month is invalid.")).toBeInTheDocument();
+    expect(screen.getByText("Year is invalid.")).toBeInTheDocument();
+
+    expect(mockCreateBudget).toHaveBeenCalledWith({
+      categoryId: 1,
+      monthlyLimit: 500,
+      month: nextMonth,
+      year: nextYear,
     });
   });
 
@@ -551,6 +696,52 @@ describe("BudgetPage", () => {
     });
   });
 
+  it("resets edit mode when the budget being edited is deleted", async () => {
+    const user = userEvent.setup();
+
+    mockGetBudgets
+      .mockResolvedValueOnce([groceriesBudget])
+      .mockResolvedValueOnce([]);
+    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<BudgetPage />);
+
+    await screen.findByRole("heading", { name: "Groceries" });
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Create Budget" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel Edit" })).toBeNull();
+  });
+
+  it.each([
+    [
+      new ApiError("Budget could not be deleted.", 409),
+      "Budget could not be deleted.",
+    ],
+    [
+      new Error("Network unavailable"),
+      "Unable to delete the budget. Please try again.",
+    ],
+  ])("reports a budget deletion failure", async (error, expectedMessage) => {
+    const user = userEvent.setup();
+
+    mockGetBudgets.mockResolvedValue([groceriesBudget]);
+    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    mockDeleteBudget.mockRejectedValue(error);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<BudgetPage />);
+
+    await screen.findByRole("heading", { name: "Groceries" });
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(expectedMessage);
+  });
+
   it("does not delete a budget when confirmation is cancelled", async () => {
     const user = userEvent.setup();
 
@@ -605,6 +796,16 @@ describe("BudgetPage", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Unable to load budgets.",
+    );
+  });
+
+  it("shows a fallback error when the budget page cannot load", async () => {
+    mockGetBudgets.mockRejectedValue(new Error("Network unavailable"));
+
+    render(<BudgetPage />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to load budget information. Please try again.",
     );
   });
 });

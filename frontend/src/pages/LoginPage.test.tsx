@@ -10,7 +10,6 @@ import {
 } from "react-router-dom";
 
 import { describe, expect, it, vi } from "vitest";
-
 import * as AuthContextModule from "../context/AuthContext";
 import { ApiError } from "../services/api";
 import LoginPage from "./LoginPage";
@@ -160,6 +159,26 @@ describe("LoginPage", () => {
         name: "Login",
       }),
     ).toBeInTheDocument();
+  });
+
+  it("shows a fallback error when login fails unexpectedly", async () => {
+    const login = vi.fn().mockRejectedValue(new TypeError("Network failed"));
+
+    mockLoggedOutContext(login);
+
+    render(
+      <MemoryRouter initialEntries={["/login"]}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await submitLoginForm();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to log in. Please try again.",
+    );
   });
 
   it("does not redirect back to Login after a successful login", async () => {
