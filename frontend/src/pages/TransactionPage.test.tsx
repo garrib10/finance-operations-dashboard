@@ -1,7 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
 import * as categoryService from "../services/categoryService";
 import { ApiError } from "../services/api";
 import * as transactionService from "../services/transactionService";
@@ -120,6 +119,26 @@ describe("TransactionPage", () => {
     expect(screen.getAllByText("Groceries")).toHaveLength(2);
     expect(screen.getByText("$75.50")).toBeInTheDocument();
     expect(screen.getByText("Sep 10, 2026")).toBeInTheDocument();
+  });
+
+  it("renders income transactions", async () => {
+    vi.mocked(transactionService.getTransactions).mockResolvedValue(
+      createPagedResponse([
+        {
+          ...transaction,
+          id: 2,
+          type: "INCOME",
+          description: "Paycheck",
+        },
+      ]),
+    );
+
+    render(<TransactionPage />);
+
+    const transactionRow = await screen.findByTestId("transaction-row-2");
+
+    expect(transactionRow).toHaveTextContent("Paycheck");
+    expect(transactionRow).toHaveTextContent("Income");
   });
 
   it("renders the empty transaction state", async () => {
@@ -310,6 +329,87 @@ describe("TransactionPage", () => {
     });
   });
 
+  it.each([
+    ["type", "Type is invalid.", "Type", "#transaction-type"],
+    ["amount", "Amount is invalid.", "Amount", undefined],
+    ["description", "Description is invalid.", "Description", undefined],
+    ["transactionDate", "Date is invalid.", "Date", undefined],
+  ])(
+    "focuses the %s field when it is the first validation error",
+    async (field, message, label, selector) => {
+      const user = userEvent.setup();
+
+      vi.mocked(transactionService.createTransaction).mockRejectedValue(
+        new ApiError("Validation failed.", 400, { [field]: message }),
+      );
+
+      render(<TransactionPage />);
+
+      await screen.findByText("Food Lion");
+      await completeTransactionForm();
+
+      if (field === "type") {
+        await user.selectOptions(
+          screen.getByLabelText("Type", { selector: "#transaction-type" }),
+          "INCOME",
+        );
+      }
+
+      await user.click(screen.getByRole("button", { name: "Add Transaction" }));
+
+      const input = selector
+        ? screen.getByLabelText(label, { selector })
+        : screen.getByLabelText(label);
+
+      expect(await screen.findByText(message)).toBeInTheDocument();
+      expect(input).toHaveAttribute("aria-invalid", "true");
+      expect(input).toHaveAccessibleDescription(message);
+
+      await waitFor(() => {
+        expect(input).toHaveFocus();
+      });
+    },
+  );
+
+  it("shows an API form error that has no field validation details", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(transactionService.createTransaction).mockRejectedValue(
+      new ApiError("Transaction could not be saved.", 422),
+    );
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await completeTransactionForm();
+    await user.click(screen.getByRole("button", { name: "Add Transaction" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Transaction could not be saved.",
+    );
+    expect(screen.getByLabelText("Category")).toHaveAttribute(
+      "aria-invalid",
+      "false",
+    );
+  });
+
+  it.each([
+    [
+      new ApiError("Transactions are unavailable.", 503),
+      "Transactions are unavailable.",
+    ],
+    [
+      new Error("Network failed"),
+      "Unable to load transaction data. Please try again.",
+    ],
+  ])("reports initial transaction load failures", async (error, message) => {
+    vi.mocked(transactionService.getTransactions).mockRejectedValue(error);
+
+    render(<TransactionPage />);
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+  });
+
   it("preserves the create form and skips refresh when creation fails", async () => {
     const user = userEvent.setup();
 
@@ -468,6 +568,48 @@ describe("TransactionPage", () => {
     });
   });
 
+  it("resets the form when deleting the transaction being edited", async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(transactionService.getTransactions)
+      .mockResolvedValueOnce(createPagedResponse())
+      .mockResolvedValueOnce(createPagedResponse([], 0, 0));
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Add Transaction" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cancel" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [new ApiError("Delete is unavailable.", 503), "Delete is unavailable."],
+    [
+      new Error("Network failed"),
+      "Unable to delete transaction. Please try again.",
+    ],
+  ])("reports transaction deletion failures", async (error, message) => {
+    const user = userEvent.setup();
+
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(transactionService.deleteTransaction).mockRejectedValue(error);
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+  });
+
   it("does not delete a transaction when confirmation is cancelled", async () => {
     const user = userEvent.setup();
 
@@ -497,6 +639,13 @@ describe("TransactionPage", () => {
       "EXPENSE",
     );
 
+    await user.type(screen.getByLabelText("Start Date"), "2026-09-01");
+    await user.type(screen.getByLabelText("End Date"), "2026-09-30");
+    await user.type(screen.getByLabelText("Minimum Amount"), "25");
+    await user.type(screen.getByLabelText("Maximum Amount"), "100");
+    await user.selectOptions(screen.getByLabelText("Sort By"), "amount");
+    await user.selectOptions(screen.getByLabelText("Direction"), "asc");
+
     await user.click(
       screen.getByRole("button", {
         name: "Apply Filters",
@@ -510,11 +659,94 @@ describe("TransactionPage", () => {
           size: 10,
           search: "Food",
           type: "EXPENSE",
-          sortBy: "transactionDate",
-          sortDirection: "desc",
+          startDate: "2026-09-01",
+          endDate: "2026-09-30",
+          minAmount: 25,
+          maxAmount: 100,
+          sortBy: "amount",
+          sortDirection: "asc",
         }),
       );
     });
+  });
+
+  it.each([
+    [
+      new ApiError("Filtering is unavailable.", 503),
+      "Filtering is unavailable.",
+    ],
+    [
+      new Error("Network failed"),
+      "Unable to filter transactions. Please try again.",
+    ],
+  ])("reports transaction filter failures", async (error, message) => {
+    const user = userEvent.setup();
+
+    vi.mocked(transactionService.getTransactions)
+      .mockResolvedValueOnce(createPagedResponse())
+      .mockRejectedValueOnce(error);
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+  });
+
+  it("resets filters and reloads the first page with default sorting", async () => {
+    const user = userEvent.setup();
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await user.type(screen.getByLabelText("Search"), "Food");
+    await user.selectOptions(
+      screen.getByLabelText("Type", { selector: "#filter-type" }),
+      "EXPENSE",
+    );
+    await user.type(screen.getByLabelText("Start Date"), "2026-09-01");
+    await user.type(screen.getByLabelText("End Date"), "2026-09-30");
+    await user.type(screen.getByLabelText("Minimum Amount"), "25");
+    await user.type(screen.getByLabelText("Maximum Amount"), "100");
+    await user.selectOptions(screen.getByLabelText("Sort By"), "amount");
+    await user.selectOptions(screen.getByLabelText("Direction"), "asc");
+
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+
+    await waitFor(() => {
+      expect(transactionService.getTransactions).toHaveBeenLastCalledWith({
+        page: 0,
+        size: 10,
+        sortBy: "transactionDate",
+        sortDirection: "desc",
+      });
+    });
+
+    expect(screen.getByLabelText("Search")).toHaveValue("");
+    expect(screen.getByLabelText("Sort By")).toHaveValue("transactionDate");
+    expect(screen.getByLabelText("Direction")).toHaveValue("desc");
+  });
+
+  it.each([
+    [new ApiError("Reset is unavailable.", 503), "Reset is unavailable."],
+    [
+      new Error("Network failed"),
+      "Unable to load transactions. Please try again.",
+    ],
+  ])("reports reset-filter failures", async (error, message) => {
+    const user = userEvent.setup();
+
+    vi.mocked(transactionService.getTransactions)
+      .mockResolvedValueOnce(createPagedResponse())
+      .mockRejectedValueOnce(error);
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
   });
 
   it("loads the next page while preserving filters", async () => {
@@ -544,5 +776,60 @@ describe("TransactionPage", () => {
         }),
       );
     });
+  });
+
+  it("loads the previous page", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(transactionService.getTransactions).mockResolvedValue(
+      createPagedResponse([transaction], 1, 2),
+    );
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+
+    await waitFor(() => {
+      expect(transactionService.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 0 }),
+      );
+    });
+  });
+
+  it("ignores an invalid previous-page request", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(transactionService.getTransactions).mockResolvedValue(
+      createPagedResponse([transaction], -1, 2),
+    );
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+
+    expect(transactionService.getTransactions).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [new ApiError("Page is unavailable.", 503), "Page is unavailable."],
+    [
+      new Error("Network failed"),
+      "Unable to load the requested page. Please try again.",
+    ],
+  ])("reports pagination failures", async (error, message) => {
+    const user = userEvent.setup();
+
+    vi.mocked(transactionService.getTransactions)
+      .mockResolvedValueOnce(createPagedResponse([transaction], 0, 2))
+      .mockRejectedValueOnce(error);
+
+    render(<TransactionPage />);
+
+    await screen.findByText("Food Lion");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
   });
 });

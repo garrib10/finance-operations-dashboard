@@ -141,6 +141,27 @@ describe("AppHeader", () => {
     expect(screen.queryByText("demo@fintrack.dev")).not.toBeInTheDocument();
   });
 
+  it("keeps the account menu open for keys other than Escape", async () => {
+    const user = userEvent.setup();
+    mockAuthenticatedUser();
+    renderHeader();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Open account menu for Demo User",
+      }),
+    );
+
+    fireEvent.keyDown(document, { key: "Enter" });
+
+    expect(screen.getByText("demo@fintrack.dev")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Close account menu for Demo User",
+      }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("closes the account menu when a pointer event occurs outside it", async () => {
     const user = userEvent.setup();
     mockAuthenticatedUser();

@@ -33,6 +33,14 @@ function successResponse<T>(body: T): Response {
   } as unknown as Response;
 }
 
+function noContentResponse(): Response {
+  return {
+    ok: true,
+    status: 204,
+    json: vi.fn(),
+  } as unknown as Response;
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   fetchMock.mockReset();
@@ -150,6 +158,51 @@ describe("public API requests", () => {
     );
 
     unsubscribe();
+  });
+});
+
+describe("API response handling", () => {
+  it("returns field errors from a validation response", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: vi.fn().mockResolvedValue({
+        fields: {
+          email: "Email must be valid.",
+        },
+      }),
+    } as unknown as Response);
+
+    await expect(
+      apiRequest("/api/auth/register", { authenticated: false }),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: "Validation failed.",
+      validationErrors: {
+        email: "Email must be valid.",
+      },
+    });
+  });
+
+  it("uses a fallback message when an error response omits one", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: vi.fn().mockResolvedValue({}),
+    } as unknown as Response);
+
+    await expect(apiRequest("/api/dashboard")).rejects.toMatchObject({
+      status: 500,
+      message: "An unexpected error occurred.",
+    });
+  });
+
+  it("returns undefined for a successful no-content response", async () => {
+    const response = noContentResponse();
+    fetchMock.mockResolvedValueOnce(response);
+
+    await expect(apiRequest("/api/transactions/1")).resolves.toBeUndefined();
+    expect(response.json).not.toHaveBeenCalled();
   });
 });
 
