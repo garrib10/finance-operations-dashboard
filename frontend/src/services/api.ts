@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "./apiConfig";
+import { invalidateAuthSession } from "./authSession";
 import { getAuthToken } from "../utils/authToken";
 import type { ApiErrorResponse, ValidationErrorResponse } from "../types/api";
 
@@ -19,14 +20,20 @@ export class ApiError extends Error {
   }
 }
 
+export interface ApiRequestOptions extends RequestInit {
+  authenticated?: boolean;
+}
+
 export async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {},
+  options: ApiRequestOptions = {},
 ): Promise<T> {
-  const token = getAuthToken();
+  const { authenticated = true, ...requestOptions } = options;
+
+  const token = authenticated ? getAuthToken() : null;
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
+    ...requestOptions,
     headers: {
       "Content-Type": "application/json",
       ...(token
@@ -34,11 +41,15 @@ export async function apiRequest<T>(
             Authorization: `Bearer ${token}`,
           }
         : {}),
-      ...options.headers,
+      ...requestOptions.headers,
     },
   });
 
   if (!response.ok) {
+    if (response.status === 401 && authenticated) {
+      invalidateAuthSession();
+    }
+
     const errorBody = (await response.json()) as
       | ApiErrorResponse
       | ValidationErrorResponse;
