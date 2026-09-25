@@ -78,13 +78,7 @@ public class AuthController {
                 .findByEmail(email)
                 .orElseThrow();
 
-        UserResponse response = new UserResponse(
-                user.getId(),
-                user.getFirstName(),
-                user.getLastName(),
-                user.getEmail(),
-                user.getCreatedAt()
-        );
+        UserResponse response = UserResponse.from(user);
 
         return ResponseEntity.ok(response);
     }

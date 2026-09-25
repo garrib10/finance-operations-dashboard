@@ -25,13 +25,14 @@ class FlywayMigrationTest {
 
         flyway.migrate();
 
-        assertThat(currentVersion(flyway)).isEqualTo("2");
+        assertThat(currentVersion(flyway)).isEqualTo("3");
         assertThat(rowCount(databaseUrl, "users")).isZero();
         assertThat(rowCount(databaseUrl, "categories")).isZero();
         assertThat(rowCount(databaseUrl, "transactions")).isZero();
         assertThat(rowCount(databaseUrl, "budgets")).isZero();
         assertThat(historyCount(databaseUrl, "1", "SQL")).isEqualTo(1);
         assertThat(historyCount(databaseUrl, "2", "SQL")).isEqualTo(1);
+        assertThat(historyCount(databaseUrl, "3", "SQL")).isEqualTo(1);
         assertThat(transactionLookupIndexCount(databaseUrl)).isEqualTo(1);
     }
 
@@ -45,10 +46,11 @@ class FlywayMigrationTest {
         Flyway flyway = configureFlyway(databaseUrl, true);
         flyway.migrate();
 
-        assertThat(currentVersion(flyway)).isEqualTo("2");
+        assertThat(currentVersion(flyway)).isEqualTo("3");
         assertThat(rowCount(databaseUrl, "users")).isEqualTo(1);
         assertThat(historyCount(databaseUrl, "1", "BASELINE")).isEqualTo(1);
         assertThat(historyCount(databaseUrl, "2", "SQL")).isEqualTo(1);
+        assertThat(historyCount(databaseUrl, "3", "SQL")).isEqualTo(1);
         assertThat(transactionLookupIndexCount(databaseUrl)).isEqualTo(1);
     }
 
@@ -63,6 +65,59 @@ class FlywayMigrationTest {
 
         assertThatThrownBy(flyway::migrate)
                 .isInstanceOf(FlywayException.class);
+    }
+
+    @Test
+    void shouldUpgradePopulatedV2PreservingDataAndEnforcingDefaults() throws SQLException {
+        String url = databaseUrl("upgrade");
+        Flyway.configure().dataSource(url, "sa", "")
+                .locations("classpath:db/migration").target("2").load().migrate();
+        insertExistingUser(url);
+        try (Connection connection = DriverManager.getConnection(url, "sa", "");
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate("UPDATE users SET first_name = '  Flyway  ', last_name = ' Test  '");
+            statement.executeUpdate("INSERT INTO categories VALUES (1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, TRUE, 'Food', 1)");
+            statement.executeUpdate("INSERT INTO transactions VALUES (1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 12.50, 'Lunch', CURRENT_DATE, 'EXPENSE', 1, 1)");
+            statement.executeUpdate("INSERT INTO budgets VALUES (1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 9, 100.00, 2026, 1, 1)");
+            statement.executeUpdate("INSERT INTO users (first_name,last_name,email,password_hash,created_at,updated_at) VALUES (' ', ' ', 'blank@example.com', 'blank-hash', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
+            statement.executeUpdate("INSERT INTO users (first_name,last_name,email,password_hash,created_at,updated_at) VALUES (REPEAT('a',100), REPEAT('b',100), 'long@example.com', 'long-hash', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
+            String original;
+            try (ResultSet row = statement.executeQuery("SELECT CONCAT(id, email, first_name, last_name, password_hash, created_at, updated_at) FROM users WHERE id = 1")) {
+                row.next();
+                original = row.getString(1);
+            }
+            Flyway flyway = configureFlyway(url, false);
+            flyway.migrate();
+            assertThat(currentVersion(flyway)).isEqualTo("3");
+            assertThat(flyway.migrate().migrationsExecuted).isZero();
+            assertThat(historyCount(url, "3", "SQL")).isEqualTo(1);
+            try (ResultSet rows = statement.executeQuery("SELECT *, CONCAT(id, email, first_name, last_name, password_hash, created_at, updated_at) AS original FROM users ORDER BY id")) {
+                rows.next();
+                assertThat(rows.getString("original")).isEqualTo(original);
+                assertThat(rows.getString("display_name")).isEqualTo("Flyway Test");
+                assertThat(rows.getString("date_format")).isEqualTo("MEDIUM");
+                assertThat(rows.getInt("transaction_page_size")).isEqualTo(10);
+                rows.next();
+                assertThat(rows.getString("display_name")).isEqualTo("Account");
+                rows.next();
+                assertThat(rows.getString("display_name")).isEqualTo("a".repeat(100));
+            }
+            assertThat(rowCount(url, "users")).isEqualTo(3);
+            assertThat(rowCount(url, "categories")).isEqualTo(1);
+            assertThat(rowCount(url, "transactions")).isEqualTo(1);
+            assertThat(rowCount(url, "budgets")).isEqualTo(1);
+            statement.executeUpdate("INSERT INTO users (first_name,last_name,display_name,email,password_hash,created_at,updated_at) VALUES ('New', 'User', 'New User', 'new@example.com', 'hash', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
+            try (ResultSet row = statement.executeQuery("SELECT date_format, transaction_page_size FROM users WHERE email = 'new@example.com'")) {
+                row.next();
+                assertThat(row.getString(1)).isEqualTo("MEDIUM");
+                assertThat(row.getInt(2)).isEqualTo(10);
+            }
+            statement.executeUpdate("UPDATE users SET date_format = 'ISO', transaction_page_size = 25 WHERE id = 1");
+            statement.executeUpdate("UPDATE users SET transaction_page_size = 50 WHERE id = 1");
+            assertThatThrownBy(() -> statement.executeUpdate("UPDATE users SET display_name = NULL WHERE id = 1")).isInstanceOf(SQLException.class);
+            assertThatThrownBy(() -> statement.executeUpdate("UPDATE users SET date_format = 'OTHER' WHERE id = 1")).isInstanceOf(SQLException.class);
+            assertThatThrownBy(() -> statement.executeUpdate("UPDATE users SET transaction_page_size = 11 WHERE id = 1")).isInstanceOf(SQLException.class);
+        }
     }
 
     private Flyway configureFlyway(

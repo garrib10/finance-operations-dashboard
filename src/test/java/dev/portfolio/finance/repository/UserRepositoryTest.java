@@ -16,6 +16,9 @@ import dev.portfolio.finance.entity.User;
 class UserRepositoryTest {
 
     @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+
+    @Autowired
     private UserRepository userRepository;
 
     @Test
@@ -28,7 +31,8 @@ class UserRepositoryTest {
                 "hashed-password"
         );
 
-        userRepository.save(user);
+        userRepository.saveAndFlush(user);
+        entityManager.clear();
 
         var result =
                 userRepository.findByEmail("test@example.com");
@@ -41,6 +45,10 @@ class UserRepositoryTest {
 
         assertThat(result.get().getFirstName())
                 .isEqualTo("Test");
+
+        assertThat(result.get().getDisplayName()).isEqualTo("Test User");
+        assertThat(result.get().getDateFormat()).isEqualTo(dev.portfolio.finance.entity.DateFormatPreference.MEDIUM);
+        assertThat(result.get().getTransactionPageSize()).isEqualTo(10);
 
         assertThat(result.get().getLastName())
                 .isEqualTo("User");

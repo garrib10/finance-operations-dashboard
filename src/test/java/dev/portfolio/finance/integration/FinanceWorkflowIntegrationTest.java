@@ -25,7 +25,7 @@ class FinanceWorkflowIntegrationTest {
             "integration@example.com";
 
     private static final String TEST_PASSWORD =
-            "Password123!";
+            "River meadow lantern 42!";
 
     @Autowired
     private MockMvc mockMvc;
