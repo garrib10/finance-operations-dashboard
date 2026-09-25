@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.RestController;
 import dev.portfolio.finance.dto.category.CategoryResponse;
 import dev.portfolio.finance.dto.category.CreateCategoryRequest;
 import dev.portfolio.finance.service.CategoryService;
-import dev.portfolio.finance.exception.category.CategoryNotFoundException;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PathVariable;
 import dev.portfolio.finance.dto.category.UpdateCategoryRequest;

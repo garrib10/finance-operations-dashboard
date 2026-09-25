@@ -1,13 +1,14 @@
 import { createContext, useContext } from "react";
-
 import type { LoginRequest, UserResponse } from "../types/auth";
 
 export interface AuthContextValue {
   user: UserResponse | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  restorationError: string | null;
   login: (request: LoginRequest) => Promise<void>;
   logout: () => void;
+  retrySessionRestore: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextValue | undefined>(

@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SubmitEvent as ReactSubmitEvent } from "react";
-
 import {
   Bar,
   BarChart,
@@ -12,7 +11,6 @@ import {
 } from "recharts";
 
 import { ApiError } from "../services/api";
-
 import {
   createBudget,
   deleteBudget,
@@ -22,7 +20,6 @@ import {
 } from "../services/budgetService";
 
 import { getCategories } from "../services/categoryService";
-
 import type {
   BudgetAnalyticsResponse,
   BudgetResponse,
@@ -32,7 +29,6 @@ import type {
 } from "../types/budget";
 
 import type { CategoryResponse } from "../types/category";
-
 import { formatCurrency } from "../utils/formatters";
 
 interface BudgetFormState {
@@ -115,9 +111,14 @@ function BudgetPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [formErrorMessage, setFormErrorMessage] = useState("");
+  const [refreshWarning, setRefreshWarning] = useState("");
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
+
+  const formHeadingRef = useRef<HTMLHeadingElement>(null);
+  const editTriggerIdRef = useRef<number | null>(null);
+  const pendingFocusTriggerIdRef = useRef<number | null>(null);
 
   const today = new Date();
   const [viewMonth, setViewMonth] = useState(String(today.getMonth() + 1));
@@ -148,9 +149,8 @@ function BudgetPage() {
   async function loadBudgetData(): Promise<void> {
     const budgetResponse = await getBudgets();
 
-    setBudgets(budgetResponse);
-
     if (budgetResponse.length === 0) {
+      setBudgets([]);
       setAnalytics({});
       return;
     }
@@ -167,6 +167,7 @@ function BudgetPage() {
       return result;
     }, {});
 
+    setBudgets(budgetResponse);
     setAnalytics(analyticsByBudgetId);
   }
 
@@ -219,6 +220,35 @@ function BudgetPage() {
     void loadPageData();
   }, []);
 
+  useEffect(() => {
+    if (editingBudgetId === null) {
+      return;
+    }
+
+    formHeadingRef.current?.scrollIntoView?.({
+      behavior: "smooth",
+      block: "start",
+    });
+
+    formHeadingRef.current?.focus({
+      preventScroll: true,
+    });
+  }, [editingBudgetId]);
+
+  useEffect(() => {
+    if (editingBudgetId !== null || pendingFocusTriggerIdRef.current === null) {
+      return;
+    }
+
+    const triggerId = pendingFocusTriggerIdRef.current;
+
+    document
+      .querySelector<HTMLButtonElement>(`[data-budget-edit-id="${triggerId}"]`)
+      ?.focus();
+
+    pendingFocusTriggerIdRef.current = null;
+  }, [editingBudgetId]);
+
   function resetForm(): void {
     setForm(getInitialBudgetForm());
 
@@ -227,9 +257,19 @@ function BudgetPage() {
     setFormErrorMessage("");
 
     setValidationErrors({});
+
+    editTriggerIdRef.current = null;
+  }
+
+  function handleCancelEdit(): void {
+    pendingFocusTriggerIdRef.current = editTriggerIdRef.current;
+
+    resetForm();
   }
 
   function handleEditBudget(budget: BudgetResponse): void {
+    editTriggerIdRef.current = budget.id;
+
     setEditingBudgetId(budget.id);
 
     setForm({
@@ -242,11 +282,6 @@ function BudgetPage() {
     setFormErrorMessage("");
 
     setValidationErrors({});
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
   }
 
   async function handleSubmit(
@@ -254,7 +289,11 @@ function BudgetPage() {
   ): Promise<void> {
     event.preventDefault();
 
+    const isEditing = editingBudgetId !== null;
+
     setFormErrorMessage("");
+
+    setRefreshWarning("");
 
     setValidationErrors({});
 
@@ -277,27 +316,14 @@ function BudgetPage() {
       year: Number(form.year),
     };
 
-    try {
-      setIsSubmitting(true);
+    setIsSubmitting(true);
 
+    try {
       if (editingBudgetId !== null) {
         await updateBudget(editingBudgetId, request);
       } else {
         await createBudget(request);
       }
-
-      /*
-       * Move the displayed budget period
-       * to the month/year that was just
-       * created or updated.
-       */
-      setViewMonth(String(request.month));
-
-      setViewYear(String(request.year));
-
-      resetForm();
-
-      await loadBudgetData();
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.validationErrors) {
@@ -307,11 +333,32 @@ function BudgetPage() {
         }
       } else {
         setFormErrorMessage(
-          editingBudgetId !== null
+          isEditing
             ? "Unable to update the budget. Please try again."
             : "Unable to create the budget. Please try again.",
         );
       }
+
+      setIsSubmitting(false);
+      return;
+    }
+
+    /*
+     * Move the displayed budget period to the month/year
+     * that was successfully created or updated.
+     */
+    setViewMonth(String(request.month));
+
+    setViewYear(String(request.year));
+
+    resetForm();
+
+    try {
+      await loadBudgetData();
+    } catch {
+      setRefreshWarning(
+        "Budget saved, but the budget list could not be refreshed. Reload the page to see the latest data.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -365,8 +412,16 @@ function BudgetPage() {
 
       {errorMessage && <p role="alert">{errorMessage}</p>}
 
+      {refreshWarning && (
+        <p className="form-error" role="status">
+          {refreshWarning}
+        </p>
+      )}
+
       <section>
-        <h2>{editingBudgetId !== null ? "Edit Budget" : "Create Budget"}</h2>
+        <h2 ref={formHeadingRef} tabIndex={-1}>
+          {editingBudgetId !== null ? "Edit Budget" : "Create Budget"}
+        </h2>
 
         <form className="budget-form" onSubmit={handleSubmit}>
           <label className="form-field">
@@ -476,7 +531,7 @@ function BudgetPage() {
               <button
                 type="button"
                 className="button button--secondary"
-                onClick={resetForm}
+                onClick={handleCancelEdit}
                 disabled={isSubmitting}
               >
                 Cancel Edit
@@ -700,6 +755,7 @@ function BudgetPage() {
                     <button
                       type="button"
                       className="button button--secondary"
+                      data-budget-edit-id={budget.id}
                       onClick={() => handleEditBudget(budget)}
                     >
                       Edit

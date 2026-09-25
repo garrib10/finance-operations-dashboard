@@ -2,9 +2,9 @@ name: ESLint
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
   schedule:
     - cron: "23 2 * * 2"
 
@@ -12,7 +12,7 @@ permissions:
   contents: read
   security-events: write
 
-a_jobs:
+jobs:
   eslint:
     name: Run ESLint scanning
     runs-on: ubuntu-latest
