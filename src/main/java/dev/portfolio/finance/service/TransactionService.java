@@ -212,10 +212,13 @@ public class TransactionService {
                         ? Sort.Direction.ASC
                         : Sort.Direction.DESC;
 
+        Sort sort = Sort.by(direction, sortBy)
+                .and(Sort.by(direction, "id"));
+
         Pageable pageable = PageRequest.of(
                 page,
                 size,
-                Sort.by(direction, sortBy)
+                sort
         );
 
         Specification<Transaction> specification =

@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import AppHeader from "./AppHeader";
+import { MemoryRouter } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as AuthContextModule from "../context/AuthContext";
+import AppHeader from "./AppHeader";
 
 vi.mock("../context/AuthContext", async () => {
   const actual = await vi.importActual<typeof AuthContextModule>(
@@ -18,68 +18,205 @@ vi.mock("../context/AuthContext", async () => {
 
 const mockedUseAuth = vi.mocked(AuthContextModule.useAuth);
 
+function mockAuthenticatedUser(logout = vi.fn()): void {
+  mockedUseAuth.mockReturnValue({
+    user: {
+      id: 1,
+      firstName: "Demo",
+      lastName: "User",
+      email: "demo@fintrack.dev",
+      createdAt: "2026-09-09T00:00:00",
+    },
+    isAuthenticated: true,
+    isLoading: false,
+    restorationError: null,
+    login: vi.fn(),
+    logout,
+    retrySessionRestore: vi.fn(async () => undefined),
+  });
+}
+
+function renderHeader(): void {
+  render(
+    <MemoryRouter>
+      <AppHeader />
+    </MemoryRouter>,
+  );
+}
+
 describe("AppHeader", () => {
-  it("shows authenticated navigation and user name", () => {
-    mockedUseAuth.mockReturnValue({
-      user: {
-        id: 1,
-        firstName: "Demo",
-        lastName: "User",
-        email: "demo@fintrack.dev",
-        createdAt: "2026-09-09T00:00:00",
-      },
-      isAuthenticated: true,
-      isLoading: false,
-      login: vi.fn(),
-      logout: vi.fn(),
-    });
-
-    render(
-      <MemoryRouter>
-        <AppHeader />
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByText("Demo")).toBeInTheDocument();
-
-    expect(screen.getByText("Dashboard")).toBeInTheDocument();
-
-    expect(screen.getByText("Transactions")).toBeInTheDocument();
-
-    expect(screen.getByText("Budgets")).toBeInTheDocument();
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it("calls logout when the logout button is clicked", async () => {
-    const logout = vi.fn();
+  it("shows authenticated navigation and a closed account menu", () => {
+    mockAuthenticatedUser();
+    renderHeader();
 
-    mockedUseAuth.mockReturnValue({
-      user: {
-        id: 1,
-        firstName: "Demo",
-        lastName: "User",
-        email: "demo@fintrack.dev",
-        createdAt: "2026-09-09T00:00:00",
-      },
-      isAuthenticated: true,
-      isLoading: false,
-      login: vi.fn(),
-      logout,
+    const accountTrigger = screen.getByRole("button", {
+      name: "Open account menu for Demo User",
     });
 
-    const user = userEvent.setup();
+    expect(accountTrigger).toHaveAttribute("aria-expanded", "false");
+    expect(accountTrigger).toHaveAttribute(
+      "aria-controls",
+      "account-menu-panel",
+    );
+    expect(accountTrigger).toHaveTextContent("DU");
+    expect(accountTrigger).toHaveTextContent("Demo User");
 
-    render(
-      <MemoryRouter>
-        <AppHeader />
-      </MemoryRouter>,
+    expect(screen.getByText("Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("Transactions")).toBeInTheDocument();
+    expect(screen.getByText("Budgets")).toBeInTheDocument();
+    expect(screen.queryByText("demo@fintrack.dev")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Logout" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens the account menu and displays the user identity", async () => {
+    const user = userEvent.setup();
+    mockAuthenticatedUser();
+    renderHeader();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Open account menu for Demo User",
+      }),
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Close account menu for Demo User",
+      }),
+    ).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("demo@fintrack.dev")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Logout" })).toBeInTheDocument();
+  });
+
+  it("closes the account menu when the trigger is selected again", async () => {
+    const user = userEvent.setup();
+    mockAuthenticatedUser();
+    renderHeader();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Open account menu for Demo User",
+      }),
     );
 
     await user.click(
       screen.getByRole("button", {
-        name: "Logout",
+        name: "Close account menu for Demo User",
       }),
     );
 
+    expect(
+      screen.getByRole("button", {
+        name: "Open account menu for Demo User",
+      }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("demo@fintrack.dev")).not.toBeInTheDocument();
+  });
+
+  it("closes the account menu with Escape and restores trigger focus", async () => {
+    const user = userEvent.setup();
+    mockAuthenticatedUser();
+    renderHeader();
+
+    const accountTrigger = screen.getByRole("button", {
+      name: "Open account menu for Demo User",
+    });
+
+    await user.click(accountTrigger);
+
+    const logoutButton = screen.getByRole("button", { name: "Logout" });
+    logoutButton.focus();
+    expect(logoutButton).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
+    expect(accountTrigger).toHaveFocus();
+    expect(accountTrigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("demo@fintrack.dev")).not.toBeInTheDocument();
+  });
+
+  it("keeps the account menu open for keys other than Escape", async () => {
+    const user = userEvent.setup();
+    mockAuthenticatedUser();
+    renderHeader();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Open account menu for Demo User",
+      }),
+    );
+
+    fireEvent.keyDown(document, { key: "Enter" });
+
+    expect(screen.getByText("demo@fintrack.dev")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Close account menu for Demo User",
+      }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("closes the account menu when a pointer event occurs outside it", async () => {
+    const user = userEvent.setup();
+    mockAuthenticatedUser();
+    renderHeader();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Open account menu for Demo User",
+      }),
+    );
+
+    fireEvent.pointerDown(document.body);
+
+    expect(screen.queryByText("demo@fintrack.dev")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Open account menu for Demo User",
+      }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("calls logout and closes the account menu", async () => {
+    const user = userEvent.setup();
+    const logout = vi.fn();
+    mockAuthenticatedUser(logout);
+    renderHeader();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Open account menu for Demo User",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Logout" }));
+
     expect(logout).toHaveBeenCalledOnce();
+    expect(screen.queryByText("demo@fintrack.dev")).not.toBeInTheDocument();
+  });
+
+  it("shows authentication navigation when signed out", () => {
+    mockedUseAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      restorationError: null,
+      login: vi.fn(),
+      logout: vi.fn(),
+      retrySessionRestore: vi.fn(async () => undefined),
+    });
+
+    renderHeader();
+
+    expect(screen.getByRole("link", { name: "Login" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Register" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /account menu/i }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -5,6 +5,7 @@
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)
+![Flyway](https://img.shields.io/badge/Flyway-CC0200?logo=flyway&logoColor=white)
 ![JUnit 5](https://img.shields.io/badge/JUnit-5-25A162?logo=junit5&logoColor=white)
 ![Vitest](https://img.shields.io/badge/Vitest-4.1-6E9F18?logo=vitest&logoColor=white)
 ![Railway](https://img.shields.io/badge/Railway-0B0D0E?logo=railway&logoColor=white)
@@ -35,8 +36,8 @@ The project demonstrates layered backend architecture, stateless JWT authenticat
 - Search, filtering, sorting, pagination, and financial analytics
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
-- **152 passing backend tests** with **98% instruction coverage** and **94% branch coverage**
-- **39 passing frontend tests** across **7 test files**
+- **170 passing backend tests** with **98% instruction coverage** and **94% branch coverage**
+- **141 passing frontend tests** across **20 test files** with **100% statement, branch, function, and line coverage**
 
 ---
 
@@ -46,7 +47,7 @@ The project demonstrates layered backend architecture, stateless JWT authenticat
 | ---------------- | ------------------------------------------------------------------------------------------------------------- |
 | Backend          | Java 21, Spring Boot 4.1, Spring Web MVC, Spring Security, Spring Data JPA, Hibernate, Bean Validation, Maven |
 | Frontend         | React 19, TypeScript 6, Vite, React Router, Recharts, custom CSS                                              |
-| Database         | MySQL                                                                                                         |
+| Database         | MySQL, Flyway                                                                                                 |
 | Authentication   | JWT, BCrypt                                                                                                   |
 | Backend Testing  | JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, JaCoCo                                 |
 | Frontend Testing | Vitest, React Testing Library, jest-dom, jsdom                                                                |
@@ -84,7 +85,11 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 - User registration and login
 - Session restoration after browser refresh
 - Protected application routes
+- Centralized handling for expired or invalid authenticated sessions
+- Attempted-route restoration after signing in again
+- Temporary restoration failures preserve the stored session and provide a manual retry action
 - Logout and session clearing
+- Accessible user-account dropdown with account details, keyboard dismissal, focus restoration, and logout
 
 ### Transactions
 
@@ -93,6 +98,9 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 - Filter by type, amount, and date
 - Sort by amount, transaction date, or creation date
 - Paginated transaction results
+- Deterministic pagination: transactions with equal values in the selected sort field are ordered by transaction ID in the same direction.
+- Preserve completed saves and show separate warnings when a follow-up list refresh fails
+- Accessible validation errors with field associations and automatic focus management
 
 ### Categories
 
@@ -109,6 +117,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 - Prevent duplicate budgets for the same category and period
 - Calculate spending, remaining balance, and utilization
 - Display On Track, Caution, Warning, and Over Budget statuses
+- Preserve completed saves and show separate warnings when a follow-up list or analytics refresh fails
 
 ### Dashboard
 
@@ -131,6 +140,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 ## Security
 
 - Stateless authentication using signed JWT access tokens
+- Documented [CSRF security decision for stateless JWT authentication](docs/security-csrf.md)
 - Password hashing with BCrypt
 - Protected frontend routes and backend API endpoints
 - Authenticated-user ownership enforcement for transactions, categories, budgets, and dashboard data
@@ -147,17 +157,20 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 
 ## Testing & Quality
 
-| Test Suite       | Results                                           |
-| ---------------- | ------------------------------------------------- |
-| Backend          | **152 tests passing**                             |
-| Backend Coverage | **98% instruction coverage, 94% branch coverage** |
-| Frontend         | **39 tests passing across 7 test files**          |
+| Test Suite        | Results                                              |
+| ----------------- | ---------------------------------------------------- |
+| Backend           | **170 tests passing**                                |
+| Backend Coverage  | **98% instruction coverage, 94% branch coverage**    |
+| Frontend          | **141 tests passing across 20 test files**           |
+| Frontend Coverage | **100% statement,branch,function and line coverage** |
 
 For deployed routes, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
+For schema versioning, migration conventions, existing-database adoption, and backup expectations, see [Database Migrations](docs/database-migrations.md).
+
 ### Backend Testing
 
-The backend test suite uses JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, and JaCoCo.
+The backend test suite uses JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, Flyway and JaCoCo.
 
 Coverage includes:
 
@@ -172,6 +185,7 @@ Coverage includes:
 - Budget calculations, analytics, and status behavior
 - Dashboard aggregation
 - Full authenticated application workflows
+- Flyway clean-schema migrations, existing-schema adoption, migration history, and failure handling
 
 Backend tests use a dedicated `test` profile and an H2 in-memory database configured for MySQL compatibility.
 
@@ -312,6 +326,7 @@ Authorization: Bearer <JWT>
 | `src/main/java/dev/portfolio/finance/service`       | Business logic and ownership enforcement                                 |
 | `src/main/java/dev/portfolio/finance/specification` | Dynamic transaction filtering                                            |
 | `src/main/resources`                                | Application and production configuration                                 |
+| `src/main/resources/db/migration`                   | Versioned Flyway database migrations                                     |
 | `src/test`                                          | Backend unit and integration tests                                       |
 | `frontend/src`                                      | React components, pages, services, contexts, types, hooks, and utilities |
 | `docs/sql`                                          | Documented MySQL scripts                                                 |
@@ -374,6 +389,8 @@ Start the Spring Boot API:
 ./scripts/run-local.sh
 ```
 
+Flyway applies pending database migrations during application startup. For setup, adoption, and migration rules, see [Database Migrations](docs/database-migrations.md).
+
 The backend runs at `http://localhost:8080`.
 
 - Health endpoint: `http://localhost:8080/api/health`
@@ -406,17 +423,11 @@ The frontend runs at `http://localhost:5173`.
 
 ## Future Improvements
 
-- Add database migrations with Flyway or Liquibase
 - Add refresh-token support and token revocation
-- Add a custom-category workflow where selecting `Other` displays a field for entering and saving a new category
-- Add an accessible user-account menu with an initials avatar, profile, account settings, and logout options
+- Add a custom-category workflow where selecting Other displays a field for entering and saving a new category
+- Expand the user-account dropdown with profile management, account settings, password-change controls, and account preferences
 - Add optional profile-photo upload with secure file validation and object storage
-- Add profile management, password-change controls, and account preferences
-- Automatically scroll to and focus the transaction or budget form when a user selects a record to edit
-- Improve budget progress-bar accessibility with proper progress-bar roles, values, and assistive-technology support
-- Add backend and frontend coverage reporting with enforceable quality thresholds
 - Add production monitoring and structured application metrics
-- Build a separate Selenium end-to-end automation suite covering deployed FinTrack workflows
 
 ---
 

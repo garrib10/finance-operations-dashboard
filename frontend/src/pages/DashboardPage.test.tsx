@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { ApiError } from "../services/api";
 import DashboardPage from "./DashboardPage";
 import * as DashboardService from "../services/dashboardService";
 import type { DashboardResponse } from "../types/dashboard";
@@ -174,6 +175,23 @@ describe("DashboardPage", () => {
     expect(screen.queryByText("OVER_BUDGET")).not.toBeInTheDocument();
   });
 
+  it("keeps an unknown budget status readable", async () => {
+    mockedGetDashboard.mockResolvedValue({
+      ...dashboardResponse,
+      budgetSummaries: [
+        {
+          ...budgetSummaries[0],
+          status:
+            "PAUSED" as DashboardResponse["budgetSummaries"][number]["status"],
+        },
+      ],
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("PAUSED")).toBeInTheDocument();
+  });
+
   it("exposes accessible budget progress values and caps over-budget progress", async () => {
     mockedGetDashboard.mockResolvedValue({
       ...dashboardResponse,
@@ -223,5 +241,27 @@ describe("DashboardPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Unable to load dashboard data. Please try again.",
     );
+  });
+
+  it("shows the API error message when dashboard loading fails", async () => {
+    mockedGetDashboard.mockRejectedValue(
+      new ApiError("Dashboard service is unavailable.", 503),
+    );
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Dashboard service is unavailable.",
+    );
+  });
+
+  it("shows a fallback when the dashboard response is empty", async () => {
+    mockedGetDashboard.mockResolvedValue(null as unknown as DashboardResponse);
+
+    render(<DashboardPage />);
+
+    expect(
+      await screen.findByText("No dashboard data is available."),
+    ).toBeInTheDocument();
   });
 });

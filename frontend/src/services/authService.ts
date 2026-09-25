@@ -10,6 +10,7 @@ export function login(request: LoginRequest): Promise<LoginResponse> {
   return apiRequest<LoginResponse>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify(request),
+    authenticated: false,
   });
 }
 
@@ -17,6 +18,7 @@ export function register(request: RegisterRequest): Promise<UserResponse> {
   return apiRequest<UserResponse>("/api/auth/register", {
     method: "POST",
     body: JSON.stringify(request),
+    authenticated: false,
   });
 }
 

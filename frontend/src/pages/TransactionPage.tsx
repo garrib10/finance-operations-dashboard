@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SubmitEvent as ReactSubmitEvent } from "react";
 import { ApiError } from "../services/api";
 import { getCategories } from "../services/categoryService";
@@ -81,9 +81,86 @@ function TransactionPage() {
 
   const [formErrorMessage, setFormErrorMessage] = useState("");
 
+  const [refreshWarning, setRefreshWarning] = useState("");
+
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
+
+  const categoryInputRef = useRef<HTMLSelectElement>(null);
+  const typeInputRef = useRef<HTMLSelectElement>(null);
+  const amountInputRef = useRef<HTMLInputElement>(null);
+  const descriptionInputRef = useRef<HTMLInputElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const formErrorRef = useRef<HTMLParagraphElement>(null);
+  const formHeadingRef = useRef<HTMLHeadingElement>(null);
+  const editTriggerIdRef = useRef<number | null>(null);
+  const pendingFocusTriggerIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (validationErrors.categoryId) {
+      categoryInputRef.current?.focus();
+      return;
+    }
+
+    if (validationErrors.type) {
+      typeInputRef.current?.focus();
+      return;
+    }
+
+    if (validationErrors.amount) {
+      amountInputRef.current?.focus();
+      return;
+    }
+
+    if (validationErrors.description) {
+      descriptionInputRef.current?.focus();
+      return;
+    }
+
+    if (validationErrors.transactionDate) {
+      dateInputRef.current?.focus();
+      return;
+    }
+
+    if (formErrorMessage) {
+      formErrorRef.current?.focus();
+    }
+  }, [formErrorMessage, validationErrors]);
+
+  useEffect(() => {
+    if (editingTransactionId === null) {
+      return;
+    }
+
+    formHeadingRef.current?.scrollIntoView?.({
+      behavior: "smooth",
+      block: "start",
+    });
+
+    formHeadingRef.current?.focus({
+      preventScroll: true,
+    });
+  }, [editingTransactionId]);
+
+  useEffect(() => {
+    if (
+      editingTransactionId !== null ||
+      pendingFocusTriggerIdRef.current === null
+    ) {
+      return;
+    }
+
+    const triggerId = pendingFocusTriggerIdRef.current;
+
+    document
+      .querySelector<HTMLButtonElement>(
+        `[data-transaction-edit-id="${triggerId}"]`,
+      )
+      ?.focus();
+
+    pendingFocusTriggerIdRef.current = null;
+  }, [editingTransactionId]);
 
   function buildFilters(page = 0): TransactionFilterRequest {
     return {
@@ -162,9 +239,18 @@ function TransactionPage() {
     setEditingTransactionId(null);
     setFormErrorMessage("");
     setValidationErrors({});
+    editTriggerIdRef.current = null;
+  }
+
+  function handleCancelEdit(): void {
+    pendingFocusTriggerIdRef.current = editTriggerIdRef.current;
+
+    resetForm();
   }
 
   function handleEdit(transaction: TransactionResponse): void {
+    editTriggerIdRef.current = transaction.id;
+
     setEditingTransactionId(transaction.id);
 
     setForm({
@@ -184,8 +270,11 @@ function TransactionPage() {
   ): Promise<void> {
     event.preventDefault();
 
+    const isEditing = editingTransactionId !== null;
+
     setIsSubmitting(true);
     setFormErrorMessage("");
+    setRefreshWarning("");
     setValidationErrors({});
 
     const request: CreateTransactionRequest = {
@@ -202,10 +291,6 @@ function TransactionPage() {
       } else {
         await createTransaction(request);
       }
-
-      resetForm();
-
-      await loadTransactions(buildFilters(0));
     } catch (error) {
       if (error instanceof ApiError) {
         setFormErrorMessage(error.message);
@@ -214,8 +299,25 @@ function TransactionPage() {
           setValidationErrors(error.validationErrors);
         }
       } else {
-        setFormErrorMessage("Unable to save transaction. Please try again.");
+        setFormErrorMessage(
+          isEditing
+            ? "Unable to update the transaction. Please try again."
+            : "Unable to create the transaction. Please try again.",
+        );
       }
+
+      setIsSubmitting(false);
+      return;
+    }
+
+    resetForm();
+
+    try {
+      await loadTransactions(buildFilters(0));
+    } catch {
+      setRefreshWarning(
+        "Transaction saved, but the transaction list could not be refreshed. Reload the page to see the latest data.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -331,9 +433,15 @@ function TransactionPage() {
 
       {errorMessage && <p className="form-error">{errorMessage}</p>}
 
+      {refreshWarning && (
+        <p className="form-error" role="status">
+          {refreshWarning}
+        </p>
+      )}
+
       <section>
         <div>
-          <h2>
+          <h2 ref={formHeadingRef} tabIndex={-1}>
             {editingTransactionId !== null
               ? "Edit Transaction"
               : "Add Transaction"}
@@ -351,8 +459,15 @@ function TransactionPage() {
             <label htmlFor="transaction-category">Category</label>
 
             <select
+              ref={categoryInputRef}
               id="transaction-category"
               value={form.categoryId}
+              aria-invalid={Boolean(validationErrors.categoryId)}
+              aria-describedby={
+                validationErrors.categoryId
+                  ? "transaction-category-error"
+                  : undefined
+              }
               onChange={(event) =>
                 setForm({
                   ...form,
@@ -371,7 +486,9 @@ function TransactionPage() {
             </select>
 
             {validationErrors.categoryId && (
-              <p className="field-error">{validationErrors.categoryId}</p>
+              <p id="transaction-category-error" className="field-error">
+                {validationErrors.categoryId}
+              </p>
             )}
           </div>
 
@@ -379,8 +496,13 @@ function TransactionPage() {
             <label htmlFor="transaction-type">Type</label>
 
             <select
+              ref={typeInputRef}
               id="transaction-type"
               value={form.type}
+              aria-invalid={Boolean(validationErrors.type)}
+              aria-describedby={
+                validationErrors.type ? "transaction-type-error" : undefined
+              }
               onChange={(event) =>
                 setForm({
                   ...form,
@@ -394,7 +516,9 @@ function TransactionPage() {
             </select>
 
             {validationErrors.type && (
-              <p className="field-error">{validationErrors.type}</p>
+              <p id="transaction-type-error" className="field-error">
+                {validationErrors.type}
+              </p>
             )}
           </div>
 
@@ -402,11 +526,16 @@ function TransactionPage() {
             <label htmlFor="transaction-amount">Amount</label>
 
             <input
+              ref={amountInputRef}
               id="transaction-amount"
               type="number"
               min="0.01"
               step="0.01"
               value={form.amount}
+              aria-invalid={Boolean(validationErrors.amount)}
+              aria-describedby={
+                validationErrors.amount ? "transaction-amount-error" : undefined
+              }
               onChange={(event) =>
                 setForm({
                   ...form,
@@ -417,7 +546,9 @@ function TransactionPage() {
             />
 
             {validationErrors.amount && (
-              <p className="field-error">{validationErrors.amount}</p>
+              <p id="transaction-amount-error" className="field-error">
+                {validationErrors.amount}
+              </p>
             )}
           </div>
 
@@ -425,10 +556,17 @@ function TransactionPage() {
             <label htmlFor="transaction-description">Description</label>
 
             <input
+              ref={descriptionInputRef}
               id="transaction-description"
               type="text"
               maxLength={255}
               value={form.description}
+              aria-invalid={Boolean(validationErrors.description)}
+              aria-describedby={
+                validationErrors.description
+                  ? "transaction-description-error"
+                  : undefined
+              }
               onChange={(event) =>
                 setForm({
                   ...form,
@@ -439,7 +577,9 @@ function TransactionPage() {
             />
 
             {validationErrors.description && (
-              <p className="field-error">{validationErrors.description}</p>
+              <p id="transaction-description-error" className="field-error">
+                {validationErrors.description}
+              </p>
             )}
           </div>
 
@@ -447,9 +587,16 @@ function TransactionPage() {
             <label htmlFor="transaction-date">Date</label>
 
             <input
+              ref={dateInputRef}
               id="transaction-date"
               type="date"
               value={form.transactionDate}
+              aria-invalid={Boolean(validationErrors.transactionDate)}
+              aria-describedby={
+                validationErrors.transactionDate
+                  ? "transaction-date-error"
+                  : undefined
+              }
               onChange={(event) =>
                 setForm({
                   ...form,
@@ -460,11 +607,23 @@ function TransactionPage() {
             />
 
             {validationErrors.transactionDate && (
-              <p className="field-error">{validationErrors.transactionDate}</p>
+              <p id="transaction-date-error" className="field-error">
+                {validationErrors.transactionDate}
+              </p>
             )}
           </div>
 
-          {formErrorMessage && <p className="form-error">{formErrorMessage}</p>}
+          {formErrorMessage && (
+            <p
+              ref={formErrorRef}
+              id="transaction-form-error"
+              className="form-error"
+              role="alert"
+              tabIndex={-1}
+            >
+              {formErrorMessage}
+            </p>
+          )}
 
           <div>
             <button
@@ -483,7 +642,7 @@ function TransactionPage() {
               <button
                 type="button"
                 className="button button--secondary"
-                onClick={resetForm}
+                onClick={handleCancelEdit}
               >
                 Cancel
               </button>
@@ -710,6 +869,7 @@ function TransactionPage() {
                       <button
                         type="button"
                         className="button button--secondary"
+                        data-transaction-edit-id={transaction.id}
                         onClick={() => handleEdit(transaction)}
                       >
                         Edit

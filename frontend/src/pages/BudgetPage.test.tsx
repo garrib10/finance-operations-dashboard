@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
 import BudgetPage from "./BudgetPage";
 import { ApiError } from "../services/api";
 import {
@@ -43,8 +42,14 @@ vi.mock("recharts", () => ({
   ),
   CartesianGrid: () => null,
   XAxis: () => null,
-  YAxis: () => null,
-  Tooltip: () => null,
+  YAxis: ({ tickFormatter }: { tickFormatter?: (value: number) => string }) => (
+    <div data-testid="y-axis-formatted-value">{tickFormatter?.(125) ?? ""}</div>
+  ),
+  Tooltip: ({ formatter }: { formatter?: (value: number) => unknown }) => (
+    <div data-testid="tooltip-formatted-value">
+      {String(formatter?.(25.5) ?? "")}
+    </div>
+  ),
   Bar: ({ name }: { name?: string }) => <div>{name}</div>,
 }));
 
@@ -54,6 +59,7 @@ const mockCreateBudget = vi.mocked(createBudget);
 const mockUpdateBudget = vi.mocked(updateBudget);
 const mockDeleteBudget = vi.mocked(deleteBudget);
 const mockGetCategories = vi.mocked(getCategories);
+const scrollIntoViewMock = vi.fn();
 
 const today = new Date();
 const currentMonth = today.getMonth() + 1;
@@ -137,6 +143,11 @@ describe("BudgetPage", () => {
       value: vi.fn(),
     });
 
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoViewMock,
+    });
+
     mockGetCategories.mockResolvedValue(categories);
     mockCreateBudget.mockResolvedValue(groceriesBudget);
     mockUpdateBudget.mockResolvedValue(groceriesBudget);
@@ -199,6 +210,74 @@ describe("BudgetPage", () => {
     ).toBeInTheDocument();
 
     expect(screen.getAllByTestId("bar-chart")).toHaveLength(2);
+
+    const yAxisValues = screen.getAllByTestId("y-axis-formatted-value");
+    expect(yAxisValues[0]).toHaveTextContent("$125");
+    expect(yAxisValues[1]).toHaveTextContent("125%");
+
+    const tooltipValues = screen.getAllByTestId("tooltip-formatted-value");
+    expect(tooltipValues[0]).toHaveTextContent("$25.50");
+    expect(tooltipValues[1]).toHaveTextContent("25.5%");
+  });
+
+  it("renders caution, warning, and over-budget status labels", async () => {
+    const statusBudgets: BudgetResponse[] = [
+      {
+        ...groceriesBudget,
+        id: 11,
+        categoryName: "Caution Category",
+      },
+      {
+        ...groceriesBudget,
+        id: 12,
+        categoryName: "Warning Category",
+      },
+      {
+        ...groceriesBudget,
+        id: 13,
+        categoryName: "Over Budget Category",
+      },
+    ];
+
+    const statuses = {
+      11: "CAUTION",
+      12: "WARNING",
+      13: "OVER_BUDGET",
+    } as const;
+
+    mockGetBudgets.mockResolvedValue(statusBudgets);
+    mockGetBudgetAnalytics.mockImplementation(async (id: number) => ({
+      ...groceriesAnalytics,
+      budgetId: id,
+      categoryName:
+        statusBudgets.find((budget) => budget.id === id)?.categoryName ?? "",
+      status: statuses[id as keyof typeof statuses],
+    }));
+
+    render(<BudgetPage />);
+
+    expect(await screen.findByText("Caution")).toBeInTheDocument();
+    expect(screen.getByText("Warning")).toBeInTheDocument();
+    expect(screen.getByText("Over Budget")).toBeInTheDocument();
+  });
+
+  it("renders a budget when its analytics record is unavailable", async () => {
+    mockGetBudgets.mockResolvedValue([groceriesBudget]);
+    mockGetBudgetAnalytics.mockResolvedValue({
+      ...groceriesAnalytics,
+      budgetId: 999,
+    });
+
+    render(<BudgetPage />);
+
+    const budgetCard = await screen.findByTestId("budget-card-1");
+
+    expect(budgetCard).toHaveTextContent("Groceries");
+    expect(budgetCard).toHaveTextContent("$500.00");
+    expect(budgetCard).not.toHaveTextContent("On Track");
+    expect(
+      screen.queryByRole("heading", { name: "Budget vs. Spending" }),
+    ).not.toBeInTheDocument();
   });
 
   it("filters budgets by month and shows the empty state for a period with no budgets", async () => {
@@ -307,6 +386,133 @@ describe("BudgetPage", () => {
     });
   });
 
+  it("validates the category and monthly limit before submitting", async () => {
+    const user = userEvent.setup();
+    mockGetBudgets.mockResolvedValue([]);
+
+    render(<BudgetPage />);
+
+    await screen.findByRole("heading", { name: "Create Budget" });
+
+    const form = screen
+      .getByRole("button", { name: "Create Budget" })
+      .closest("form");
+    expect(form).not.toBeNull();
+
+    fireEvent.submit(form!);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Please select a category.",
+    );
+
+    await user.selectOptions(screen.getByLabelText("Category"), "1");
+    await user.type(screen.getByLabelText("Monthly Limit"), "0");
+    fireEvent.submit(form!);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Monthly limit must be greater than 0.",
+    );
+    expect(mockCreateBudget).not.toHaveBeenCalled();
+  });
+
+  it("displays every field validation error returned by the API", async () => {
+    const user = userEvent.setup();
+    const nextMonth = currentMonth === 12 ? 11 : currentMonth + 1;
+    const nextYear = currentYear + 1;
+
+    mockGetBudgets.mockResolvedValue([]);
+    mockCreateBudget.mockRejectedValue(
+      new ApiError("Validation failed.", 400, {
+        categoryId: "Category is invalid.",
+        monthlyLimit: "Monthly limit is invalid.",
+        month: "Month is invalid.",
+        year: "Year is invalid.",
+      }),
+    );
+
+    render(<BudgetPage />);
+
+    await screen.findByRole("heading", { name: "Create Budget" });
+
+    await user.selectOptions(screen.getByLabelText("Category"), "1");
+    await user.type(screen.getByLabelText("Monthly Limit"), "500");
+    await user.selectOptions(
+      screen.getAllByLabelText("Month")[0],
+      String(nextMonth),
+    );
+
+    const yearInput = screen.getAllByLabelText("Year")[0];
+    await user.clear(yearInput);
+    await user.type(yearInput, String(nextYear));
+    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+
+    expect(await screen.findByText("Category is invalid.")).toBeInTheDocument();
+    expect(screen.getByText("Monthly limit is invalid.")).toBeInTheDocument();
+    expect(screen.getByText("Month is invalid.")).toBeInTheDocument();
+    expect(screen.getByText("Year is invalid.")).toBeInTheDocument();
+
+    expect(mockCreateBudget).toHaveBeenCalledWith({
+      categoryId: 1,
+      monthlyLimit: 500,
+      month: nextMonth,
+      year: nextYear,
+    });
+  });
+
+  it("preserves the create form and skips refresh when creation fails", async () => {
+    const user = userEvent.setup();
+
+    mockGetBudgets.mockResolvedValue([]);
+    mockCreateBudget.mockRejectedValue(new Error("Request failed"));
+
+    render(<BudgetPage />);
+
+    await screen.findByRole("heading", { name: "Create Budget" });
+
+    await user.selectOptions(screen.getByLabelText("Category"), "1");
+    await user.type(screen.getByLabelText("Monthly Limit"), "500");
+    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to create the budget. Please try again.",
+    );
+
+    expect(mockGetBudgets).toHaveBeenCalledOnce();
+    expect(screen.getByLabelText("Category")).toHaveValue("1");
+    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500);
+  });
+
+  it("reports a refresh warning after a successful create", async () => {
+    const user = userEvent.setup();
+
+    mockGetBudgets
+      .mockResolvedValueOnce([groceriesBudget])
+      .mockRejectedValueOnce(new Error("Refresh failed"));
+
+    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+
+    render(<BudgetPage />);
+
+    await screen.findByRole("heading", { name: "Groceries" });
+
+    await user.selectOptions(screen.getByLabelText("Category"), "2");
+    await user.type(screen.getByLabelText("Monthly Limit"), "200");
+    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Budget saved, but the budget list could not be refreshed.",
+    );
+
+    expect(mockCreateBudget).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole("heading", { name: "Groceries" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Category")).toHaveValue("");
+    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(null);
+    expect(
+      screen.queryByText(/Unable to create the budget/i),
+    ).not.toBeInTheDocument();
+  });
+
   it("loads a budget into edit mode and updates it", async () => {
     const user = userEvent.setup();
 
@@ -317,11 +523,25 @@ describe("BudgetPage", () => {
 
     await screen.findByRole("heading", { name: "Groceries" });
 
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const editButton = screen.getByRole("button", { name: "Edit" });
 
-    expect(
-      screen.getByRole("heading", { name: "Edit Budget" }),
-    ).toBeInTheDocument();
+    expect(editButton).toHaveAttribute("data-budget-edit-id", "1");
+
+    await user.click(editButton);
+
+    const formHeading = screen.getByRole("heading", { name: "Edit Budget" });
+
+    expect(formHeading).toBeInTheDocument();
+    expect(formHeading).toHaveAttribute("tabindex", "-1");
+
+    await waitFor(() => {
+      expect(formHeading).toHaveFocus();
+    });
+
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start",
+    });
 
     expect(screen.getByLabelText("Category")).toHaveValue("1");
     expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500);
@@ -343,7 +563,75 @@ describe("BudgetPage", () => {
     });
   });
 
-  it("cancels edit mode and resets the form", async () => {
+  it("preserves edit mode and skips refresh when updating fails", async () => {
+    const user = userEvent.setup();
+
+    mockGetBudgets.mockResolvedValue([groceriesBudget]);
+    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    mockUpdateBudget.mockRejectedValue(new Error("Request failed"));
+
+    render(<BudgetPage />);
+
+    await screen.findByRole("heading", { name: "Groceries" });
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const monthlyLimitInput = screen.getByLabelText("Monthly Limit");
+    await user.clear(monthlyLimitInput);
+    await user.type(monthlyLimitInput, "600");
+    await user.click(screen.getByRole("button", { name: "Update Budget" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to update the budget. Please try again.",
+    );
+
+    expect(mockGetBudgets).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole("heading", { name: "Edit Budget" }),
+    ).toBeInTheDocument();
+    expect(monthlyLimitInput).toHaveValue(600);
+  });
+
+  it("keeps existing data and reports a warning when analytics refresh fails after update", async () => {
+    const user = userEvent.setup();
+    const updatedBudget: BudgetResponse = {
+      ...groceriesBudget,
+      monthlyLimit: 600,
+    };
+
+    mockGetBudgets
+      .mockResolvedValueOnce([groceriesBudget])
+      .mockResolvedValueOnce([updatedBudget]);
+
+    mockGetBudgetAnalytics
+      .mockResolvedValueOnce(groceriesAnalytics)
+      .mockRejectedValueOnce(new Error("Analytics refresh failed"));
+
+    render(<BudgetPage />);
+
+    await screen.findByRole("heading", { name: "Groceries" });
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const monthlyLimitInput = screen.getByLabelText("Monthly Limit");
+    await user.clear(monthlyLimitInput);
+    await user.type(monthlyLimitInput, "600");
+    await user.click(screen.getByRole("button", { name: "Update Budget" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Budget saved, but the budget list could not be refreshed.",
+    );
+
+    expect(mockUpdateBudget).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole("heading", { name: "Create Budget" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("$500.00")).toBeInTheDocument();
+    expect(screen.queryByText("$600.00")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Groceries" }),
+    ).toBeInTheDocument();
+  });
+
+  it("cancels edit mode, resets the form, and restores focus", async () => {
     const user = userEvent.setup();
 
     mockGetBudgets.mockResolvedValue([groceriesBudget]);
@@ -374,6 +662,10 @@ describe("BudgetPage", () => {
     expect(
       screen.queryByRole("button", { name: "Cancel Edit" }),
     ).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Edit" })).toHaveFocus();
+    });
   });
 
   it("deletes a budget after confirmation", async () => {
@@ -402,6 +694,52 @@ describe("BudgetPage", () => {
     await waitFor(() => {
       expect(mockGetBudgets).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("resets edit mode when the budget being edited is deleted", async () => {
+    const user = userEvent.setup();
+
+    mockGetBudgets
+      .mockResolvedValueOnce([groceriesBudget])
+      .mockResolvedValueOnce([]);
+    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<BudgetPage />);
+
+    await screen.findByRole("heading", { name: "Groceries" });
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Create Budget" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel Edit" })).toBeNull();
+  });
+
+  it.each([
+    [
+      new ApiError("Budget could not be deleted.", 409),
+      "Budget could not be deleted.",
+    ],
+    [
+      new Error("Network unavailable"),
+      "Unable to delete the budget. Please try again.",
+    ],
+  ])("reports a budget deletion failure", async (error, expectedMessage) => {
+    const user = userEvent.setup();
+
+    mockGetBudgets.mockResolvedValue([groceriesBudget]);
+    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    mockDeleteBudget.mockRejectedValue(error);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<BudgetPage />);
+
+    await screen.findByRole("heading", { name: "Groceries" });
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(expectedMessage);
   });
 
   it("does not delete a budget when confirmation is cancelled", async () => {
@@ -458,6 +796,16 @@ describe("BudgetPage", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Unable to load budgets.",
+    );
+  });
+
+  it("shows a fallback error when the budget page cannot load", async () => {
+    mockGetBudgets.mockRejectedValue(new Error("Network unavailable"));
+
+    render(<BudgetPage />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to load budget information. Please try again.",
     );
   });
 });
