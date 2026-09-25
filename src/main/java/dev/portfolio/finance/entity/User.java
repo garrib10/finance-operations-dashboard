@@ -6,9 +6,11 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.type.SqlTypes;
 
 @Entity
+@DynamicUpdate
 @Table(name = "users")
 public class User extends BaseEntity {
 
@@ -53,6 +55,21 @@ public class User extends BaseEntity {
         );
         this.email = email;
         this.passwordHash = passwordHash;
+    }
+
+    public void updateProfile(String firstName, String lastName, String displayName) {
+        this.firstName = firstName.trim();
+        this.lastName = lastName.trim();
+        this.displayName = displayName.trim();
+    }
+
+    public void updatePreferences(DateFormatPreference dateFormat, int transactionPageSize) {
+        this.dateFormat = dateFormat;
+        this.transactionPageSize = transactionPageSize;
+    }
+
+    public void changePasswordHash(String encodedPassword) {
+        this.passwordHash = encodedPassword;
     }
 
     public String getFirstName() {

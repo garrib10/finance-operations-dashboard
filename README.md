@@ -36,7 +36,7 @@ The project demonstrates layered backend architecture, stateless JWT authenticat
 - Search, filtering, sorting, pagination, and financial analytics
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
-- **170 passing backend tests** with **98% instruction coverage** and **94% branch coverage**
+- **234 passing backend tests** with **98% instruction coverage** and **94% branch coverage**
 - **141 passing frontend tests** across **20 test files** with **100% statement, branch, function, and line coverage**
 
 ---
@@ -159,7 +159,7 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 
 | Test Suite        | Results                                              |
 | ----------------- | ---------------------------------------------------- |
-| Backend           | **170 tests passing**                                |
+| Backend           | **234 tests passing**                                |
 | Backend Coverage  | **98% instruction coverage, 94% branch coverage**    |
 | Frontend          | **141 tests passing across 20 test files**           |
 | Frontend Coverage | **100% statement,branch,function and line coverage** |

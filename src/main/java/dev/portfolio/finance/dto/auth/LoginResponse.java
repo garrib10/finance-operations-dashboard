@@ -6,4 +6,8 @@ public record LoginResponse(
         String tokenType,
         Long expiresIn
 ) {
+    @Override
+    public String toString() {
+        return "LoginResponse[accessToken=[REDACTED]]";
+    }
 }
