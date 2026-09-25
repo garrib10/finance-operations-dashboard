@@ -9,13 +9,13 @@ function AppHeader() {
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const accountTriggerRef = useRef<HTMLButtonElement>(null);
 
-  const fullName = user
-    ? `${user.firstName} ${user.lastName}`.trim()
-    : "Account";
-
-  const initials = user
-    ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
-    : "";
+  const fullName = user?.displayName?.trim()
+    || [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim()
+    || "Account";
+  const nameParts = fullName.split(/\s+/);
+  const initials = (Array.from(nameParts[0])[0]
+    + (nameParts.length > 1 ? Array.from(nameParts[nameParts.length - 1])[0] : ""))
+    .toUpperCase();
 
   useEffect(() => {
     if (!isAccountMenuOpen) {
@@ -108,6 +108,11 @@ function AppHeader() {
                     <strong>{fullName}</strong>
                     <span>{user?.email}</span>
                   </div>
+
+                  <nav className="account-menu__links" aria-label="Account navigation">
+                    <Link to="/profile" onClick={() => setIsAccountMenuOpen(false)}>Profile</Link>
+                    <Link to="/settings" onClick={() => setIsAccountMenuOpen(false)}>Account Settings</Link>
+                  </nav>
 
                   <button
                     className="button button--secondary account-menu__logout"

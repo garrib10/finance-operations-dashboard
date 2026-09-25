@@ -15,6 +15,8 @@ const registeredUser: UserResponse = {
   id: 1,
   firstName: "Demo",
   lastName: "User",
+  displayName: "Demo User",
+  preferences: { dateFormat: "MEDIUM" as const, transactionPageSize: 10 as const },
   email: "demo@fintrack.dev",
   createdAt: "2026-09-23T00:00:00",
 };

@@ -2,6 +2,9 @@ import "./App.css";
 
 import { Navigate, Route, Routes } from "react-router-dom";
 
+import ProfilePage from "./pages/ProfilePage";
+import AccountSettingsPage from "./pages/AccountSettingsPage";
+
 import AppHeader from "./components/AppHeader";
 import ProtectedRoute from "./components/ProtectedRoute";
 import BudgetPage from "./pages/BudgetPage";
@@ -25,6 +28,8 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
 
           <Route element={<ProtectedRoute />}>
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/settings" element={<AccountSettingsPage />} />
             <Route path="/" element={<DashboardPage />} />
             <Route path="/transactions" element={<TransactionPage />} />
             <Route path="/budgets" element={<BudgetPage />} />

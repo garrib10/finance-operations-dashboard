@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as AuthContextModule from "../context/AuthContext";
 import AppHeader from "./AppHeader";
@@ -24,6 +24,8 @@ function mockAuthenticatedUser(logout = vi.fn()): void {
       id: 1,
       firstName: "Demo",
       lastName: "User",
+      displayName: "Demo User",
+      preferences: { dateFormat: "MEDIUM" as const, transactionPageSize: 10 as const },
       email: "demo@fintrack.dev",
       createdAt: "2026-09-09T00:00:00",
     },
@@ -32,14 +34,21 @@ function mockAuthenticatedUser(logout = vi.fn()): void {
     restorationError: null,
     login: vi.fn(),
     logout,
+    updateProfile: vi.fn(),
+    updatePreferences: vi.fn(),
     retrySessionRestore: vi.fn(async () => undefined),
   });
+}
+
+function LocationProbe() {
+  return <p data-testid="location">{useLocation().pathname}</p>;
 }
 
 function renderHeader(): void {
   render(
     <MemoryRouter>
       <AppHeader />
+      <LocationProbe />
     </MemoryRouter>,
   );
 }
@@ -208,6 +217,8 @@ describe("AppHeader", () => {
       restorationError: null,
       login: vi.fn(),
       logout: vi.fn(),
+      updateProfile: vi.fn(),
+      updatePreferences: vi.fn(),
       retrySessionRestore: vi.fn(async () => undefined),
     });
 
@@ -219,4 +230,44 @@ describe("AppHeader", () => {
       screen.queryByRole("button", { name: /account menu/i }),
     ).not.toBeInTheDocument();
   });
+  it("uses display name and its initials in the trigger and dropdown", async () => {
+    mockAuthenticatedUser();
+    const context = mockedUseAuth();
+    mockedUseAuth.mockReturnValue({ ...context, user: { ...context.user!, displayName: "River Quiet Walker" } });
+    renderHeader();
+    const trigger = screen.getByRole("button", { name: "Open account menu for River Quiet Walker" });
+    expect(trigger).toHaveTextContent("RW");
+    expect(trigger).not.toHaveAccessibleName(/demo@/);
+    await userEvent.click(trigger);
+    expect(screen.getAllByText("River Quiet Walker")).toHaveLength(2);
+  });
+
+  it.each([
+    ["", "Demo", "User", "Demo User", "DU"],
+    [" ", "", "", "Account", "A"],
+    ["Solo", "Demo", "User", "Solo", "S"],
+  ])("supports identity fallback for %s", (displayName, firstName, lastName, name, initials) => {
+    mockAuthenticatedUser();
+    const context = mockedUseAuth();
+    mockedUseAuth.mockReturnValue({ ...context, user: { ...context.user!, displayName, firstName, lastName } });
+    renderHeader();
+    expect(screen.getByRole("button", { name: `Open account menu for ${name}` })).toHaveTextContent(initials);
+  });
+
+  it.each([["Profile", "/profile"], ["Account Settings", "/settings"]])("navigates to %s and closes the dropdown", async (label, path) => {
+    mockAuthenticatedUser();
+    renderHeader();
+    const user = userEvent.setup();
+    const trigger = screen.getByRole("button", { name: /Open account menu/ });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    const link = screen.getByRole("link", { name: label });
+    expect(link).toHaveAttribute("href", path);
+    link.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByTestId("location")).toHaveTextContent(path);
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("navigation", { name: "Account navigation" })).not.toBeInTheDocument();
+  });
+
 });
