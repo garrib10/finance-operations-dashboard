@@ -11,6 +11,7 @@ SET display_name = LEFT(
 ALTER TABLE users MODIFY COLUMN display_name VARCHAR(100) NOT NULL;
 ALTER TABLE users ADD CONSTRAINT ck_users_date_format
     -- CASE avoids H2 retaining a closed migration session in an IN predicate.
-    CHECK (CASE date_format WHEN 'MEDIUM' THEN TRUE WHEN 'ISO' THEN TRUE ELSE FALSE END);
+    -- MySQL requires an explicit Boolean comparison around the CASE result.
+    CHECK ((CASE date_format WHEN 'MEDIUM' THEN 1 WHEN 'ISO' THEN 1 ELSE 0 END) = 1);
 ALTER TABLE users ADD CONSTRAINT ck_users_transaction_page_size
-    CHECK (CASE transaction_page_size WHEN 10 THEN TRUE WHEN 25 THEN TRUE WHEN 50 THEN TRUE ELSE FALSE END);
+    CHECK ((CASE transaction_page_size WHEN 10 THEN 1 WHEN 25 THEN 1 WHEN 50 THEN 1 ELSE 0 END) = 1);
