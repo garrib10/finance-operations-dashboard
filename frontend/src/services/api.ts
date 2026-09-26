@@ -46,7 +46,7 @@ export async function apiRequest<T>(
   });
 
   if (!response.ok) {
-    if (response.status === 401 && authenticated) {
+    if (response.status === 401 && authenticated && token === getAuthToken()) {
       invalidateAuthSession();
     }
 
