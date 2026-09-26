@@ -55,12 +55,6 @@ public class UserService {
         categoryInitializationService
                 .createDefaultCategories(savedUser);
 
-        return new UserResponse(
-                savedUser.getId(),
-                savedUser.getFirstName(),
-                savedUser.getLastName(),
-                savedUser.getEmail(),
-                savedUser.getCreatedAt()
-        );
+        return UserResponse.from(savedUser);
     }
 }

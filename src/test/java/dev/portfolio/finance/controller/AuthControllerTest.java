@@ -88,7 +88,7 @@ class AuthControllerTest {
                   "firstName": "Test",
                   "lastName": "User",
                   "email": "test@example.com",
-                  "password": "Password123!"
+                  "password": "River meadow lantern 42!"
                 }
                 """;
 
@@ -97,6 +97,7 @@ class AuthControllerTest {
                         1L,
                         "Test",
                         "User",
+                        "Test User",
                         TEST_EMAIL,
                         LocalDateTime.of(
                                 2026,
@@ -104,6 +105,9 @@ class AuthControllerTest {
                                 8,
                                 12,
                                 0
+                        ),
+                        new dev.portfolio.finance.dto.account.AccountPreferencesResponse(
+                                dev.portfolio.finance.entity.DateFormatPreference.MEDIUM, 10
                         )
                 );
 

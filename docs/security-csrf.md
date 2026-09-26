@@ -88,3 +88,29 @@ If authentication moves to cookies, FinTrack must implement appropriate CSRF pro
 
 - [Spring Security CSRF documentation](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html)
 - [OWASP Cross-Site Request Forgery Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
+
+
+## Issue #16 account operations
+
+Profile, preferences, and password changes use the same explicit bearer header,
+stateless filter chain, and existing CORS policy. CSRF behavior has not changed.
+Ownership is resolved from the principal; account DTOs expose only editable fields.
+The password endpoint verifies the current hash with `PasswordEncoder.matches()`
+and returns 400 for an incorrect current password, preserving the browser session.
+
+A genuine authenticated 401 clears the current browser session. Temporary session
+restoration failures preserve the token for manual retry. Account updates cannot
+restore a logged-out user or overwrite a different session with a late response.
+
+Password changes do not revoke already-issued access tokens. Browser logout also
+only removes the local token. Tokens remain usable until expiration; refresh-token
+rotation and revocation belong to issue #18. Reassess this CSRF decision if that
+work introduces cookie-based credentials.
+
+Credential DTOs redact passwords and login tokens in `toString()`. Account error
+responses use safe messages; the exception resolver and HandlerMethod argument-resolution logger are pinned
+above DEBUG because validation and malformed-JSON exceptions may contain rejected
+credentials. A regression test covers an unquoted secret in a malformed body. Do not enable request-body,
+Authorization-header, or SQL bind-value logging. Deployed proxy/APM logging still
+requires environment-specific review. The login response intentionally contains its
+access token; profile/preference responses never contain credentials or tokens.

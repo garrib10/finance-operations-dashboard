@@ -269,6 +269,29 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void shouldContinueUnauthenticatedWhenTokenSubjectCannotBeRead() throws Exception {
+        request.addHeader("Authorization", "Bearer " + TEST_TOKEN);
+        when(jwtService.isTokenValid(TEST_TOKEN)).thenReturn(true);
+        when(jwtService.extractEmail(TEST_TOKEN)).thenThrow(new io.jsonwebtoken.MalformedJwtException("Invalid subject"));
+        jwtAuthenticationFilter.doFilter(request, response, filterChain);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+        verify(filterChain).doFilter(request, response);
+        verify(userDetailsService, never()).loadUserByUsername(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void shouldContinueUnauthenticatedWhenUserNoLongerExists() throws Exception {
+        request.addHeader("Authorization", "Bearer " + TEST_TOKEN);
+        when(jwtService.isTokenValid(TEST_TOKEN)).thenReturn(true);
+        when(jwtService.extractEmail(TEST_TOKEN)).thenReturn(TEST_EMAIL);
+        when(userDetailsService.loadUserByUsername(TEST_EMAIL))
+                .thenThrow(new org.springframework.security.core.userdetails.UsernameNotFoundException("User not found"));
+        jwtAuthenticationFilter.doFilter(request, response, filterChain);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
     void shouldNotReplaceExistingAuthentication()
             throws ServletException, IOException {
 
