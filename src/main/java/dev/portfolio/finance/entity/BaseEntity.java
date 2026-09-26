@@ -1,7 +1,7 @@
 package dev.portfolio.finance.entity;
 
 import java.time.LocalDateTime;
-
+import java.time.temporal.ChronoUnit;
 import jakarta.persistence.Column;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -25,14 +25,14 @@ public abstract class BaseEntity {
 
     @PrePersist
     protected void onCreate() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
         createdAt = now;
         updatedAt = now;
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
     }
 
     public Long getId() {
