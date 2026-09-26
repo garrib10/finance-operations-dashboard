@@ -6,16 +6,17 @@ body properties, query parameters, and headers cannot select another account.
 Extra JSON properties are ignored under the existing mapper configuration; only
 the explicitly defined DTO fields are applied. Email cannot be changed.
 
-| Method | Endpoint | Request fields | Success |
-| --- | --- | --- | --- |
-| GET | `/api/auth/me` | None | 200, canonical user response |
-| PUT | `/api/account/profile` | `firstName`, `lastName`, `displayName` | 200, canonical user response |
-| PUT | `/api/account/preferences` | `dateFormat`, `transactionPageSize` | 200, canonical user response |
-| POST | `/api/account/password` | `currentPassword`, `newPassword` | 204, empty body |
+| Method | Endpoint                   | Request fields                         | Success                      |
+| ------ | -------------------------- | -------------------------------------- | ---------------------------- |
+| GET    | `/api/auth/me`             | None                                   | 200, canonical user response |
+| PUT    | `/api/account/profile`     | `firstName`, `lastName`, `displayName` | 200, canonical user response |
+| PUT    | `/api/account/preferences` | `dateFormat`, `transactionPageSize`    | 200, canonical user response |
+| POST   | `/api/account/password`    | `currentPassword`, `newPassword`       | 204, empty body              |
 
 The canonical user response contains `id`, `firstName`, `lastName`, `displayName`,
 `email`, `createdAt`, and `preferences` (`dateFormat`, `transactionPageSize`).
-Password values and hashes are never included.
+Password values, hashes, tokens, and authorization headers are never included in
+account responses. The public login endpoint intentionally returns an access token.
 
 Both PUT operations require all fields in their editable subset. Names are
 trimmed, required, and limited to 100 characters. Preferences support `MEDIUM`
@@ -49,8 +50,9 @@ JSON returns a safe 400 message. Unexpected account failures return a generic 50
 message. Missing, malformed, invalid, or expired authentication returns the normal
 401 envelope. A token referring to a user who no longer exists also returns 401.
 
-Do not enable DEBUG logging for Spring's ExceptionHandlerExceptionResolver: its
-exception messages can contain rejected credentials. Credential request DTOs and
+Do not enable DEBUG logging for Spring's ExceptionHandlerExceptionResolver or
+HandlerMethod loggers: validation and argument-resolution parse errors can contain
+rejected credentials. Both are pinned at INFO even when broader web DEBUG is enabled. Credential request DTOs and
 the login response redact secrets in `toString()`; no account request-body logging
 is introduced.
 
@@ -58,7 +60,8 @@ is introduced.
 
 Existing JWTs remain valid until their normal expiration after a password change.
 Removing a token from a browser is not server-side revocation. Token revocation and
-invalidation belong to issue #18; Phase 3 must communicate this limitation.
+refresh-token rotation belong to issue #18. The current session remains signed in
+after a successful password change.
 
 Hibernate updates only dirty user columns, preventing a profile save from
 rewriting unrelated credentials. No optimistic locking or token-version field is

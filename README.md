@@ -36,7 +36,7 @@ The project demonstrates layered backend architecture, stateless JWT authenticat
 - Search, filtering, sorting, pagination, and financial analytics
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
-- **234 passing backend tests** with **98% instruction coverage** and **94% branch coverage**
+- **235 passing backend tests** with **98.55% instruction coverage** and **94.44% branch coverage**
 - **291 passing frontend tests** across **25 test files** with **100% statement, branch, function, and line coverage**
 
 ---
@@ -91,6 +91,23 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 - Logout and session clearing
 - Accessible user-account dropdown with account details, keyboard dismissal, focus restoration, and logout
 
+### Profile and Account Settings
+
+- Protected `/profile` and `/settings` pages, available from the account dropdown
+- Editable display name, first name, and last name; email remains read-only
+- Immediate header identity updates using the canonical saved user response
+- Persisted date format: `MEDIUM` (Sep 25, 2026) or `ISO` (2026-09-25)
+- Persisted transaction page size: 10, 25, or 50; changes restart pagination at page zero
+- Password changes require the correct current password and frontend confirmation
+- New passwords require at least 15 Unicode code points and at most 72 UTF-8 bytes;
+  spaces and Unicode are allowed without trimming or normalization. Common passwords,
+  all-blank passwords, and reuse of the current password are rejected.
+- Accessible field errors, focus management, live password-rule checks, visibility
+  controls, success messages, and a read-only email hint
+- Names and preferences survive refresh and later sign-in; failed saves preserve edits
+
+See [Account API](docs/account-api.md) for request fields, response shapes, and errors.
+
 ### Transactions
 
 - Create, view, edit, and delete income and expense transactions
@@ -143,7 +160,9 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 - Documented [CSRF security decision for stateless JWT authentication](docs/security-csrf.md)
 - Password hashing with BCrypt
 - Protected frontend routes and backend API endpoints
-- Authenticated-user ownership enforcement for transactions, categories, budgets, and dashboard data
+- Authenticated-user ownership enforcement for profiles, preferences, password changes, transactions, categories, budgets, and dashboard data
+- Account mutation DTOs accept only their editable fields; ownership comes from the principal
+- Password changes do not revoke existing JWTs; refresh-token rotation/revocation is deferred to issue #18
 - Cross-user resource isolation verified through automated tests
 - Request validation and consistent API error handling
 - Production CORS allowlist for approved Vercel origins
@@ -157,16 +176,20 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 
 ## Testing & Quality
 
-| Test Suite        | Results                                              |
-| ----------------- | ---------------------------------------------------- |
-| Backend           | **234 tests passing**                                |
-| Backend Coverage  | **98% instruction coverage, 94% branch coverage**    |
-| Frontend          | **287 tests passing across 25 test files**           |
-| Frontend Coverage | **100% statement,branch,function and line coverage** |
+| Test Suite        | Results                                                 |
+| ----------------- | ------------------------------------------------------- |
+| Backend           | **235 tests passing**                                   |
+| Backend Coverage  | **98.55% instruction coverage, 94.44% branch coverage** |
+| Frontend          | **291 tests passing across 25 test files**              |
+| Frontend Coverage | **100% statement, branch, function, and line coverage** |
 
-For deployed routes, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
+These results were measured during the final issue #16 verification on September 26, 2026.
+
+For branch behavior, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
 For schema versioning, migration conventions, existing-database adoption, and backup expectations, see [Database Migrations](docs/database-migrations.md).
+
+See the [frontend and staging testing guide](docs/frontend-testing.md) for commands and the issue #16 smoke checklist.
 
 ### Backend Testing
 
@@ -192,7 +215,7 @@ Backend tests use a dedicated `test` profile and an H2 in-memory database config
 Run the backend suite:
 
 ```bash
-./mvnw clean test
+./mvnw --batch-mode clean verify
 ```
 
 The JaCoCo HTML report is generated at:
@@ -214,6 +237,8 @@ Coverage includes:
 - Budget CRUD, analytics, charts, and business rules
 - User-visible validation and API errors
 - Local-storage token utilities
+- Profile, preference, and password forms; stale session responses and safe 401 handling
+- Preference-aware date rendering and all transaction request paths
 
 Run the frontend suite:
 
@@ -261,7 +286,10 @@ The health, registration, and login endpoints are public. All other endpoints re
 | Health         | `GET`    | `/api/health`                 | Check application health                        |
 | Authentication | `POST`   | `/api/auth/register`          | Register a user                                 |
 | Authentication | `POST`   | `/api/auth/login`             | Authenticate and receive a JWT                  |
-| Authentication | `GET`    | `/api/auth/me`                | Get the authenticated user                      |
+| Authentication | `GET`    | `/api/auth/me`                | Get own canonical user; 200                     |
+| Account        | `PUT`    | `/api/account/profile`        | Update own names; 200 canonical user            |
+| Account        | `PUT`    | `/api/account/preferences`    | Update own preferences; 200 canonical user      |
+| Account        | `POST`   | `/api/account/password`       | Change own password; 204 empty body             |
 | Transactions   | `POST`   | `/api/transactions`           | Create a transaction                            |
 | Transactions   | `GET`    | `/api/transactions`           | Search, filter, sort, and paginate transactions |
 | Transactions   | `GET`    | `/api/transactions/{id}`      | Get a transaction                               |
@@ -389,7 +417,7 @@ Start the Spring Boot API:
 ./scripts/run-local.sh
 ```
 
-Flyway applies pending database migrations during application startup. For setup, adoption, and migration rules, see [Database Migrations](docs/database-migrations.md).
+Flyway applies pending database migrations during application startup. V3 adds display names and persisted account preferences, backfilling existing users before enforcing non-null display names. For setup, adoption, and migration rules, see [Database Migrations](docs/database-migrations.md).
 
 The backend runs at `http://localhost:8080`.
 
@@ -425,7 +453,6 @@ The frontend runs at `http://localhost:5173`.
 
 - Add refresh-token support and token revocation
 - Add a custom-category workflow where selecting Other displays a field for entering and saving a new category
-- Expand the user-account dropdown with profile management, account settings, password-change controls, and account preferences
 - Add optional profile-photo upload with secure file validation and object storage
 - Add production monitoring and structured application metrics
 

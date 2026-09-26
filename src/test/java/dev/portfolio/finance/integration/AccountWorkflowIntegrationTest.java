@@ -163,4 +163,14 @@ class AccountWorkflowIntegrationTest {
         mvc.perform(accountRequest("profile").header("Authorization", "Bearer " + unknownToken).content("{}"))
                 .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.message").value("Authentication is required to access this resource"));
     }
+
+    @Test
+    void unquotedMalformedCredentialsAreNotLoggedWithWebDebugEnabled(CapturedOutput output) throws Exception {
+        String submittedSecret = "UnquotedCredentialProbeValue";
+        String response = mvc.perform(accountRequest("password")
+                .header("Authorization", "Bearer " + token).content(submittedSecret))
+                .andExpect(status().isBadRequest())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(response + output.getAll()).doesNotContain(submittedSecret, token);
+    }
 }
