@@ -1,3 +1,4 @@
+import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
 import { ApiError } from "../services/api";
 import { getDashboard } from "../services/dashboardService";
@@ -28,6 +29,7 @@ function clampProgressPercentage(percentage: number): number {
 }
 
 function DashboardPage() {
+  const { user } = useAuth();
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -187,7 +189,7 @@ function DashboardPage() {
 
                       <td>{transaction.type}</td>
 
-                      <td>{formatDate(transaction.transactionDate)}</td>
+                      <td>{formatDate(transaction.transactionDate, user?.preferences?.dateFormat)}</td>
 
                       <td>{formatCurrency(transaction.amount)}</td>
                     </tr>

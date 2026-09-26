@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import type { UserResponse } from "../types/auth";
 
 export const accountUser: UserResponse = {
@@ -18,4 +19,12 @@ export function deferred<T>() {
     reject = rejectPromise;
   });
   return { promise, resolve, reject };
+}
+
+export function accountContext(user = accountUser) {
+  return {
+    user, isAuthenticated: true, isLoading: false, restorationError: null,
+    login: vi.fn(), logout: vi.fn(), retrySessionRestore: vi.fn(),
+    updateProfile: vi.fn().mockResolvedValue(user), updatePreferences: vi.fn().mockResolvedValue(user),
+  };
 }

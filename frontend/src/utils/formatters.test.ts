@@ -16,3 +16,9 @@ describe("formatDate", () => {
     expect(formatDate("2026-09-10")).toBe("Sep 10, 2026");
   });
 });
+
+it("preserves calendar dates in ISO and readable formats", () => {
+ expect(formatDate("2026-01-01", "ISO")).toBe("2026-01-01");
+ expect(formatDate("2026-01-01", "MEDIUM")).toBe("Jan 1, 2026");
+ expect(formatDate("2024-02-29", "ISO")).toBe("2024-02-29");
+});

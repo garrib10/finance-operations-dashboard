@@ -29,13 +29,12 @@ function renderApp(path: string, authenticated = true) {
   </AuthContext.Provider>);
 }
 
-describe("application routing and account shells", () => {
-  it.each([["/profile", "Profile"], ["/settings", "Account Settings"]])("protects and renders %s without account forms", (path, title) => {
+describe("application routing and account forms", () => {
+  it.each([["/profile", "Profile"], ["/settings", "Account Settings"]])("protects and renders %s with account forms", (path, title) => {
     renderApp(path);
     expect(screen.getByRole("heading", { name: title, level: 1 })).toBeInTheDocument();
     expect(screen.getAllByRole("banner")).toHaveLength(1);
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    expect(document.querySelector("form")).toBeNull();
+    expect(document.querySelector("form")).not.toBeNull();
     expect(screen.getByRole("link", { name: "Skip to main content" })).toHaveAttribute("href", "#main-content");
   });
 

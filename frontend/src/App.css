@@ -796,3 +796,112 @@
     padding-right: 0;
   }
 }
+
+.account-page {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 48rem;
+  margin-inline: auto;
+  min-width: 0;
+}
+
+.account-section {
+  padding: clamp(1rem, 4vw, 2rem);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.account-form {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.account-form input,
+.account-form select {
+  width: 100%;
+  min-width: 0;
+}
+
+.account-actions,
+.account-password {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.account-password input {
+  flex: 1 1 12rem;
+}
+
+.account-form button:focus-visible,
+.account-form select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+.account-form [role="alert"]:empty,
+.account-form [role="status"]:empty {
+  margin: 0;
+  height: 0;
+}
+
+.password-rules {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.password-rule {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  color: var(--color-text-muted);
+}
+
+.password-rule--met {
+  color: var(--color-success);
+}
+
+.password-rule__indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 1.25em;
+  width: 1.25em;
+  height: 1.25em;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  align-self: center;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.password-rule--met .password-rule__indicator {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: #fff;
+}
+
+.password-rule__state {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.account-email-hint__bubble {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+  color: var(--color-text);
+}
