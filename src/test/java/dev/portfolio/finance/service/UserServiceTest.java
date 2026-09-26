@@ -41,7 +41,7 @@ class UserServiceTest {
                         "  Test  ",
                         "  User  ",
                         "  TEST@EXAMPLE.COM  ",
-                        "Password123!"
+                        " River meadow lantern 42! "
                 );
 
         String normalizedEmail =
@@ -53,7 +53,7 @@ class UserServiceTest {
         when(userRepository.existsByEmail(normalizedEmail))
                 .thenReturn(false);
 
-        when(passwordEncoder.encode("Password123!"))
+        when(passwordEncoder.encode(" River meadow lantern 42! "))
                 .thenReturn(passwordHash);
 
         when(userRepository.save(
@@ -109,11 +109,15 @@ class UserServiceTest {
                 response.email()
         );
 
+        assertEquals("Test User", response.displayName());
+        assertEquals(dev.portfolio.finance.entity.DateFormatPreference.MEDIUM, response.preferences().dateFormat());
+        assertEquals(10, response.preferences().transactionPageSize());
+
         verify(userRepository)
                 .existsByEmail(normalizedEmail);
 
         verify(passwordEncoder)
-                .encode("Password123!");
+                .encode(" River meadow lantern 42! ");
 
         verify(categoryInitializationService)
                 .createDefaultCategories(savedUser);
@@ -127,7 +131,7 @@ class UserServiceTest {
                         "Test",
                         "User",
                         "  TEST@EXAMPLE.COM  ",
-                        "Password123!"
+                        " River meadow lantern 42! "
                 );
 
         String normalizedEmail =

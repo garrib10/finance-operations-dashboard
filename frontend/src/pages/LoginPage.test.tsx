@@ -66,6 +66,8 @@ function mockLoggedOutContext(login: AuthContextValue["login"]) {
     restorationError: null,
     login,
     logout: vi.fn(),
+    updateProfile: vi.fn(),
+    updatePreferences: vi.fn(),
     retrySessionRestore: vi.fn(async () => undefined),
   });
 }
