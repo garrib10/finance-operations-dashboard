@@ -81,6 +81,17 @@ describe("authenticated API requests", () => {
     },
   );
 
+  it("does not invalidate a newer session when an old request returns 401", async () => {
+    setAuthToken("old-token");
+    let finish!: (response: Response) => void;
+    fetchMock.mockReturnValue(new Promise<Response>((resolve) => { finish = resolve; }));
+    const request = apiRequest("/api/account/profile");
+    setAuthToken("new-token");
+    finish(errorResponse(401, "Expired"));
+    await expect(request).rejects.toMatchObject({ status: 401 });
+    expect(getAuthToken()).toBe("new-token");
+  });
+
   it("does not invalidate the session for non-401 errors", async () => {
     setAuthToken("valid-token");
 
