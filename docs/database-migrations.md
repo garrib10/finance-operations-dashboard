@@ -113,3 +113,53 @@ uses one of the following approaches:
 
 A failed migration must prevent application startup and be investigated
 before another deployment is attempted.
+
+## V3: profile and account preferences
+
+`V3__add_profile_and_account_preferences.sql` adds these `users` columns:
+
+| Column                  | Definition              | Default/backfill                                                                  |
+| ----------------------- | ----------------------- | --------------------------------------------------------------------------------- |
+| `display_name`          | `VARCHAR(100) NOT NULL` | Trimmed first and last name, limited to 100 characters; `Account` for empty names |
+| `date_format`           | `VARCHAR(16) NOT NULL`  | `MEDIUM`; allowed values `MEDIUM`, `ISO`                                          |
+| `transaction_page_size` | `INT NOT NULL`          | `10`; allowed values 10, 25, 50                                                   |
+
+The migration first adds a nullable display name, backfills legacy rows, and only
+then applies NOT NULL. IDs, email, password hashes, timestamps, and relationships
+are not changed. Both preference columns have named CHECK constraints. Their CASE
+expressions are explicitly compared with 1, which is required for MySQL Boolean
+constraint expressions and avoids the H2 IN-predicate migration-session issue.
+
+An empty database runs V1, V2, and V3. A database already at V2 runs only V3.
+A legacy schema with no Flyway history must follow the controlled V1 adoption
+procedure above; do not enable baseline-on-migrate for routine upgrades. Normal
+startup keeps it false and validates migration history. Once successfully applied,
+V3 is recorded as current; later starts validate without rerunning it.
+
+Do not edit a successfully applied migration, including V3. Subsequent changes
+require V4 or later. MySQL DDL can leave partial changes after failure: stop,
+back up, inspect schema and history, and reconcile the partial schema before a
+controlled repair/retry. Repairing history alone does not undo existing columns.
+Never mark a failed migration successful without verifying its complete schema.
+
+### Staging migration checks
+
+The automated migration suite uses H2 in MySQL mode, not a MySQL server. There is
+no configured disposable MySQL/Testcontainers workflow in this repository.
+A previous user-run local MySQL 9.7 recovery validated V3, but does not replace
+clean-install and populated-V2 rehearsal on the staging MySQL version.
+
+Before deployment, use an isolated disposable database or restored copy, never a
+shared production schema, to:
+
+1. Back up and verify restoration; record server version, collation, and baseline.
+2. Run a clean install and a populated V2 upgrade with the exact release artifact.
+3. Compare IDs, credential hashes, timestamps, and financial records privately,
+   without including credential values in reports.
+4. Check backfills, defaults, NOT NULL, and both allowed-value constraints, including
+   rejected unsupported values. Verify the uppercase enum contract under the target collation.
+5. Confirm V3 success in `flyway_schema_history`, then restart to confirm no repeat migration.
+6. Check Hibernate validation, `/api/health`, and account/financial workflows.
+
+Flyway previously warned that local MySQL 9.7 was newer than its verified 9.4
+version. Confirm the target server/Flyway compatibility during staging rehearsal.
