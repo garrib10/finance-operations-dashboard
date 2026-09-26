@@ -1,6 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+vi.mock("../context/AuthContext", () => ({ useAuth: vi.fn() }));
+import { useAuth } from "../context/AuthContext";
+import { accountContext, accountUser, deferred } from "../test/accountFixtures";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as categoryService from "../services/categoryService";
 import { ApiError } from "../services/api";
 import * as transactionService from "../services/transactionService";
@@ -63,8 +66,14 @@ async function completeTransactionForm(
   await user.type(screen.getByLabelText("Date"), "2026-09-10");
 }
 
-describe("TransactionPage", () => {
+describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageSize) => {
+  afterEach(() => {
+    for (const [request] of vi.mocked(transactionService.getTransactions).mock.calls) {
+      expect(request?.size).toBe(pageSize);
+    }
+  });
   beforeEach(() => {
+    vi.mocked(useAuth).mockReturnValue(accountContext({ ...accountUser, preferences: { dateFormat: "MEDIUM", transactionPageSize: pageSize } }));
     vi.clearAllMocks();
 
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
@@ -656,7 +665,7 @@ describe("TransactionPage", () => {
       expect(transactionService.getTransactions).toHaveBeenLastCalledWith(
         expect.objectContaining({
           page: 0,
-          size: 10,
+          size: pageSize,
           search: "Food",
           type: "EXPENSE",
           startDate: "2026-09-01",
@@ -717,7 +726,7 @@ describe("TransactionPage", () => {
     await waitFor(() => {
       expect(transactionService.getTransactions).toHaveBeenLastCalledWith({
         page: 0,
-        size: 10,
+        size: pageSize,
         sortBy: "transactionDate",
         sortDirection: "desc",
       });
@@ -770,7 +779,7 @@ describe("TransactionPage", () => {
       expect(transactionService.getTransactions).toHaveBeenLastCalledWith(
         expect.objectContaining({
           page: 1,
-          size: 10,
+          size: pageSize,
           sortBy: "transactionDate",
           sortDirection: "desc",
         }),
@@ -832,4 +841,93 @@ describe("TransactionPage", () => {
 
     expect(await screen.findByText(message)).toBeInTheDocument();
   });
+});
+
+ it("uses the preferred page size and resets to page zero on preference changes", async () => {
+   vi.mocked(useAuth).mockReturnValue(accountContext({ ...accountUser, preferences: { dateFormat: "ISO", transactionPageSize: 25 } }));
+   vi.mocked(categoryService.getCategories).mockResolvedValue(categories);
+   vi.mocked(transactionService.getTransactions).mockResolvedValue(createPagedResponse());
+   const { rerender } = render(<TransactionPage />);
+   expect(await screen.findByText("2026-09-10")).toBeInTheDocument();
+   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 25 }));
+   await userEvent.type(screen.getByLabelText("Search"), "Food");
+   await userEvent.click(screen.getByRole("button", { name: "Apply Filters" }));
+   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ size: 25, search: "Food" }));
+   vi.mocked(useAuth).mockReturnValue(accountContext({ ...accountUser, preferences: { dateFormat: "ISO", transactionPageSize: 50 } }));
+   rerender(<TransactionPage />);
+   await waitFor(() => expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 50, search: "Food" })));
+   await userEvent.click(screen.getByRole("button", { name: "Reset" }));
+   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 50 }));
+ });
+
+it("falls back to ten when account preferences are unavailable", async () => {
+ vi.clearAllMocks();
+ vi.mocked(useAuth).mockReturnValue({ ...accountContext(), user: null });
+ vi.mocked(categoryService.getCategories).mockResolvedValue(categories);
+ vi.mocked(transactionService.getTransactions).mockResolvedValue(createPagedResponse());
+ render(<TransactionPage />);
+ await screen.findByText("Food Lion");
+ expect(transactionService.getTransactions).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ size: 10 }));
+});
+
+it("ignores an older page-size response and avoids refetches for unrelated identity changes", async () => {
+ vi.clearAllMocks();
+ const old = deferred<PagedTransactionResponse>();
+ vi.mocked(useAuth).mockReturnValue(accountContext());
+ vi.mocked(categoryService.getCategories).mockResolvedValue(categories);
+ vi.mocked(transactionService.getTransactions).mockReturnValueOnce(old.promise).mockResolvedValue(createPagedResponse([{ ...transaction, description: "New result" }]));
+ const { rerender } = render(<TransactionPage />);
+ await waitFor(() => expect(transactionService.getTransactions).toHaveBeenCalledTimes(1));
+ const updated = { ...accountUser, preferences: { dateFormat: "ISO" as const, transactionPageSize: 50 as const } };
+ vi.mocked(useAuth).mockReturnValue(accountContext(updated));
+ rerender(<TransactionPage />);
+ await screen.findByText("New result");
+ old.resolve(createPagedResponse([{ ...transaction, description: "Old result" }]));
+ await waitFor(() => expect(screen.queryByText("Old result")).not.toBeInTheDocument());
+ vi.mocked(useAuth).mockReturnValue(accountContext({ ...updated, displayName: "Changed name" }));
+ rerender(<TransactionPage />);
+ expect(transactionService.getTransactions).toHaveBeenCalledTimes(2);
+});
+
+
+it("keeps newer filter results when an older filter request completes later", async () => {
+  vi.clearAllMocks();
+  vi.mocked(useAuth).mockReturnValue(accountContext());
+  vi.mocked(categoryService.getCategories).mockResolvedValue(categories);
+  const older = deferred<PagedTransactionResponse>();
+  vi.mocked(transactionService.getTransactions)
+    .mockResolvedValueOnce(createPagedResponse())
+    .mockReturnValueOnce(older.promise)
+    .mockResolvedValueOnce(createPagedResponse([{ ...transaction, description: "Latest filtered result" }]));
+  render(<TransactionPage />);
+  await screen.findByText("Food Lion");
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText("Search"), "Old");
+  await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+  await user.clear(screen.getByLabelText("Search"));
+  await user.type(screen.getByLabelText("Search"), "Latest");
+  await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+  await screen.findByText("Latest filtered result");
+  await act(async () => older.resolve(createPagedResponse([{ ...transaction, description: "Obsolete filtered result" }])));
+  expect(screen.getByText("Latest filtered result")).toBeInTheDocument();
+  expect(screen.queryByText("Obsolete filtered result")).not.toBeInTheDocument();
+});
+
+it("ignores an obsolete page-size load failure after the new size succeeds", async () => {
+  vi.clearAllMocks();
+  const older = deferred<PagedTransactionResponse>();
+  vi.mocked(useAuth).mockReturnValue(accountContext());
+  vi.mocked(categoryService.getCategories).mockResolvedValue(categories);
+  vi.mocked(transactionService.getTransactions)
+    .mockReturnValueOnce(older.promise)
+    .mockResolvedValueOnce(createPagedResponse([{ ...transaction, description: "Current page" }]));
+  const { rerender } = render(<TransactionPage />);
+  await waitFor(() => expect(transactionService.getTransactions).toHaveBeenCalledTimes(1));
+  vi.mocked(useAuth).mockReturnValue(accountContext({ ...accountUser, preferences: { dateFormat: "MEDIUM", transactionPageSize: 25 } }));
+  rerender(<TransactionPage />);
+  await screen.findByText("Current page");
+  await act(async () => older.reject(new ApiError("Obsolete request failed", 503)));
+  expect(screen.getByText("Current page")).toBeInTheDocument();
+  expect(screen.queryByText("Obsolete request failed")).not.toBeInTheDocument();
+  expect(screen.queryByText("Loading transactions...")).not.toBeInTheDocument();
 });
