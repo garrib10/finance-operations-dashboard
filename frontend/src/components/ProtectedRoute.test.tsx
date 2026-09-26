@@ -68,6 +68,8 @@ describe("ProtectedRoute", () => {
       restorationError: null,
       login: vi.fn(),
       logout: vi.fn(),
+      updateProfile: vi.fn(),
+      updatePreferences: vi.fn(),
       retrySessionRestore: vi.fn(async () => undefined),
     });
 
@@ -85,6 +87,8 @@ describe("ProtectedRoute", () => {
       restorationError: null,
       login: vi.fn(),
       logout: vi.fn(),
+      updateProfile: vi.fn(),
+      updatePreferences: vi.fn(),
       retrySessionRestore: vi.fn(async () => undefined),
     });
 
@@ -115,6 +119,8 @@ describe("ProtectedRoute", () => {
         id: 1,
         firstName: "Demo",
         lastName: "User",
+        displayName: "Demo User",
+        preferences: { dateFormat: "MEDIUM" as const, transactionPageSize: 10 as const },
         email: "demo@fintrack.dev",
         createdAt: "2026-09-09T00:00:00",
       },
@@ -123,6 +129,8 @@ describe("ProtectedRoute", () => {
       restorationError: null,
       login: vi.fn(),
       logout: vi.fn(),
+      updateProfile: vi.fn(),
+      updatePreferences: vi.fn(),
       retrySessionRestore: vi.fn(async () => undefined),
     });
 
@@ -140,6 +148,8 @@ describe("ProtectedRoute", () => {
         "We couldn’t restore your session. Check your connection and try again.",
       login: vi.fn(),
       logout: vi.fn(),
+      updateProfile: vi.fn(),
+      updatePreferences: vi.fn(),
       retrySessionRestore: vi.fn(async () => undefined),
     });
 
@@ -177,6 +187,8 @@ describe("ProtectedRoute", () => {
         "We couldn’t restore your session. Check your connection and try again.",
       login: vi.fn(),
       logout: vi.fn(),
+      updateProfile: vi.fn(),
+      updatePreferences: vi.fn(),
       retrySessionRestore,
     });
 
@@ -200,6 +212,8 @@ describe("ProtectedRoute", () => {
         "We couldn’t restore your session. Check your connection and try again.",
       login: vi.fn(),
       logout: vi.fn(),
+      updateProfile: vi.fn(),
+      updatePreferences: vi.fn(),
       retrySessionRestore: vi.fn(async () => undefined),
     });
 

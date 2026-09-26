@@ -1,3 +1,6 @@
+vi.mock("../context/AuthContext", () => ({ useAuth: vi.fn() }));
+import { useAuth } from "../context/AuthContext";
+import { accountContext, accountUser } from "../test/accountFixtures";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ApiError } from "../services/api";
@@ -86,6 +89,7 @@ const budgetSummaries: DashboardResponse["budgetSummaries"] = [
 
 describe("DashboardPage", () => {
   beforeEach(() => {
+    vi.mocked(useAuth).mockReturnValue(accountContext());
     vi.clearAllMocks();
   });
 
@@ -265,3 +269,10 @@ describe("DashboardPage", () => {
     ).toBeInTheDocument();
   });
 });
+
+ it("uses ISO dates from account preferences", async () => {
+ vi.mocked(useAuth).mockReturnValue(accountContext({ ...accountUser, preferences: { dateFormat: "ISO", transactionPageSize: 25 } }));
+ mockedGetDashboard.mockResolvedValue(dashboardResponse);
+ render(<DashboardPage />);
+ expect(await screen.findByText("2026-09-09")).toBeInTheDocument();
+ });
