@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { SubmitEvent as ReactSubmitEvent } from "react";
 import { ApiError } from "../services/api";
 import { getCategories } from "../services/categoryService";
@@ -59,6 +60,9 @@ const initialFilterState: TransactionFilterState = {
 };
 
 function TransactionPage() {
+  const { user } = useAuth();
+  const pageSize = user?.preferences?.transactionPageSize ?? 10;
+  const requestSequence = useRef(0);
   const [transactionData, setTransactionData] =
     useState<PagedTransactionResponse | null>(null);
 
@@ -165,7 +169,7 @@ function TransactionPage() {
   function buildFilters(page = 0): TransactionFilterRequest {
     return {
       page,
-      size: 10,
+      size: pageSize,
       sortBy: filters.sortBy,
       sortDirection: filters.sortDirection,
       ...(filters.search.trim() && {
@@ -192,47 +196,50 @@ function TransactionPage() {
   async function loadTransactions(
     transactionFilters: TransactionFilterRequest = {
       page: 0,
-      size: 10,
+      size: pageSize,
       sortBy: "transactionDate",
       sortDirection: "desc",
     },
   ): Promise<void> {
+    const sequence = ++requestSequence.current;
     const response = await getTransactions(transactionFilters);
 
-    setTransactionData(response);
+    if (sequence === requestSequence.current) setTransactionData(response);
   }
 
+  const filtersForSizeChange = useEffectEvent(() => buildFilters(0));
+
   useEffect(() => {
+    let active = true;
+    const sequence = ++requestSequence.current;
     async function loadTransactionPage(): Promise<void> {
       try {
         setIsLoading(true);
         setErrorMessage("");
 
         const [transactionsResponse, categoriesResponse] = await Promise.all([
-          getTransactions({
-            page: 0,
-            size: 10,
-            sortBy: "transactionDate",
-            sortDirection: "desc",
-          }),
+          getTransactions({ ...filtersForSizeChange(), size: pageSize }),
           getCategories(),
         ]);
 
+        if (!active || sequence !== requestSequence.current) return;
         setTransactionData(transactionsResponse);
         setCategories(categoriesResponse);
       } catch (error) {
+        if (!active || sequence !== requestSequence.current) return;
         if (error instanceof ApiError) {
           setErrorMessage(error.message);
         } else {
           setErrorMessage("Unable to load transaction data. Please try again.");
         }
       } finally {
-        setIsLoading(false);
+        if (active && sequence === requestSequence.current) setIsLoading(false);
       }
     }
 
     void loadTransactionPage();
-  }, []);
+    return () => { active = false; };
+  }, [pageSize]);
 
   function resetForm(): void {
     setForm(initialFormState);
@@ -379,7 +386,7 @@ function TransactionPage() {
 
       await loadTransactions({
         page: 0,
-        size: 10,
+        size: pageSize,
         sortBy: "transactionDate",
         sortDirection: "desc",
       });
@@ -853,7 +860,7 @@ function TransactionPage() {
                     key={transaction.id}
                     data-testid={`transaction-row-${transaction.id}`}
                   >
-                    <td>{formatDate(transaction.transactionDate)}</td>
+                    <td>{formatDate(transaction.transactionDate, user?.preferences?.dateFormat)}</td>
 
                     <td>{transaction.description}</td>
 
