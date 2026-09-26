@@ -1,7 +1,11 @@
 import { createContext, useContext } from "react";
 import type { LoginRequest, UserResponse } from "../types/auth";
 
+import type { UpdateProfileRequest, UpdatePreferencesRequest } from "../types/account";
+
 export interface AuthContextValue {
+  updateProfile: (request: UpdateProfileRequest) => Promise<UserResponse>;
+  updatePreferences: (request: UpdatePreferencesRequest) => Promise<UserResponse>;
   user: UserResponse | null;
   isAuthenticated: boolean;
   isLoading: boolean;
