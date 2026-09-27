@@ -1,20 +1,32 @@
 # Profile-photo architecture and security policy
 
-## Phase 1 boundary
+## Phase 2 boundary
 
-Issue #17 extends the existing account feature. This phase adds the V4 nullable
-storage reference, configuration, provider-neutral contracts, and canonical user
-response mapping only. There are no upload/remove endpoints, provider SDK/network
-operations, image processing, frontend controls, or deployment changes yet.
+Issue #17 extends the existing account feature. V4, entity support, and canonical
+mapping remain unchanged. Phase 2 adds an in-memory image processor, a UUID key
+generator, and a conditional Cloudinary adapter. There are still no upload/remove
+endpoints, authenticated replacement workflows, frontend controls, or hosted
+configuration changes. Enabling the foundation does not expose an upload API.
 
-Cloudinary is the approved future provider. `ProfilePhotoStorage` defines storage
-of processed JPEG bytes under a fresh backend-generated key, idempotent deletion
-by persisted key, and delivery URL resolution through `ProfilePhotoUrlResolver`.
-Only a pure URL resolver is registered now; there is no writable storage bean or
-filesystem fallback. The adapter and image-processing implementation belong to
-later phases. Do not treat enabling the configuration as enabling uploads.
+`ProfilePhotoStorage` keeps the Phase 1 byte-array contract. Later orchestration
+must call `ProfilePhotoProcessor` and pass only its freshly encoded JPEG bytes to
+storage, never the original request bytes. The adapter's JPEG envelope check is a
+misuse guard, not a second untrusted-file validator. No caller supplies a filename,
+remote URL, user-selected public ID, or transformation instructions.
 
-## Approved policy for later upload implementation
+Dependencies added:
+
+- `com.cloudinary:cloudinary-http5:2.4.0`: official Java SDK for upload parameter
+  construction, signing, and provider response interpretation. SDK types stay in
+  the storage package. Version availability was verified against Maven Central.
+- `com.drewnoakes:metadata-extractor:2.21.0`: JPEG EXIF extraction for orientation.
+  Only the EXIF reader is selected; no general image/document metadata dispatcher
+  runs on user input. Extracted directories are transient and never logged.
+
+No frontend dependency, Apache Tika, image codec plugin, or real-provider test
+resource is needed. Java ImageIO supplies JPEG/PNG decoding and JPEG encoding.
+
+## Implemented processing policy
 
 | Policy | Value |
 | --- | --- |
@@ -28,12 +40,41 @@ later phases. Do not treat enabling the configuration as enabling uploads.
 | Metadata | Apply orientation, then discard original metadata, including EXIF/GPS |
 | Unsupported | SVG, GIF, WebP, animation, and remote-URL uploads |
 
-Future upload code must inspect actual bytes, determine the allowed decoder,
-check dimensions before full decoding, bound reads and decoded work, and
-re-encode a fresh image. Filename extensions and browser Content-Type are not
-proof of content. Only processed output may leave the backend for storage.
-Servlet multipart limits are configured now but do not replace those checks.
-There is no browser-direct Cloudinary upload or client-submitted storage key/URL.
+`ProfilePhotoProcessor.process(byte[])` rejects null/empty input and lengths above
+the configured 2 MiB ceiling. It does not accept filenames, MIME claims, URLs, or
+streams. Phase 3 must bound the multipart read before constructing this array;
+servlet limits alone do not replace that check.
+
+The inspection sequence is:
+
+1. Verify a JPEG or PNG signature and bounded container structure. PNG chunk
+   lengths, CRCs, types, header/end structure, and data ordering are checked.
+   APNG `acTL`, `fcTL`, and `fdAT` chunks are rejected explicitly. JPEGs require a
+   complete scan/end marker; MPF and concatenated image containers are rejected.
+2. Strip PNG ancillary metadata before decoding, preventing compressed text or ICC
+   metadata from being inflated merely to obtain raster pixels. Raster palette and
+   transparency chunks are retained. Unrelated trailing payload is not passed to
+   the decoder.
+3. Select an ImageIO reader whose reported format matches JPEG/PNG, inspect width
+   and height, and check the pixel product using long arithmetic before allocating
+   the full decoded image. Reject multiple-image counts and decoder warnings or
+   failures. Readers and memory-only streams are disposed/closed on failure too.
+4. For JPEG, extract EXIF orientation. All eight standard rotations/reflections
+   are applied to pixels. Absent orientation means normal presentation; malformed
+   EXIF or values outside 1–8 are rejected with a sanitized validation error.
+5. Resize with bicubic interpolation, preserving aspect ratio within the output
+   box and never upscaling. Flatten alpha onto **white (`#FFFFFF`)**. The stored
+   image remains rectangular; circular cropping belongs to frontend CSS.
+6. Write a fresh RGB JPEG at configured quality 0.85, without copying EXIF, GPS,
+   camera details, comments, XMP, or other input metadata. Return defensive copies
+   of JPEG bytes with `image/jpeg` and output dimensions. Its string representation
+   redacts image content.
+
+The processor has no user, database, provider, or filesystem dependency. Tests
+create synthetic images in memory; no photographs or generated output are tracked.
+Signature checks alone are not proof of safety. Re-encoding does not detect every
+polyglot: protection comes from decoding allowlisted raster pixels and storing
+only a newly written JPEG. Keep the JDK and parser dependencies patched.
 
 ## Persistence and canonical responses
 
@@ -52,18 +93,21 @@ Keys must match the configured namespace followed by a lowercase UUID v4, for
 example `fintrack/development/profile-photos/<uuid>`. Namespace segments use
 lowercase ASCII letters, digits, and hyphens, separated by single slashes, with a
 maximum namespace length of 180. The resulting key fits the 255-character column.
-Each later replacement must use a fresh UUID and never overwrite an existing key.
+The key generator uses `UUID.randomUUID()` (version 4). Each replacement receives
+a fresh UUID and never overwrites an existing key. The existing prefix already
+contains `profile-photos`; it is not appended a second time.
 
 The resolver permits only the fixed HTTPS delivery origin `res.cloudinary.com`,
 the validated cloud name, and a matching persisted key. It uses an explicit `v1`
-delivery path component and the fixed `.jpg` format; future SDK integration must
-verify this convention against the adapter's returned public ID and delivery URL.
+delivery path component and the fixed `.jpg` format; the adapter checks that the returned public ID, resource type, and format match
+the request. Canonical responses use the same pure resolver, ignoring provider
+URLs. A real development-provider smoke test remains necessary before release.
 No API endpoint, upload signature, arbitrary host, or remote request is involved.
 Invalid or foreign-namespace keys resolve to null without echoing their value.
 
 When disabled, all photo URLs resolve to null, even if a row already contains a
 key. The stored key is retained. Initials remain the frontend fallback; the current
-frontend is unchanged in Phase 1. Switching namespaces hides old-namespace photos
+frontend is unchanged. Switching namespaces hides old-namespace photos
 until an intentional migration is performed; do not casually change a namespace.
 
 ## Backend configuration and environment separation
@@ -102,6 +146,37 @@ Rotate credentials by deploying replacement credentials, verifying later storage
 operations, and then revoking the old credentials. No cloud resources or hosted
 environment variables have been created for this phase.
 
+## Cloudinary operations and safe failures
+
+When enabled, `CloudinaryProfilePhotoStorage` uses backend credentials and fresh,
+namespace-validated keys. Uploads fix `resource_type=image`, `type=upload`,
+`format=jpg`, `overwrite=false`, `use_filename=false`, `unique_filename=false`,
+and `backup=false`. Multipart filenames are the fixed `photo.jpg`. Existing or
+unexpectedly overwritten results are safe collision failures, not successes.
+Missing/mismatched responses also fail safely. No provider result map escapes.
+
+Deletion uses the persisted key and requests CDN invalidation; both `ok` and
+`not found` are success. Other results and exceptions become application-owned
+exceptions without SDK messages or nested causes. No adapter/processor logs image
+bytes, configuration, metadata, or provider responses. Cloudinary and Apache HTTP5
+client/core loggers are disabled to prevent wire/header diagnostics from exposing
+credentials or multipart image data when broader DEBUG logging is enabled.
+
+The SDK's default transport does not expose automatic-retry controls. A small
+`AbstractUploaderStrategy` implementation uses the SDK signing/response helpers
+with Apache HTTP5 retries and redirects disabled. Connect, socket, pool-acquisition,
+and response timeouts are 10 seconds, and provider response reads are capped at
+64 KiB. These are per-stage/inactivity bounds, not a guaranteed total wall-clock
+deadline. Client resources close with the Spring bean. No automatic application
+retry is performed, including after ambiguous timeouts. The caller retains the
+new generated key so Phase 3 can attempt cleanup/reconciliation safely.
+
+When disabled, only `DisabledProfilePhotoStorage` is selected: no Cloudinary client
+is initialized, URLs remain null, and mutations explicitly throw a DISABLED storage
+exception. Later endpoints can map this to 503. There is no filesystem fallback or
+no-op upload that claims success. All current tests use mocks, in-memory fixtures,
+and synthetic configuration; none calls Cloudinary.
+
 ## Public delivery and future consistency behavior
 
 Delivery is public: anyone who possesses a photo URL can view it. Random keys
@@ -124,8 +199,9 @@ are possible future hardening, not guarantees of this foundation.
 
 ## Verification boundaries
 
-Focused tests cover configuration, URL safety, serialization, entity persistence,
-canonical API mapping, and H2 clean/V3-upgrade migrations. No provider call is
+Focused tests cover image processing, orientation, boundary/corruption cases,
+provider and transport mocks, configuration, URL safety, serialization, entity
+persistence, canonical API mapping, and H2 clean/V3-upgrade migrations. No provider call is
 needed. Before release, rehearse V4 on the target MySQL version in an isolated
 database and verify the real provider delivery convention. H2 is not proof of
 MySQL deployment compatibility. Final deployment and README documentation belong
