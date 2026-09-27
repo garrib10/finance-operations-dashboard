@@ -6,6 +6,8 @@ import type { UpdateProfileRequest, UpdatePreferencesRequest } from "../types/ac
 export interface AuthContextValue {
   updateProfile: (request: UpdateProfileRequest) => Promise<UserResponse>;
   updatePreferences: (request: UpdatePreferencesRequest) => Promise<UserResponse>;
+  uploadProfilePhoto: (photo: File) => Promise<UserResponse>;
+  removeProfilePhoto: () => Promise<UserResponse>;
   user: UserResponse | null;
   isAuthenticated: boolean;
   isLoading: boolean;

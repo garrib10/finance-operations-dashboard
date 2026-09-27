@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as AuthContextModule from "../context/AuthContext";
 import AppHeader from "./AppHeader";
+import { photoUrl, replacementPhotoUrl } from "../test/accountFixtures";
 
 vi.mock("../context/AuthContext", async () => {
   const actual = await vi.importActual<typeof AuthContextModule>(
@@ -28,6 +29,7 @@ function mockAuthenticatedUser(logout = vi.fn()): void {
       preferences: { dateFormat: "MEDIUM" as const, transactionPageSize: 10 as const },
       email: "demo@fintrack.dev",
       createdAt: "2026-09-09T00:00:00",
+      profilePhotoUrl: null,
     },
     isAuthenticated: true,
     isLoading: false,
@@ -36,6 +38,8 @@ function mockAuthenticatedUser(logout = vi.fn()): void {
     logout,
     updateProfile: vi.fn(),
     updatePreferences: vi.fn(),
+    uploadProfilePhoto: vi.fn(),
+    removeProfilePhoto: vi.fn(),
     retrySessionRestore: vi.fn(async () => undefined),
   });
 }
@@ -219,6 +223,8 @@ describe("AppHeader", () => {
       logout: vi.fn(),
       updateProfile: vi.fn(),
       updatePreferences: vi.fn(),
+      uploadProfilePhoto: vi.fn(),
+      removeProfilePhoto: vi.fn(),
       retrySessionRestore: vi.fn(async () => undefined),
     });
 
@@ -270,4 +276,59 @@ describe("AppHeader", () => {
     expect(screen.queryByRole("navigation", { name: "Account navigation" })).not.toBeInTheDocument();
   });
 
+
+  describe("profile photo", () => {
+    function mockPhoto(profilePhotoUrl: string | null) {
+      mockAuthenticatedUser();
+      const context = mockedUseAuth();
+      mockedUseAuth.mockReturnValue({ ...context, user: { ...context.user!, profilePhotoUrl } });
+    }
+    const trigger = () => screen.getByRole("button", { name: /account menu for Demo User/ });
+
+    it("renders the photo as a decorative part of the trigger without changing its name", () => {
+      mockPhoto(photoUrl);
+      renderHeader();
+      const image = trigger().querySelector("img");
+      expect(image).toHaveAttribute("src", photoUrl);
+      expect(image).toHaveAttribute("alt", "");
+      expect(image?.parentElement).toHaveClass("avatar", "account-menu__avatar");
+      expect(image?.parentElement).toHaveAttribute("aria-hidden", "true");
+      expect(trigger()).toHaveAccessibleName("Open account menu for Demo User");
+      expect(trigger()).not.toHaveTextContent("DU");
+      expect(trigger()).toHaveTextContent("Demo User");
+      expect(screen.getAllByRole("button")).toHaveLength(1);
+      expect(document.body).not.toHaveTextContent(photoUrl);
+    });
+
+    it("renders initials when there is no photo", () => {
+      mockPhoto(null);
+      renderHeader();
+      expect(trigger().querySelector("img")).toBeNull();
+      expect(trigger().querySelector(".account-menu__avatar")).toHaveTextContent("DU");
+    });
+
+    it("falls back to initials when the photo fails and retries a replacement", () => {
+      mockPhoto(photoUrl);
+      const { rerender } = render(<MemoryRouter><AppHeader /></MemoryRouter>);
+      fireEvent.error(trigger().querySelector("img")!);
+      expect(trigger().querySelector("img")).toBeNull();
+      expect(trigger()).toHaveTextContent("DU");
+      mockPhoto(replacementPhotoUrl);
+      rerender(<MemoryRouter><AppHeader /></MemoryRouter>);
+      expect(trigger().querySelector("img")).toHaveAttribute("src", replacementPhotoUrl);
+    });
+
+    it("keeps the avatar, name, and chevron structure used by the responsive layout", async () => {
+      mockPhoto(photoUrl);
+      renderHeader();
+      expect([...trigger().children].map(child => child.className)).toEqual([
+        "avatar account-menu__avatar", "account-menu__name", "account-menu__chevron",
+      ]);
+      await userEvent.click(trigger());
+      expect(screen.getByText("demo@fintrack.dev")).toBeInTheDocument();
+      await userEvent.keyboard("{Escape}");
+      expect(trigger()).toHaveFocus();
+      expect(trigger()).toHaveAttribute("aria-expanded", "false");
+    });
+  });
 });

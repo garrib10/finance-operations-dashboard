@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { updateProfile, updatePreferences, changePassword } from "./accountService";
+import { updateProfile, updatePreferences, changePassword, uploadProfilePhoto, removeProfilePhoto } from "./accountService";
 import { API_BASE_URL } from "./apiConfig";
-import { accountUser } from "../test/accountFixtures";
+import { accountUser, photoUrl } from "../test/accountFixtures";
 import { getAuthToken, setAuthToken } from "../utils/authToken";
 
 const fetchMock = vi.fn();
@@ -55,5 +55,53 @@ describe("accountService", () => {
       status, validationErrors: { currentPassword: "Current password is incorrect" },
     });
     expect(getAuthToken()).toBe(status === 401 ? null : "account-token");
+  });
+
+  it("uploads a photo as FormData with only the photo part and lets the browser set the boundary", async () => {
+    const photoUser = { ...accountUser, profilePhotoUrl: photoUrl };
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(photoUser)));
+    const photo = new File(["jpeg"], "me.jpg", { type: "image/jpeg" });
+    await expect(uploadProfilePhoto(photo)).resolves.toEqual(photoUser);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${API_BASE_URL}/api/account/photo`);
+    expect(init.method).toBe("PUT");
+    expect(init.headers).toEqual({ Authorization: "Bearer account-token" });
+    expect(init.body).toBeInstanceOf(FormData);
+    const body = init.body as FormData;
+    expect([...body.keys()]).toEqual(["photo"]);
+    expect(body.get("photo")).toBe(photo);
+    expect(JSON.stringify(init)).not.toMatch(/profilePhotoKey|cloudinary|api_key|api_secret/i);
+  });
+
+  it("removes a photo without sending a URL or key and parses the canonical user", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(accountUser)));
+    await expect(removeProfilePhoto()).resolves.toEqual(accountUser);
+    expect(fetchMock).toHaveBeenCalledWith(`${API_BASE_URL}/api/account/photo`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer account-token" },
+    });
+  });
+
+  it.each([
+    [400, "Animated and multiple-image files are not supported."],
+    [413, "The photo exceeds the allowed file size."],
+    [415, "Choose a static JPEG or PNG image."],
+    [503, "Profile photos are temporarily unavailable. Please try again later."],
+  ])("propagates photo status %s through the existing ApiError flow", async (status, message) => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ timestamp: "t", status, error: "Error", message }), { status }));
+    await expect(uploadProfilePhoto(new File(["x"], "x.png", { type: "image/png" }))).rejects.toMatchObject({ name: "ApiError", status, message });
+    expect(getAuthToken()).toBe("account-token");
+  });
+
+  it("invalidates the session through the existing 401 handling on photo removal", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ message: "Authentication is required" }), { status: 401 }));
+    await expect(removeProfilePhoto()).rejects.toMatchObject({ status: 401 });
+    expect(getAuthToken()).toBeNull();
+  });
+
+  it("rejects without parsing success when a proxy returns a non-JSON photo error", async () => {
+    fetchMock.mockResolvedValue(new Response("<html>413 Request Entity Too Large</html>", { status: 413 }));
+    await expect(uploadProfilePhoto(new File(["x"], "x.jpg", { type: "image/jpeg" }))).rejects.toBeInstanceOf(SyntaxError);
+    expect(getAuthToken()).toBe("account-token");
   });
 });

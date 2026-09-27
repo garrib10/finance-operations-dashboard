@@ -68,6 +68,8 @@ function mockLoggedOutContext(login: AuthContextValue["login"]) {
     logout: vi.fn(),
     updateProfile: vi.fn(),
     updatePreferences: vi.fn(),
+    uploadProfilePhoto: vi.fn(),
+    removeProfilePhoto: vi.fn(),
     retrySessionRestore: vi.fn(async () => undefined),
   });
 }

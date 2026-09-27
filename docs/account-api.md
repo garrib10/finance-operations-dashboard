@@ -12,9 +12,15 @@ the explicitly defined DTO fields are applied. Email cannot be changed.
 | PUT    | `/api/account/profile`     | `firstName`, `lastName`, `displayName` | 200, canonical user response |
 | PUT    | `/api/account/preferences` | `dateFormat`, `transactionPageSize`    | 200, canonical user response |
 | POST   | `/api/account/password`    | `currentPassword`, `newPassword`       | 204, empty body              |
+| PUT    | `/api/account/photo`       | Multipart file part `photo` only       | 200, canonical user response |
+| DELETE | `/api/account/photo`       | None                                   | 200, canonical user response |
 
 The canonical user response contains `id`, `firstName`, `lastName`, `displayName`,
-`email`, `createdAt`, and `preferences` (`dateFormat`, `transactionPageSize`).
+`email`, `createdAt`, `preferences` (`dateFormat`, `transactionPageSize`), and
+`profilePhotoUrl` (an HTTPS URL, or `null` when no photo is stored or the feature is
+disabled). Photo uploads accept one static JPEG or PNG up to 2 MiB; removal is
+idempotent. Photo errors return 400, 413, 415, or 503; see
+[Profile-photo security](profile-photo-security.md) for limits and failure behavior.
 Password values, hashes, tokens, and authorization headers are never included in
 account responses. The public login endpoint intentionally returns an access token.
 

@@ -60,7 +60,8 @@ class AuthControllerTest {
                         userService,
                         authService,
                         jwtService,
-                        userRepository
+                        userRepository,
+                        dev.portfolio.finance.support.ProfilePhotoTestSupport.mapper()
                 );
 
         mockMvc =
@@ -108,7 +109,7 @@ class AuthControllerTest {
                         ),
                         new dev.portfolio.finance.dto.account.AccountPreferencesResponse(
                                 dev.portfolio.finance.entity.DateFormatPreference.MEDIUM, 10
-                        )
+                        ), null
                 );
 
         when(userService.register(

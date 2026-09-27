@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import dev.portfolio.finance.dto.auth.RegisterRequest;
 import dev.portfolio.finance.dto.auth.UserResponse;
+import dev.portfolio.finance.dto.auth.UserResponseMapper;
 import dev.portfolio.finance.entity.User;
 import dev.portfolio.finance.exception.auth.DuplicateEmailException;
 import dev.portfolio.finance.repository.UserRepository;
@@ -13,6 +14,7 @@ import dev.portfolio.finance.repository.UserRepository;
 @Service
 public class UserService {
 
+    private final UserResponseMapper responseMapper;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final CategoryInitializationService categoryInitializationService;
@@ -20,8 +22,10 @@ public class UserService {
     public UserService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            CategoryInitializationService categoryInitializationService
+            CategoryInitializationService categoryInitializationService,
+            UserResponseMapper responseMapper
     ) {
+        this.responseMapper = responseMapper;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.categoryInitializationService = categoryInitializationService;
@@ -55,6 +59,6 @@ public class UserService {
         categoryInitializationService
                 .createDefaultCategories(savedUser);
 
-        return UserResponse.from(savedUser);
+        return responseMapper.toResponse(savedUser);
     }
 }

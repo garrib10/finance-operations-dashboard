@@ -30,7 +30,7 @@ class AccountServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AccountService(users, encoder);
+        service = new AccountService(users, encoder, dev.portfolio.finance.support.ProfilePhotoTestSupport.mapper());
         user = new User("First", "Last", EMAIL, encoder.encode(OLD));
     }
 
@@ -46,12 +46,14 @@ class AccountServiceTest {
     void updatesOnlyProfileFieldsOfAuthenticatedUser() {
         found(); saved();
         User other = new User("Other", "User", "b@example.com", "other-hash");
+        user.changeProfilePhotoKey(dev.portfolio.finance.support.ProfilePhotoTestSupport.KEY);
         String hash = user.getPasswordHash();
         var response = service.updateProfile(EMAIL, new UpdateProfileRequest(" New ", " Name ", " Display "));
         assertThat(response.firstName()).isEqualTo("New");
         assertThat(response.lastName()).isEqualTo("Name");
         assertThat(response.displayName()).isEqualTo("Display");
         assertThat(response.email()).isEqualTo(EMAIL);
+        assertThat(response.profilePhotoUrl()).isEqualTo(dev.portfolio.finance.support.ProfilePhotoTestSupport.URL);
         assertThat(user.getPasswordHash()).isEqualTo(hash);
         assertThat(response.preferences().dateFormat()).isEqualTo(DateFormatPreference.MEDIUM);
         assertThat(response.preferences().transactionPageSize()).isEqualTo(10);
@@ -63,6 +65,7 @@ class AccountServiceTest {
     @Test
     void updatesOnlyPreferences() {
         found(); saved();
+        user.changeProfilePhotoKey(dev.portfolio.finance.support.ProfilePhotoTestSupport.KEY);
         String hash = user.getPasswordHash();
         var response = service.updatePreferences(EMAIL, new UpdatePreferencesRequest(DateFormatPreference.ISO, 50));
         assertThat(response.preferences().dateFormat()).isEqualTo(DateFormatPreference.ISO);
@@ -71,6 +74,7 @@ class AccountServiceTest {
         assertThat(response.lastName()).isEqualTo("Last");
         assertThat(response.displayName()).isEqualTo("First Last");
         assertThat(response.email()).isEqualTo(EMAIL);
+        assertThat(response.profilePhotoUrl()).isEqualTo(dev.portfolio.finance.support.ProfilePhotoTestSupport.URL);
         assertThat(user.getPasswordHash()).isEqualTo(hash);
         verify(users).save(user);
     }
@@ -92,6 +96,7 @@ class AccountServiceTest {
     @Test
     void rejectsIncorrectCurrentPasswordWithoutWriting() {
         found();
+        user.changeProfilePhotoKey(dev.portfolio.finance.support.ProfilePhotoTestSupport.KEY);
         String hash = user.getPasswordHash();
         assertThatThrownBy(() -> service.changePassword(EMAIL, new ChangePasswordRequest("wrong", NEXT)))
                 .isInstanceOfSatisfying(AccountValidationException.class,
@@ -103,6 +108,7 @@ class AccountServiceTest {
     @Test
     void rejectsReusedPasswordWithoutWriting() {
         found();
+        user.changeProfilePhotoKey(dev.portfolio.finance.support.ProfilePhotoTestSupport.KEY);
         String hash = user.getPasswordHash();
         assertThatThrownBy(() -> service.changePassword(EMAIL, new ChangePasswordRequest(OLD, OLD)))
                 .isInstanceOfSatisfying(AccountValidationException.class,

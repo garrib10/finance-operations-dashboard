@@ -42,7 +42,11 @@ class ProfileFoundationIntegrationTest {
                 .andExpect(jsonPath("$.passwordHash").doesNotExist())
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andReturn().getResponse().getContentAsString();
+        assertThat(mapper.readTree(response).has("profilePhotoUrl")).isTrue();
+        assertThat(mapper.readTree(response).get("profilePhotoUrl").isNull()).isTrue();
+        assertThat(mapper.readTree(response).has("profilePhotoKey")).isFalse();
         User saved = users.findByEmail(email).orElseThrow();
+        assertThat(saved.getProfilePhotoKey()).isNull();
         assertThat(encoder.matches(password, saved.getPasswordHash())).isTrue();
         assertThat(encoder.matches(password.trim(), saved.getPasswordHash())).isFalse();
         assertThat(response).doesNotContain(password, saved.getPasswordHash());
@@ -53,6 +57,25 @@ class ProfileFoundationIntegrationTest {
         mockMvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(content().json(response));
+    }
+
+    @Test
+    void disabledFeatureHidesExistingKeyWithoutRemovingIt() throws Exception {
+        User user = new User("Photo", "Disabled", "disabled-photo@example.com", encoder.encode(" River meadow lantern 42! "));
+        user.changeProfilePhotoKey(dev.portfolio.finance.support.ProfilePhotoTestSupport.KEY);
+        users.saveAndFlush(user);
+        String login = mockMvc.perform(post("/api/auth/login").contentType("application/json")
+                .content(mapper.writeValueAsString(new dev.portfolio.finance.dto.auth.LoginRequest(
+                        user.getEmail(), " River meadow lantern 42! "))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String token = mapper.readTree(login).get("accessToken").stringValue();
+        String response = mockMvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(mapper.readTree(response).has("profilePhotoUrl")).isTrue();
+        assertThat(mapper.readTree(response).get("profilePhotoUrl").isNull()).isTrue();
+        assertThat(response).doesNotContain("profilePhotoKey", dev.portfolio.finance.support.ProfilePhotoTestSupport.KEY);
+        assertThat(users.findByEmail(user.getEmail()).orElseThrow().getProfilePhotoKey())
+                .isEqualTo(dev.portfolio.finance.support.ProfilePhotoTestSupport.KEY);
     }
 
     @Test

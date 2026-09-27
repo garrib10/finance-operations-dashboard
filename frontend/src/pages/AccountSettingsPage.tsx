@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useAccountForm } from "../hooks/useAccountForm";
 import { AccountFeedback } from "../components/AccountFeedback";
+import { ProfilePhotoSection } from "../components/ProfilePhotoSection";
 import { changePassword } from "../services/accountService";
 import type { AccountPreferences, DateFormatPreference, TransactionPageSize } from "../types/account";
 
@@ -105,8 +106,8 @@ function PasswordForm() {
 
 function AccountSettingsPage() {
   return <section className="account-page" aria-labelledby="settings-heading">
-    <div className="page-header"><h1 id="settings-heading">Account Settings</h1><p>Your account preferences and password settings.</p></div>
-    <PreferencesForm /><PasswordForm />
+    <div className="page-header"><h1 id="settings-heading">Account Settings</h1><p>Your profile photo, account preferences, and password settings.</p></div>
+    <ProfilePhotoSection /><PreferencesForm /><PasswordForm />
   </section>;
 }
 export default AccountSettingsPage;

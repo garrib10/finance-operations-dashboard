@@ -18,8 +18,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /** Keep fallback handling local to account endpoints; never echo exception details. */
-@Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = AccountController.class)
+@Order(Ordered.HIGHEST_PRECEDENCE + 1)
+@RestControllerAdvice(assignableTypes = {AccountController.class, dev.portfolio.finance.controller.AccountPhotoController.class})
 public class AccountExceptionHandler {
     private final GlobalExceptionHandler globalExceptionHandler;
 

@@ -37,6 +37,9 @@ public class User extends BaseEntity {
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
+    @Column(name = "profile_photo_key", length = 255)
+    private String profilePhotoKey;
+
     protected User() {
     }
 
@@ -70,6 +73,16 @@ public class User extends BaseEntity {
 
     public void changePasswordHash(String encodedPassword) {
         this.passwordHash = encodedPassword;
+    }
+
+    /** Only backend account behavior may supply a generated storage key. */
+    public void changeProfilePhotoKey(String key) {
+        this.profilePhotoKey = key;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public String getProfilePhotoKey() {
+        return profilePhotoKey;
     }
 
     public String getFirstName() {

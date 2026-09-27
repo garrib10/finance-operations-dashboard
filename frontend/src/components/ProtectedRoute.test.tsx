@@ -70,6 +70,8 @@ describe("ProtectedRoute", () => {
       logout: vi.fn(),
       updateProfile: vi.fn(),
       updatePreferences: vi.fn(),
+      uploadProfilePhoto: vi.fn(),
+      removeProfilePhoto: vi.fn(),
       retrySessionRestore: vi.fn(async () => undefined),
     });
 
@@ -89,6 +91,8 @@ describe("ProtectedRoute", () => {
       logout: vi.fn(),
       updateProfile: vi.fn(),
       updatePreferences: vi.fn(),
+      uploadProfilePhoto: vi.fn(),
+      removeProfilePhoto: vi.fn(),
       retrySessionRestore: vi.fn(async () => undefined),
     });
 
@@ -123,6 +127,7 @@ describe("ProtectedRoute", () => {
         preferences: { dateFormat: "MEDIUM" as const, transactionPageSize: 10 as const },
         email: "demo@fintrack.dev",
         createdAt: "2026-09-09T00:00:00",
+        profilePhotoUrl: null,
       },
       isAuthenticated: true,
       isLoading: false,
@@ -131,6 +136,8 @@ describe("ProtectedRoute", () => {
       logout: vi.fn(),
       updateProfile: vi.fn(),
       updatePreferences: vi.fn(),
+      uploadProfilePhoto: vi.fn(),
+      removeProfilePhoto: vi.fn(),
       retrySessionRestore: vi.fn(async () => undefined),
     });
 
@@ -150,6 +157,8 @@ describe("ProtectedRoute", () => {
       logout: vi.fn(),
       updateProfile: vi.fn(),
       updatePreferences: vi.fn(),
+      uploadProfilePhoto: vi.fn(),
+      removeProfilePhoto: vi.fn(),
       retrySessionRestore: vi.fn(async () => undefined),
     });
 
@@ -189,6 +198,8 @@ describe("ProtectedRoute", () => {
       logout: vi.fn(),
       updateProfile: vi.fn(),
       updatePreferences: vi.fn(),
+      uploadProfilePhoto: vi.fn(),
+      removeProfilePhoto: vi.fn(),
       retrySessionRestore,
     });
 
@@ -214,6 +225,8 @@ describe("ProtectedRoute", () => {
       logout: vi.fn(),
       updateProfile: vi.fn(),
       updatePreferences: vi.fn(),
+      uploadProfilePhoto: vi.fn(),
+      removeProfilePhoto: vi.fn(),
       retrySessionRestore: vi.fn(async () => undefined),
     });
 
