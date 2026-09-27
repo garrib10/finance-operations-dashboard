@@ -2,18 +2,21 @@
 
 ## Status
 
-In progress for FinTrack v1.2.0 (issue #18). **Phase 1 (foundation) only.**
+In progress for FinTrack v1.2.0 (issue #18). **Phases 1–2 implemented.**
 
-Phase 1 adds the schema, entities, repositories, configuration, UTC clock, and
-refresh-token primitives. The application does not issue or accept refresh tokens
-yet. Login, the refresh and logout endpoints, cookies, rotation, reuse handling,
-password-change revocation, cleanup, frontend changes, and the Vercel proxy come in
-later phases. Do not deploy or merge Phase 1 on its own.
+- Phase 1: schema, entities, repositories, configuration, UTC clock, token primitives.
+- Phase 2: login session issuance, the refresh cookie, `POST /api/auth/refresh`
+  with rotation and reuse revocation, `POST /api/auth/logout`, request protection,
+  stable authentication error codes, and access-JWT hardening.
 
-Current behavior is unchanged: login returns a stateless JWT access token, and the
-frontend sends it as `Authorization: Bearer <token>`. See
-[CSRF security decision](security-csrf.md); it must be revisited when refresh
-cookies are introduced.
+Still pending: password-change revocation, cleanup, and real-MySQL concurrency tests
+(Phase 3); frontend renewal (Phase 4); the same-origin proxy and deployment
+validation (Phase 5). **Do not deploy or merge before those phases.** In particular,
+the current frontend does not send `X-FinTrack-CSRF`, so its login is rejected with
+`403` until Phase 4 updates the client.
+
+Business APIs still authenticate with `Authorization: Bearer <access token>`. See the
+[CSRF security decision](security-csrf.md) for the cookie-authorized exception.
 
 ## Approved policy
 
@@ -24,10 +27,10 @@ cookies are introduced.
 | Transport encoding        | Unpadded Base64url, exactly 43 characters                               |
 | Storage                   | SHA-256 of the decoded 32 bytes (`BINARY(32)`); raw tokens never stored |
 | Refresh session lifetime  | **30 days absolute** from login; never extended by refresh              |
-| Rotation                  | New token on every successful refresh (Phase 2)                         |
-| Reuse of a consumed token | Revoke the whole session family (Phase 2)                               |
+| Rotation                  | New token on every successful refresh                                   |
+| Reuse of a consumed token | Revoke the whole session family, no grace window                        |
 | Multiple devices          | Independent session family per login/device                             |
-| Logout                    | Revoke the current family only (later phase)                                |
+| Logout                    | Revoke the current family only; idempotent                              |
 | Password change           | Revoke every family for the user; log in again (Phase 3)                |
 | Access-token revocation   | None: no denylist; access tokens expire within 5 minutes                |
 | Cleanup                   | Delete families 7 days after absolute expiration (later phase)          |
@@ -72,7 +75,7 @@ history. The entities are never serialized, and their `toString()` output is red
   no cause, and no submitted value.
 
 Parsing a well-formed token says nothing about whether it exists in the database.
-Lookup outcomes are handled in later phases and must not reveal existence.
+Every lookup outcome maps to the same client-facing response (see below).
 
 No refresh-token signing secret, hash pepper, BCrypt, encryption, or JWT is used. The
 token carries 256 bits of randomness, so a fast unsalted SHA-256 lookup hash is
@@ -114,10 +117,9 @@ a `VITE_` prefix. Cookie name, path, and domain are fixed, not configurable.
 set `JWT_EXPIRATION_MS=3600000` to avoid frequent re-logins. When refresh-token
 support is released, every hosted environment must set `JWT_EXPIRATION_MS=300000`.
 
-## Refresh cookie (later phase)
+## Refresh cookie
 
-Phase 1 defines constants only. Nothing writes `Set-Cookie`, reads request cookies,
-or changes controllers.
+`RefreshCookieService` is the only code that builds or reads the cookie.
 
 | Attribute | Local development   | Staging and production        |
 | --------- | ------------------- | ----------------------------- |
@@ -129,15 +131,130 @@ or changes controllers.
 | Domain    | omitted             | omitted                       |
 
 The name is derived from the Secure flag, because the `__Secure-` prefix is only
-valid on Secure cookies. At the cookie boundary, a request must carry exactly one
-refresh-token value; this is enforced when cookie parsing is implemented.
+valid on Secure cookies. `Max-Age` and `Expires` both carry the **remaining**
+absolute session lifetime (rounded down to whole seconds), so rotation never grants
+another 30 days. Clearing uses the same name, path, Secure, and SameSite with
+`Max-Age=0` and `Expires=Thu, 01 Jan 1970 00:00:00 GMT`. Example (production):
+
+```http
+Set-Cookie: __Secure-fintrack_refresh=<43 chars>; Max-Age=2592000; Expires=Tue, 27 Oct 2026 12:00:00 GMT; Path=/api/auth; Secure; HttpOnly; SameSite=Lax
+```
+
+A request must carry exactly one cookie with the configured name. Duplicates are
+never resolved to one value; they are treated as having no usable token. Refresh
+tokens are read only from this cookie, never from JSON, query or form parameters,
+`Authorization`, other headers, or paths.
+
+## Endpoints
+
+All three require request protection (below). Refresh and logout take an empty body
+and need no access token. `/api/auth/me` and every business endpoint still require
+a bearer access token; the refresh cookie never authenticates them.
+
+### `POST /api/auth/login`
+
+1. Verify credentials with BCrypt (no lock held; generic `401 Invalid email or password`).
+2. In one transaction: lock the user row, start a new family with a 30-day absolute
+   expiration from the UTC clock, generate a 32-byte token, and store only its hash.
+3. After commit, return the access-token response and set the refresh cookie.
+
+Each login creates an independent family. Failed logins create no rows and set no
+cookie. If persistence fails, the response is `503` with no cookie and no token.
+Registration still does not sign in.
+
+The response shape is unchanged; `expiresIn` is the access lifetime in seconds:
+
+```json
+{ "accessToken": "…", "tokenType": "Bearer", "expiresIn": 300 }
+```
+
+### `POST /api/auth/refresh`
+
+1. Read the cookie and strictly decode and hash it.
+2. Look up the owning user ID by hash (no secret material), outside the transaction.
+3. In one transaction: lock the user row, then reload the token and family with
+   `SELECT … FOR UPDATE`.
+4. Reject if the family is revoked or at/after `expires_at`.
+5. If the token is already consumed, revoke the family with `REUSE_DETECTED`, commit,
+   and respond `401`.
+6. Otherwise mark it consumed, store the hash of a new token in the same family
+   (expiration unchanged), and issue a new access JWT.
+7. After commit, return `200` with the access-token response and the rotated cookie.
+
+Terminal outcomes are returned rather than thrown, so reuse revocation always commits
+before the `401` is written. The replacement cookie is attached only after commit. At
+most one refresh succeeds per token; the previous token then only triggers reuse.
+Concurrent refreshes of the same token (for example, two tabs) are serialized, and
+the second one revokes the family; Phase 4 adds client-side single-flight handling.
+
+### `POST /api/auth/logout`
+
+Revokes the family identified by the cookie with `LOGOUT`, clears the cookie, and
+returns `204`. A consumed (rotated-out) token revokes its family with
+`REUSE_DETECTED` instead. Missing, blank, malformed, duplicate, unknown, expired,
+or already-revoked cookies, and repeated logouts, also return `204` and clear the
+cookie without touching any family. Other families are never revoked. If revoking a
+known family fails in the database, the response is `503`, the cookie is kept, and
+no revocation is claimed.
+
+### Error contract
+
+| Condition                                                      | Status | Code                  | Cookie   |
+| -------------------------------------------------------------- | ------ | --------------------- | -------- |
+| Refresh: missing, malformed, duplicate, unknown, expired, revoked, or reused | `401`  | `SESSION_EXPIRED`     | Cleared  |
+| Missing/invalid `Origin`, `Referer`, or `X-FinTrack-CSRF`      | `403`  | `REQUEST_FORBIDDEN`   | Untouched |
+| Temporary database/session failure                             | `503`  | `SESSION_UNAVAILABLE` | Untouched |
+| Expired, correctly signed access token on a protected API      | `401`  | `ACCESS_TOKEN_EXPIRED` | —       |
+| Missing, malformed, or otherwise invalid access token          | `401`  | `AUTHENTICATION_REQUIRED` | —   |
+
+Every refresh `401` has the same message: *"Your session has expired. Please sign in
+again."* Clients cannot tell unknown, expired, revoked, or reused tokens apart.
+Responses never contain SQL, internal IDs, token state, stack traces, or lock details.
+Codes appear in the existing error JSON as an optional `code` field.
+
+## Request protection
+
+Login, refresh, and logout require `X-FinTrack-CSRF: 1` and an exact allowlisted
+`Origin`, or, only when `Origin` is absent, an exact allowlisted `Referer`. The check
+runs before CORS and authentication. See [security-csrf.md](security-csrf.md#issue-18-refresh-cookie-exception).
+
+## Access tokens
+
+`JwtService` issues access JWTs only: subject (email), `userId`, a unique `jti`,
+`iat`, and `exp` (5 minutes in the approved configuration). A single parse verifies
+signature and expiration, then requires the subject, a numeric `userId`, and `jti`.
+`ACCESS_TOKEN_EXPIRED` is reported only for a correctly signed, complete token past
+`exp`; anything else is `AUTHENTICATION_REQUIRED`. Controller-level `401`s never
+carry the expired code. There is no access-token denylist and no database lookup per
+request, so after logout or reuse revocation an already-issued access token remains
+valid until it expires (at most 5 minutes).
+
+## Logging
+
+Fixed events with internal IDs only: `auth.login.succeeded`, `auth.login.failed`,
+`auth.session.started`, `auth.refresh.rotated`, `auth.refresh.rejected category=…`,
+`auth.refresh.reuse_detected`, `auth.logout.revoked`, `auth.logout.noop category=…`,
+`auth.session.persistence_failed`, and `auth.request_protection.rejected category=…`.
+Tomcat's cookie-parser logger is turned off because it would otherwise log rejected
+`Cookie` headers verbatim, including the refresh token. Logs never include raw or encoded tokens, hashes, `Authorization`, `Cookie`, or
+`Set-Cookie` headers, passwords, request bodies, JWT claims beyond the user ID, SQL
+bind values, or exception messages (only the exception class name).
+
+## Locking and databases
+
+Every mutating session transaction takes the user row lock first, then the token and
+session rows. Phase 3 revoke-all (password change) must use the same order. Tests
+run on H2 in MySQL mode; they verify transactional outcomes but **do not prove MySQL
+InnoDB locking or isolation behavior**. Phase 3 adds real-MySQL concurrency tests.
 
 ## Planned phases
 
-1. **Foundation** (this phase): schema, entities, repositories, configuration, clock,
-   and token primitives.
-2. Refresh issuance and rotation, including family-wide reuse revocation.
-3. Password-change revoke-all, and real-MySQL locking/concurrency tests.
-4. Remaining work: logout, cookies, cleanup scheduling, frontend, the same-origin
-   proxy, and final deployment (`JWT_EXPIRATION_MS=300000` in Phase 5). Assigned to
-   phases when each is planned.
+1. **Foundation** — done.
+2. **Issuance, rotation, reuse, logout, request protection** — done.
+3. Password-change revoke-all (replacing today's behavior, where the current session
+   stays signed in after a password change), scheduled cleanup 7 days after
+   expiration, and real-MySQL concurrency tests.
+4. Frontend: in-memory access tokens, one controlled refresh on
+   `ACCESS_TOKEN_EXPIRED`, single-flight and cross-tab coordination, and logout UX.
+5. Same-origin Vercel `/api` proxy, hosted configuration (`JWT_EXPIRATION_MS=300000`,
+   Secure cookies), and deployment validation.

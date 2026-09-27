@@ -50,7 +50,7 @@ class ProfileFoundationIntegrationTest {
         assertThat(encoder.matches(password, saved.getPasswordHash())).isTrue();
         assertThat(encoder.matches(password.trim(), saved.getPasswordHash())).isFalse();
         assertThat(response).doesNotContain(password, saved.getPasswordHash());
-        String login = mockMvc.perform(post("/api/auth/login").contentType("application/json")
+        String login = mockMvc.perform(dev.portfolio.finance.support.AuthRequests.protectedAuth(post("/api/auth/login")).contentType("application/json")
                 .content(mapper.writeValueAsString(new dev.portfolio.finance.dto.auth.LoginRequest(email, password))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String token = mapper.readTree(login).get("accessToken").stringValue();
@@ -64,7 +64,7 @@ class ProfileFoundationIntegrationTest {
         User user = new User("Photo", "Disabled", "disabled-photo@example.com", encoder.encode(" River meadow lantern 42! "));
         user.changeProfilePhotoKey(dev.portfolio.finance.support.ProfilePhotoTestSupport.KEY);
         users.saveAndFlush(user);
-        String login = mockMvc.perform(post("/api/auth/login").contentType("application/json")
+        String login = mockMvc.perform(dev.portfolio.finance.support.AuthRequests.protectedAuth(post("/api/auth/login")).contentType("application/json")
                 .content(mapper.writeValueAsString(new dev.portfolio.finance.dto.auth.LoginRequest(
                         user.getEmail(), " River meadow lantern 42! "))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -83,7 +83,7 @@ class ProfileFoundationIntegrationTest {
         String password = "old12345";
         String hash = encoder.encode(password);
         users.saveAndFlush(new User("Legacy", "User", "legacy-profile@example.com", hash));
-        mockMvc.perform(post("/api/auth/login").contentType("application/json")
+        mockMvc.perform(dev.portfolio.finance.support.AuthRequests.protectedAuth(post("/api/auth/login")).contentType("application/json")
                 .content("{\"email\":\"legacy-profile@example.com\",\"password\":\"old12345\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.accessToken").isString());
         assertThat(users.findByEmail("legacy-profile@example.com").orElseThrow().getPasswordHash()).isEqualTo(hash);

@@ -2,6 +2,7 @@ package dev.portfolio.finance.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,17 +20,15 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 
 @ExtendWith(MockitoExtension.class)
 class JwtAuthenticationFilterTest {
 
-    private static final String TEST_EMAIL =
-            "test@example.com";
-
-    private static final String TEST_TOKEN =
-            "valid-jwt-token";
+    private static final String TEST_EMAIL = "test@example.com";
+    private static final String TEST_TOKEN = "valid-jwt-token";
 
     @Mock
     private JwtService jwtService;
@@ -44,25 +43,14 @@ class JwtAuthenticationFilterTest {
     private UserDetails userDetails;
 
     private JwtAuthenticationFilter jwtAuthenticationFilter;
-
     private MockHttpServletRequest request;
-
     private MockHttpServletResponse response;
 
     @BeforeEach
     void setUp() {
-        jwtAuthenticationFilter =
-                new JwtAuthenticationFilter(
-                        jwtService,
-                        userDetailsService
-                );
-
-        request =
-                new MockHttpServletRequest();
-
-        response =
-                new MockHttpServletResponse();
-
+        jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtService, userDetailsService);
+        request = new MockHttpServletRequest();
+        response = new MockHttpServletResponse();
         SecurityContextHolder.clearContext();
     }
 
@@ -71,284 +59,98 @@ class JwtAuthenticationFilterTest {
         SecurityContextHolder.clearContext();
     }
 
-    @Test
-    void shouldContinueFilterChainWhenAuthorizationHeaderIsMissing()
-            throws ServletException, IOException {
-
-        // Act
-        jwtAuthenticationFilter.doFilter(
-                request,
-                response,
-                filterChain
-        );
-
-        // Assert
-        verify(filterChain)
-                .doFilter(
-                        request,
-                        response
-                );
-
-        verify(jwtService, never())
-                .isTokenValid(
-                        org.mockito.ArgumentMatchers.anyString()
-                );
-
-        assertNull(
-                SecurityContextHolder
-                        .getContext()
-                        .getAuthentication()
-        );
-    }
-
-    @Test
-    void shouldContinueFilterChainWhenAuthorizationHeaderIsNotBearer()
-            throws ServletException, IOException {
-
-        // Arrange
-        request.addHeader(
-                "Authorization",
-                "Basic abc123"
-        );
-
-        // Act
-        jwtAuthenticationFilter.doFilter(
-                request,
-                response,
-                filterChain
-        );
-
-        // Assert
-        verify(filterChain)
-                .doFilter(
-                        request,
-                        response
-                );
-
-        verify(jwtService, never())
-                .isTokenValid(
-                        org.mockito.ArgumentMatchers.anyString()
-                );
-
-        assertNull(
-                SecurityContextHolder
-                        .getContext()
-                        .getAuthentication()
-        );
-    }
-
-    @Test
-    void shouldContinueFilterChainWhenTokenIsInvalid()
-            throws ServletException, IOException {
-
-        // Arrange
-        request.addHeader(
-                "Authorization",
-                "Bearer " + TEST_TOKEN
-        );
-
-        when(jwtService.isTokenValid(
-                TEST_TOKEN
-        )).thenReturn(false);
-
-        // Act
-        jwtAuthenticationFilter.doFilter(
-                request,
-                response,
-                filterChain
-        );
-
-        // Assert
-        verify(jwtService)
-                .isTokenValid(
-                        TEST_TOKEN
-                );
-
-        verify(jwtService, never())
-                .extractEmail(
-                        org.mockito.ArgumentMatchers.anyString()
-                );
-
-        verify(userDetailsService, never())
-                .loadUserByUsername(
-                        org.mockito.ArgumentMatchers.anyString()
-                );
-
-        verify(filterChain)
-                .doFilter(
-                        request,
-                        response
-                );
-
-        assertNull(
-                SecurityContextHolder
-                        .getContext()
-                        .getAuthentication()
-        );
-    }
-
-    @Test
-    void shouldSetAuthenticationWhenTokenIsValid()
-            throws ServletException, IOException {
-
-        // Arrange
-        request.addHeader(
-                "Authorization",
-                "Bearer " + TEST_TOKEN
-        );
-
-        when(jwtService.isTokenValid(
-                TEST_TOKEN
-        )).thenReturn(true);
-
-        when(jwtService.extractEmail(
-                TEST_TOKEN
-        )).thenReturn(TEST_EMAIL);
-
-        when(userDetailsService.loadUserByUsername(
-                TEST_EMAIL
-        )).thenReturn(userDetails);
-
-       when(userDetails.getAuthorities())
-        .thenAnswer(invocation ->
-                List.of(
-                        new SimpleGrantedAuthority("USER")
-                )
-        );
-
-        when(userDetails.getUsername())
-                .thenReturn(TEST_EMAIL);
-
-        // Act
-        jwtAuthenticationFilter.doFilter(
-                request,
-                response,
-                filterChain
-        );
-
-        // Assert
-        verify(jwtService)
-                .isTokenValid(
-                        TEST_TOKEN
-                );
-
-        verify(jwtService)
-                .extractEmail(
-                        TEST_TOKEN
-                );
-
-        verify(userDetailsService)
-                .loadUserByUsername(
-                        TEST_EMAIL
-                );
-
-        assertEquals(
-                TEST_EMAIL,
-                SecurityContextHolder
-                        .getContext()
-                        .getAuthentication()
-                        .getName()
-        );
-
-        assertEquals(
-                "USER",
-                SecurityContextHolder
-                        .getContext()
-                        .getAuthentication()
-                        .getAuthorities()
-                        .iterator()
-                        .next()
-                        .getAuthority()
-        );
-
-        verify(filterChain)
-                .doFilter(
-                        request,
-                        response
-                );
-    }
-
-    @Test
-    void shouldContinueUnauthenticatedWhenTokenSubjectCannotBeRead() throws Exception {
-        request.addHeader("Authorization", "Bearer " + TEST_TOKEN);
-        when(jwtService.isTokenValid(TEST_TOKEN)).thenReturn(true);
-        when(jwtService.extractEmail(TEST_TOKEN)).thenThrow(new io.jsonwebtoken.MalformedJwtException("Invalid subject"));
-        jwtAuthenticationFilter.doFilter(request, response, filterChain);
-        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    private void assertUnauthenticatedAndContinued() throws ServletException, IOException {
         verify(filterChain).doFilter(request, response);
-        verify(userDetailsService, never()).loadUserByUsername(org.mockito.ArgumentMatchers.anyString());
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    @Test
+    void shouldContinueFilterChainWhenAuthorizationHeaderIsMissing() throws Exception {
+        jwtAuthenticationFilter.doFilter(request, response, filterChain);
+
+        assertUnauthenticatedAndContinued();
+        verify(jwtService, never()).validate(anyString());
+        assertNull(request.getAttribute(JwtAuthenticationFilter.ACCESS_TOKEN_EXPIRED_ATTRIBUTE));
+    }
+
+    @Test
+    void shouldContinueFilterChainWhenAuthorizationHeaderIsNotBearer() throws Exception {
+        request.addHeader("Authorization", "Basic abc123");
+
+        jwtAuthenticationFilter.doFilter(request, response, filterChain);
+
+        assertUnauthenticatedAndContinued();
+        verify(jwtService, never()).validate(anyString());
+    }
+
+    @Test
+    void shouldContinueFilterChainWhenTokenIsInvalid() throws Exception {
+        request.addHeader("Authorization", "Bearer " + TEST_TOKEN);
+        when(jwtService.validate(TEST_TOKEN)).thenReturn(AccessTokenValidation.invalid());
+
+        jwtAuthenticationFilter.doFilter(request, response, filterChain);
+
+        verify(jwtService).validate(TEST_TOKEN);
+        verify(userDetailsService, never()).loadUserByUsername(anyString());
+        assertUnauthenticatedAndContinued();
+        assertNull(request.getAttribute(JwtAuthenticationFilter.ACCESS_TOKEN_EXPIRED_ATTRIBUTE));
+    }
+
+    @Test
+    void shouldMarkExpiredTokenWithoutAuthenticating() throws Exception {
+        request.addHeader("Authorization", "Bearer " + TEST_TOKEN);
+        when(jwtService.validate(TEST_TOKEN)).thenReturn(AccessTokenValidation.expired());
+
+        jwtAuthenticationFilter.doFilter(request, response, filterChain);
+
+        verify(userDetailsService, never()).loadUserByUsername(anyString());
+        assertUnauthenticatedAndContinued();
+        assertEquals(Boolean.TRUE, request.getAttribute(JwtAuthenticationFilter.ACCESS_TOKEN_EXPIRED_ATTRIBUTE));
+    }
+
+    @Test
+    void shouldSetAuthenticationWhenTokenIsValid() throws Exception {
+        request.addHeader("Authorization", "Bearer " + TEST_TOKEN);
+        when(jwtService.validate(TEST_TOKEN)).thenReturn(AccessTokenValidation.valid(TEST_EMAIL, 1L));
+        when(userDetailsService.loadUserByUsername(TEST_EMAIL)).thenReturn(userDetails);
+        when(userDetails.getAuthorities())
+                .thenAnswer(invocation -> List.of(new SimpleGrantedAuthority("USER")));
+        when(userDetails.getUsername()).thenReturn(TEST_EMAIL);
+
+        jwtAuthenticationFilter.doFilter(request, response, filterChain);
+
+        verify(jwtService).validate(TEST_TOKEN);
+        verify(userDetailsService).loadUserByUsername(TEST_EMAIL);
+        assertEquals(TEST_EMAIL, SecurityContextHolder.getContext().getAuthentication().getName());
+        assertEquals("USER", SecurityContextHolder.getContext().getAuthentication()
+                .getAuthorities().iterator().next().getAuthority());
+        verify(filterChain).doFilter(request, response);
     }
 
     @Test
     void shouldContinueUnauthenticatedWhenUserNoLongerExists() throws Exception {
         request.addHeader("Authorization", "Bearer " + TEST_TOKEN);
-        when(jwtService.isTokenValid(TEST_TOKEN)).thenReturn(true);
-        when(jwtService.extractEmail(TEST_TOKEN)).thenReturn(TEST_EMAIL);
+        when(jwtService.validate(TEST_TOKEN)).thenReturn(AccessTokenValidation.valid(TEST_EMAIL, 1L));
         when(userDetailsService.loadUserByUsername(TEST_EMAIL))
-                .thenThrow(new org.springframework.security.core.userdetails.UsernameNotFoundException("User not found"));
+                .thenThrow(new UsernameNotFoundException("User not found"));
+
         jwtAuthenticationFilter.doFilter(request, response, filterChain);
-        assertNull(SecurityContextHolder.getContext().getAuthentication());
-        verify(filterChain).doFilter(request, response);
+
+        assertUnauthenticatedAndContinued();
     }
 
     @Test
-    void shouldNotReplaceExistingAuthentication()
-            throws ServletException, IOException {
+    void shouldNotReplaceExistingAuthentication() throws Exception {
+        request.addHeader("Authorization", "Bearer " + TEST_TOKEN);
+        when(jwtService.validate(TEST_TOKEN)).thenReturn(AccessTokenValidation.valid(TEST_EMAIL, 1L));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "already-authenticated@example.com", null, List.of(new SimpleGrantedAuthority("USER"))));
 
-        // Arrange
-        request.addHeader(
-                "Authorization",
-                "Bearer " + TEST_TOKEN
-        );
+        jwtAuthenticationFilter.doFilter(request, response, filterChain);
 
-        when(jwtService.isTokenValid(
-                TEST_TOKEN
-        )).thenReturn(true);
-
-        when(jwtService.extractEmail(
-                TEST_TOKEN
-        )).thenReturn(TEST_EMAIL);
-
-        UsernamePasswordAuthenticationToken existingAuthentication =
-                new UsernamePasswordAuthenticationToken(
-                        "already-authenticated@example.com",
-                        null,
-                        List.of(
-                                new SimpleGrantedAuthority("USER")
-                        )
-                );
-
-        SecurityContextHolder
-                .getContext()
-                .setAuthentication(
-                        existingAuthentication
-                );
-
-        // Act
-        jwtAuthenticationFilter.doFilter(
-                request,
-                response,
-                filterChain
-        );
-
-        // Assert
-        verify(userDetailsService, never())
-                .loadUserByUsername(
-                        org.mockito.ArgumentMatchers.anyString()
-                );
-
-        assertEquals(
-                "already-authenticated@example.com",
-                SecurityContextHolder
-                        .getContext()
-                        .getAuthentication()
-                        .getName()
-        );
-
-        verify(filterChain)
-                .doFilter(
-                        request,
-                        response
-                );
+        verify(userDetailsService, never()).loadUserByUsername(anyString());
+        assertEquals("already-authenticated@example.com",
+                SecurityContextHolder.getContext().getAuthentication().getName());
+        verify(filterChain).doFilter(request, response);
     }
 }
