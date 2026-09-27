@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { getAccountName } from "../utils/accountIdentity";
+import { Avatar } from "./Avatar";
 
 function AppHeader() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -9,13 +11,7 @@ function AppHeader() {
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const accountTriggerRef = useRef<HTMLButtonElement>(null);
 
-  const fullName = user?.displayName?.trim()
-    || [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim()
-    || "Account";
-  const nameParts = fullName.split(/\s+/);
-  const initials = (Array.from(nameParts[0])[0]
-    + (nameParts.length > 1 ? Array.from(nameParts[nameParts.length - 1])[0] : ""))
-    .toUpperCase();
+  const fullName = getAccountName(user);
 
   useEffect(() => {
     if (!isAccountMenuOpen) {
@@ -87,9 +83,12 @@ function AppHeader() {
                 aria-label={`${isAccountMenuOpen ? "Close" : "Open"} account menu for ${fullName}`}
                 onClick={toggleAccountMenu}
               >
-                <span className="account-menu__initials" aria-hidden="true">
-                  {initials}
-                </span>
+                <Avatar
+                  className="account-menu__avatar"
+                  name={fullName}
+                  photoUrl={user?.profilePhotoUrl}
+                  decorative
+                />
 
                 <span className="account-menu__name">{fullName}</span>
 

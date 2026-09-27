@@ -32,6 +32,7 @@ const currentUser = {
   preferences: { dateFormat: "MEDIUM" as const, transactionPageSize: 10 as const },
   email: "demo@fintrack.dev",
   createdAt: "2026-09-09T00:00:00",
+  profilePhotoUrl: null,
 };
 
 function AuthStateProbe() {

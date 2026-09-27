@@ -37,7 +37,7 @@ The project demonstrates layered backend architecture, stateless JWT authenticat
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
 - **377 passing backend tests** with **98.75% instruction coverage** and **97.56% branch coverage**
-- **291 passing frontend tests** across **25 test files** with **100% statement, branch, function, and line coverage**
+- **371 passing frontend tests** across **29 test files** with **100% statement, branch, function, and line coverage**
 
 ---
 
@@ -180,7 +180,7 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 | ----------------- | ------------------------------------------------------- |
 | Backend           | **407 tests passing**                                   |
 | Backend Coverage  | **98.79% instruction coverage, 97.50% branch coverage** |
-| Frontend          | **291 tests passing across 25 test files**              |
+| Frontend          | **371 tests passing across 29 test files**              |
 | Frontend Coverage | **100% statement, branch, function, and line coverage** |
 
 These results were measured during the final issue #16 verification on September 26, 2026.

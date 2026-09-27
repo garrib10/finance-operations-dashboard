@@ -144,10 +144,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return saveAccount(() => accountService.updatePreferences(request));
   }
 
+  function uploadProfilePhoto(photo: File): Promise<UserResponse> {
+    return saveAccount(() => accountService.uploadProfilePhoto(photo));
+  }
+
+  function removeProfilePhoto(): Promise<UserResponse> {
+    return saveAccount(() => accountService.removeProfilePhoto());
+  }
+
   const value: AuthContextValue = {
     user,
     updateProfile,
     updatePreferences,
+    uploadProfilePhoto,
+    removeProfilePhoto,
     isAuthenticated: user !== null,
     isLoading,
     restorationError,

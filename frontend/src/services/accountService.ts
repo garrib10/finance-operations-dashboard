@@ -26,3 +26,13 @@ export function changePassword({ currentPassword, newPassword }: ChangePasswordR
     body: JSON.stringify({ currentPassword, newPassword }),
   });
 }
+
+export function uploadProfilePhoto(photo: File): Promise<UserResponse> {
+  const body = new FormData();
+  body.append("photo", photo);
+  return apiRequest<UserResponse>("/api/account/photo", { method: "PUT", body });
+}
+
+export function removeProfilePhoto(): Promise<UserResponse> {
+  return apiRequest<UserResponse>("/api/account/photo", { method: "DELETE" });
+}

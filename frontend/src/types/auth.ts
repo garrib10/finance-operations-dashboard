@@ -26,4 +26,5 @@ export interface UserResponse {
   lastName: string;
   email: string;
   createdAt: string;
+  profilePhotoUrl: string | null;
 }

@@ -9,7 +9,11 @@ export const accountUser: UserResponse = {
   email: "demo@fintrack.dev",
   createdAt: "2026-09-25T12:00:00",
   preferences: { dateFormat: "MEDIUM", transactionPageSize: 10 },
+  profilePhotoUrl: null,
 };
+
+export const photoUrl = "https://res.cloudinary.com/demo/image/upload/v1/profile-photos/current.jpg";
+export const replacementPhotoUrl = "https://res.cloudinary.com/demo/image/upload/v2/profile-photos/replacement.jpg";
 
 export function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -26,5 +30,6 @@ export function accountContext(user = accountUser) {
     user, isAuthenticated: true, isLoading: false, restorationError: null,
     login: vi.fn(), logout: vi.fn(), retrySessionRestore: vi.fn(),
     updateProfile: vi.fn().mockResolvedValue(user), updatePreferences: vi.fn().mockResolvedValue(user),
+    uploadProfilePhoto: vi.fn().mockResolvedValue(user), removeProfilePhoto: vi.fn().mockResolvedValue(user),
   };
 }

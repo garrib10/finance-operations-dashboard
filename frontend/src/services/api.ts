@@ -35,7 +35,10 @@ export async function apiRequest<T>(
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...requestOptions,
     headers: {
-      "Content-Type": "application/json",
+      // Browsers must generate the multipart boundary for FormData bodies.
+      ...(requestOptions.body instanceof FormData
+        ? {}
+        : { "Content-Type": "application/json" }),
       ...(token
         ? {
             Authorization: `Bearer ${token}`,

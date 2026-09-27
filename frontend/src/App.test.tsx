@@ -22,7 +22,7 @@ function renderApp(path: string, authenticated = true) {
     isLoading: false,
     restorationError: null,
     login: vi.fn(), logout: vi.fn(), retrySessionRestore: vi.fn(),
-    updateProfile: vi.fn(), updatePreferences: vi.fn(),
+    updateProfile: vi.fn(), updatePreferences: vi.fn(), uploadProfilePhoto: vi.fn(), removeProfilePhoto: vi.fn(),
   };
   return render(<AuthContext.Provider value={context}>
     <MemoryRouter initialEntries={[path]}><App /><DestinationProbe /></MemoryRouter>
