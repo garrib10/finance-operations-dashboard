@@ -191,3 +191,76 @@ They also check the nullable 255-character column and repeat migration behavior.
 The SQL uses a simple nullable VARCHAR addition shared by MySQL and H2. Rehearse
 clean and populated V3 upgrades against the target MySQL version before deployment;
 this phase does not run migrations on local/shared or hosted MySQL databases.
+
+## V5: refresh sessions and token history
+
+`V5__add_refresh_sessions.sql` adds two tables for issue #18 refresh-token support.
+See the [authentication session lifecycle](auth-session-lifecycle.md) for the policy
+they implement. It does not change `users` or any financial table.
+
+### refresh_sessions
+
+One row per login/device session family.
+
+| Column              | Definition                     | Notes                                                    |
+| ------------------- | ------------------------------ | -------------------------------------------------------- |
+| `id`                | `CHAR(36)` primary key         | Application-generated random UUID                         |
+| `user_id`           | `BIGINT NOT NULL`              | Foreign key to `users.id` (no cascade)                    |
+| `created_at`        | `DATETIME(6) NOT NULL`         | UTC                                                       |
+| `expires_at`        | `DATETIME(6) NOT NULL`         | UTC absolute expiration; never extended                   |
+| `revoked_at`        | `DATETIME(6) NULL`             | UTC                                                       |
+| `revocation_reason` | `VARCHAR(24) NULL`             | `LOGOUT`, `PASSWORD_CHANGE`, or `REUSE_DETECTED`          |
+
+Indexes: `idx_refresh_sessions_user_revoked (user_id, revoked_at)` for per-user
+active/revoked lookups, and `idx_refresh_sessions_expires_at (expires_at)` for future
+cleanup. Named CHECK constraints require `expires_at > created_at`, require
+`revoked_at` and `revocation_reason` to be both null or both set, and restrict the
+reason to the three approved values. The reason check uses the same `CASE ... = 1`
+form as V3, so it works on both MySQL and H2. Adding a reason requires a new migration.
+
+### refresh_tokens
+
+One row per issued refresh token within a family.
+
+| Column        | Definition                         | Notes                                                        |
+| ------------- | ---------------------------------- | ------------------------------------------------------------ |
+| `id`          | `BIGINT AUTO_INCREMENT` primary key |                                                              |
+| `session_id`  | `CHAR(36) NOT NULL`                | Foreign key to `refresh_sessions.id`, `ON DELETE CASCADE`    |
+| `token_hash`  | `BINARY(32) NOT NULL`              | SHA-256 of the decoded token bytes; unique (`uk_refresh_tokens_token_hash`) |
+| `created_at`  | `DATETIME(6) NOT NULL`             | UTC                                                          |
+| `consumed_at` | `DATETIME(6) NULL`                 | UTC; consumed rows are kept for reuse detection              |
+
+Index: `idx_refresh_tokens_session_id (session_id)`. Deleting a session deletes its
+token history. Deleting a user who still has sessions is rejected by the foreign key.
+
+**Raw refresh tokens are never persisted.** Neither table stores raw or Base64 token
+text, cookies, authorization headers, IP addresses, or user-agent strings. The
+migration contains no token values and no data statements.
+
+The migration adds no CHECK on `session_id`: MySQL forbids CHECK constraints on
+columns used by cascading foreign keys. Timestamp ordering after creation (revocation
+and consumption) is enforced in the entities instead of the schema, which keeps V5
+portable between MySQL and the H2 test database.
+
+### Existing data, clean install, and upgrade
+
+Existing users receive no session rows and no backfill runs. IDs, names, email,
+password hashes, preferences, profile-photo keys, timestamps, categories, budgets,
+and transactions are unchanged. After deployment, users with existing access tokens
+keep them until they expire and get a refresh session on their next login (a later
+phase).
+
+A clean installation applies V1 through V5. A populated V4 database applies only V5.
+The current version becomes 5, and later startups validate without reapplying it.
+Baseline-on-migrate behavior is unchanged. V1–V5 are immutable once applied; any
+correction requires V6 or later.
+
+Automated tests use H2 in MySQL mode. They cover clean install, and a populated V4
+upgrade that compares every user and financial column before and after migrating.
+They also check column types and nullability, primary keys, foreign keys and delete
+rules, the named indexes, the unique hash constraint, all CHECK constraints, cascade
+deletion, and idempotent repeat migration. A separate test applies Hibernate's
+MySQL schema-validation type matching to the V5 column types, so production
+`ddl-auto=validate` accepts the new entities. As with V3 and V4, rehearse clean and
+populated-V4 upgrades against the target MySQL version before deployment. Real
+MySQL locking and concurrency coverage is planned for a later phase.
