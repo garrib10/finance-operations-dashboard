@@ -1,7 +1,6 @@
 package dev.portfolio.finance.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import dev.portfolio.finance.dto.auth.UserResponse;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -9,7 +8,8 @@ class UserProfileTest {
     @Test
     void defaultsAndMapsSafeResponse() {
         var user = new User("Test", "User", "test@example.com", "secret-hash");
-        var response = UserResponse.from(user);
+        assertThat(user.getProfilePhotoKey()).isNull();
+        var response = dev.portfolio.finance.support.ProfilePhotoTestSupport.mapper().toResponse(user);
         assertThat(response.displayName()).isEqualTo("Test User");
         assertThat(response.preferences().dateFormat()).isEqualTo(DateFormatPreference.MEDIUM);
         assertThat(response.preferences().transactionPageSize()).isEqualTo(10);

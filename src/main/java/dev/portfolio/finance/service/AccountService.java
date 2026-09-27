@@ -4,6 +4,7 @@ import dev.portfolio.finance.dto.account.ChangePasswordRequest;
 import dev.portfolio.finance.dto.account.UpdatePreferencesRequest;
 import dev.portfolio.finance.dto.account.UpdateProfileRequest;
 import dev.portfolio.finance.dto.auth.UserResponse;
+import dev.portfolio.finance.dto.auth.UserResponseMapper;
 import dev.portfolio.finance.entity.User;
 import dev.portfolio.finance.exception.account.AccountValidationException;
 import dev.portfolio.finance.exception.auth.InvalidCredentialsException;
@@ -14,10 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AccountService {
+    private final UserResponseMapper responseMapper;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public AccountService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public AccountService(UserRepository userRepository, PasswordEncoder passwordEncoder, UserResponseMapper responseMapper) {
+        this.responseMapper = responseMapper;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
     }
@@ -26,14 +29,14 @@ public class AccountService {
     public UserResponse updateProfile(String authenticatedEmail, UpdateProfileRequest request) {
         User user = resolveUser(authenticatedEmail);
         user.updateProfile(request.firstName(), request.lastName(), request.displayName());
-        return UserResponse.from(userRepository.save(user));
+        return responseMapper.toResponse(userRepository.save(user));
     }
 
     @Transactional
     public UserResponse updatePreferences(String authenticatedEmail, UpdatePreferencesRequest request) {
         User user = resolveUser(authenticatedEmail);
         user.updatePreferences(request.dateFormat(), request.transactionPageSize());
-        return UserResponse.from(userRepository.save(user));
+        return responseMapper.toResponse(userRepository.save(user));
     }
 
     @Transactional

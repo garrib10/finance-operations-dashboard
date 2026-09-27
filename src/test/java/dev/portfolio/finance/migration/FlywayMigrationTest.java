@@ -25,7 +25,7 @@ class FlywayMigrationTest {
 
         flyway.migrate();
 
-        assertThat(currentVersion(flyway)).isEqualTo("3");
+        assertThat(currentVersion(flyway)).isEqualTo("4");
         assertThat(rowCount(databaseUrl, "users")).isZero();
         assertThat(rowCount(databaseUrl, "categories")).isZero();
         assertThat(rowCount(databaseUrl, "transactions")).isZero();
@@ -33,6 +33,8 @@ class FlywayMigrationTest {
         assertThat(historyCount(databaseUrl, "1", "SQL")).isEqualTo(1);
         assertThat(historyCount(databaseUrl, "2", "SQL")).isEqualTo(1);
         assertThat(historyCount(databaseUrl, "3", "SQL")).isEqualTo(1);
+        assertThat(historyCount(databaseUrl, "4", "SQL")).isEqualTo(1);
+        assertThat(flyway.migrate().migrationsExecuted).isZero();
         assertThat(transactionLookupIndexCount(databaseUrl)).isEqualTo(1);
     }
 
@@ -46,11 +48,13 @@ class FlywayMigrationTest {
         Flyway flyway = configureFlyway(databaseUrl, true);
         flyway.migrate();
 
-        assertThat(currentVersion(flyway)).isEqualTo("3");
+        assertThat(currentVersion(flyway)).isEqualTo("4");
         assertThat(rowCount(databaseUrl, "users")).isEqualTo(1);
         assertThat(historyCount(databaseUrl, "1", "BASELINE")).isEqualTo(1);
         assertThat(historyCount(databaseUrl, "2", "SQL")).isEqualTo(1);
         assertThat(historyCount(databaseUrl, "3", "SQL")).isEqualTo(1);
+        assertThat(historyCount(databaseUrl, "4", "SQL")).isEqualTo(1);
+        assertThat(flyway.migrate().migrationsExecuted).isZero();
         assertThat(transactionLookupIndexCount(databaseUrl)).isEqualTo(1);
     }
 
@@ -88,7 +92,7 @@ class FlywayMigrationTest {
             }
             Flyway flyway = configureFlyway(url, false);
             flyway.migrate();
-            assertThat(currentVersion(flyway)).isEqualTo("3");
+            assertThat(currentVersion(flyway)).isEqualTo("4");
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             assertThat(historyCount(url, "3", "SQL")).isEqualTo(1);
             try (ResultSet rows = statement.executeQuery("SELECT *, CONCAT(id, email, first_name, last_name, password_hash, created_at, updated_at) AS original FROM users ORDER BY id")) {
@@ -118,6 +122,56 @@ class FlywayMigrationTest {
             assertThatThrownBy(() -> statement.executeUpdate("UPDATE users SET date_format = 'OTHER' WHERE id = 1")).isInstanceOf(SQLException.class);
             assertThatThrownBy(() -> statement.executeUpdate("UPDATE users SET transaction_page_size = 11 WHERE id = 1")).isInstanceOf(SQLException.class);
         }
+    }
+
+    @Test
+    void upgradesPopulatedV3WithoutChangingExistingData() throws SQLException {
+        String url = databaseUrl("photo_upgrade");
+        Flyway.configure().dataSource(url, "sa", "").locations("classpath:db/migration")
+                .target("3").load().migrate();
+        try (var connection = DriverManager.getConnection(url, "sa", "");
+             var statement = connection.createStatement()) {
+            statement.executeUpdate("INSERT INTO users (id,created_at,updated_at,first_name,last_name,display_name,email,password_hash,date_format,transaction_page_size) VALUES (1,'2026-01-01 12:00:00.123456','2026-02-01 12:00:00.654321','First','Last','Display','photo@example.com','test-hash','ISO',25)");
+            statement.executeUpdate("INSERT INTO categories VALUES (1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, TRUE, 'Food', 1)");
+            statement.executeUpdate("INSERT INTO transactions VALUES (1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 12.50, 'Lunch', CURRENT_DATE, 'EXPENSE', 1, 1)");
+            statement.executeUpdate("INSERT INTO budgets VALUES (1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 9, 100.00, 2026, 1, 1)");
+        }
+        var before = snapshot(url);
+        Flyway flyway = configureFlyway(url, false);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
+        assertThat(currentVersion(flyway)).isEqualTo("4");
+        assertThat(historyCount(url, "4", "SQL")).isEqualTo(1);
+        assertThat(snapshot(url)).isEqualTo(before);
+        try (var connection = DriverManager.getConnection(url, "sa", "");
+             var statement = connection.createStatement();
+             var rows = statement.executeQuery("SELECT profile_photo_key FROM users")) {
+            assertThat(rows.next()).isTrue();
+            assertThat(rows.getString(1)).isNull();
+            assertThat(rows.getMetaData().getPrecision(1)).isEqualTo(255);
+            assertThat(rows.getMetaData().isNullable(1)).isEqualTo(java.sql.ResultSetMetaData.columnNullable);
+        }
+        assertThat(flyway.migrate().migrationsExecuted).isZero();
+    }
+
+    private java.util.Map<String, java.util.List<String>> snapshot(String url) throws SQLException {
+        var result = new java.util.LinkedHashMap<String, java.util.List<String>>();
+        try (var connection = DriverManager.getConnection(url, "sa", "");
+             var statement = connection.createStatement()) {
+            for (String table : java.util.List.of("users", "categories", "transactions", "budgets")) {
+                var values = new java.util.ArrayList<String>();
+                try (var rows = statement.executeQuery("SELECT * FROM " + table + " ORDER BY id")) {
+                    while (rows.next()) {
+                        for (int i = 1; i <= rows.getMetaData().getColumnCount(); i++) {
+                            if (!rows.getMetaData().getColumnName(i).equalsIgnoreCase("profile_photo_key")) {
+                                values.add(rows.getMetaData().getColumnName(i) + "=" + rows.getString(i));
+                            }
+                        }
+                    }
+                }
+                result.put(table, values);
+            }
+        }
+        return result;
     }
 
     private Flyway configureFlyway(

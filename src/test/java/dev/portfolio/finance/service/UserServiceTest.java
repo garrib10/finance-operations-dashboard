@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,8 +29,13 @@ class UserServiceTest {
     @Mock
     private CategoryInitializationService categoryInitializationService;
 
-    @InjectMocks
     private UserService userService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        userService = new UserService(userRepository, passwordEncoder, categoryInitializationService,
+                dev.portfolio.finance.support.ProfilePhotoTestSupport.mapper());
+    }
 
     @Test
     void shouldRegisterUserWithNormalizedEmailAndHashedPassword() {
@@ -110,6 +114,7 @@ class UserServiceTest {
         );
 
         assertEquals("Test User", response.displayName());
+        org.junit.jupiter.api.Assertions.assertNull(response.profilePhotoUrl());
         assertEquals(dev.portfolio.finance.entity.DateFormatPreference.MEDIUM, response.preferences().dateFormat());
         assertEquals(10, response.preferences().transactionPageSize());
 

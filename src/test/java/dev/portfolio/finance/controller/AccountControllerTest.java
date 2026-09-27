@@ -6,7 +6,6 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import dev.portfolio.finance.dto.account.*;
-import dev.portfolio.finance.dto.auth.UserResponse;
 import dev.portfolio.finance.entity.User;
 import dev.portfolio.finance.exception.GlobalExceptionHandler;
 import dev.portfolio.finance.exception.account.*;
@@ -38,7 +37,7 @@ class AccountControllerTest {
 
     @Test
     void returnsCanonicalProfileAndDelegatesWithPrincipal() throws Exception {
-        when(service.updateProfile(eq("a@example.com"), any())).thenReturn(UserResponse.from(new User("New", "Name", "a@example.com", "secret-hash")));
+        when(service.updateProfile(eq("a@example.com"), any())).thenReturn(dev.portfolio.finance.support.ProfilePhotoTestSupport.mapper().toResponse(new User("New", "Name", "a@example.com", "secret-hash")));
         String body = mvc.perform(put("/api/account/profile").principal(principal).contentType("application/json")
                 .content("{\"firstName\": \" New \", \"lastName\": \" Name \", \"displayName\": \" New Name \", \"email\": \"b@example.com\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.displayName").value("New Name"))
@@ -52,7 +51,7 @@ class AccountControllerTest {
     void returnsCanonicalPreferences() throws Exception {
         User user = new User("A", "B", "a@example.com", "secret-hash");
         user.updatePreferences(dev.portfolio.finance.entity.DateFormatPreference.ISO, 25);
-        when(service.updatePreferences(eq("a@example.com"), any())).thenReturn(UserResponse.from(user));
+        when(service.updatePreferences(eq("a@example.com"), any())).thenReturn(dev.portfolio.finance.support.ProfilePhotoTestSupport.mapper().toResponse(user));
         mvc.perform(put("/api/account/preferences").principal(principal).contentType("application/json")
                 .content("{\"dateFormat\":\"ISO\",\"transactionPageSize\":25}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.preferences.dateFormat").value("ISO"))
@@ -128,7 +127,7 @@ class AccountControllerTest {
 
     @Test
     void acceptsMediumAndFiftyPreferences() throws Exception {
-        when(service.updatePreferences(anyString(), any())).thenReturn(UserResponse.from(new User("A", "B", "a@example.com", "hash")));
+        when(service.updatePreferences(anyString(), any())).thenReturn(dev.portfolio.finance.support.ProfilePhotoTestSupport.mapper().toResponse(new User("A", "B", "a@example.com", "hash")));
         for (int size : new int[]{10, 50}) {
             mvc.perform(put("/api/account/preferences").principal(principal).contentType("application/json")
                     .content("{\"dateFormat\":\"MEDIUM\",\"transactionPageSize\":" + size + "}"))

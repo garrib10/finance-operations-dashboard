@@ -11,6 +11,7 @@ import dev.portfolio.finance.dto.auth.LoginRequest;
 import dev.portfolio.finance.dto.auth.LoginResponse;
 import dev.portfolio.finance.dto.auth.RegisterRequest;
 import dev.portfolio.finance.dto.auth.UserResponse;
+import dev.portfolio.finance.dto.auth.UserResponseMapper;
 import dev.portfolio.finance.entity.User;
 import dev.portfolio.finance.repository.UserRepository;
 import dev.portfolio.finance.security.JwtService;
@@ -26,17 +27,20 @@ public class AuthController {
     private final UserService userService;
     private final AuthService authService;
     private final JwtService jwtService;
+    private final UserResponseMapper responseMapper;
     private final UserRepository userRepository;
 
     public AuthController(
             UserService userService,
             AuthService authService,
             JwtService jwtService,
-            UserRepository userRepository
+            UserRepository userRepository,
+            UserResponseMapper responseMapper
     ) {
         this.userService = userService;
         this.authService = authService;
         this.jwtService = jwtService;
+        this.responseMapper = responseMapper;
         this.userRepository = userRepository;
     }
 
@@ -78,7 +82,7 @@ public class AuthController {
                 .findByEmail(email)
                 .orElseThrow();
 
-        UserResponse response = UserResponse.from(user);
+        UserResponse response = responseMapper.toResponse(user);
 
         return ResponseEntity.ok(response);
     }

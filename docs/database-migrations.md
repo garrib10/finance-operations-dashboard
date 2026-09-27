@@ -134,7 +134,8 @@ An empty database runs V1, V2, and V3. A database already at V2 runs only V3.
 A legacy schema with no Flyway history must follow the controlled V1 adoption
 procedure above; do not enable baseline-on-migrate for routine upgrades. Normal
 startup keeps it false and validates migration history. Once successfully applied,
-V3 is recorded as current; later starts validate without rerunning it.
+V3 is recorded in history; later starts validate without rerunning it and apply
+any newer migrations, including V4.
 
 Do not edit a successfully applied migration, including V3. Subsequent changes
 require V4 or later. MySQL DDL can leave partial changes after failure: stop,
@@ -163,3 +164,30 @@ shared production schema, to:
 
 Flyway previously warned that local MySQL 9.7 was newer than its verified 9.4
 version. Confirm the target server/Flyway compatibility during staging rehearsal.
+
+
+## V4: optional profile-photo storage reference
+
+`V4__add_profile_photo_storage.sql` adds only
+`users.profile_photo_key VARCHAR(255) NULL`. This is a backend-generated storage
+key/Cloudinary public ID, not image bytes or a client-provided URL. No cleanup
+or work table is introduced. See [profile-photo policy](profile-photo-security.md).
+
+Existing users receive NULL and retain initials. Registration also leaves the
+column null. IDs, names, email, password hashes, preferences, timestamps,
+categories, budgets, and transactions remain unchanged. Clearing a future photo
+sets the reference to null. Provider secrets, binary data, Base64, original
+filenames, image metadata, and signed URLs must never be stored in this column.
+
+A clean installation now applies V1 through V4. A populated V3 database applies
+only V4. Current version becomes 4, and subsequent startups validate without
+reapplying it. Existing baseline-on-migrate behavior is unchanged and remains
+disabled for routine upgrades. V1–V4 are immutable after successful application;
+future schema corrections require a new versioned migration.
+
+Automated tests use H2 in MySQL mode and compare all preexisting user and financial
+columns before/after a populated V3 upgrade, including microsecond timestamps.
+They also check the nullable 255-character column and repeat migration behavior.
+The SQL uses a simple nullable VARCHAR addition shared by MySQL and H2. Rehearse
+clean and populated V3 upgrades against the target MySQL version before deployment;
+this phase does not run migrations on local/shared or hosted MySQL databases.
