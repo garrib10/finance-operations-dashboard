@@ -19,5 +19,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @org.springframework.data.jpa.repository.Query("select u from User u where u.id = :id")
     Optional<User> findByIdForUpdate(@org.springframework.data.repository.query.Param("id") Long id);
 
+    /** Unlocked identity lookup; callers lock with {@link #findByIdForUpdate} before trusting state. */
+    @org.springframework.data.jpa.repository.Query("select u.id from User u where u.email = :email")
+    Optional<Long> findIdByEmail(@org.springframework.data.repository.query.Param("email") String email);
+
     boolean existsByEmail(String email);
 }

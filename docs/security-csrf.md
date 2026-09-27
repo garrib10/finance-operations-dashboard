@@ -105,10 +105,11 @@ A genuine authenticated 401 clears the current browser session. Temporary sessio
 restoration failures preserve the token for manual retry. Account updates cannot
 restore a logged-out user or overwrite a different session with a late response.
 
-Password changes do not revoke already-issued access tokens. Browser logout also
-only removes the local token. Tokens remain usable until expiration; refresh-token
-rotation and revocation belong to issue #18. Reassess this CSRF decision if that
-work introduces cookie-based credentials.
+Password changes do not revoke already-issued access tokens, which remain usable
+until they expire (at most five minutes with issue #18). Since issue #18, a password
+change revokes every refresh-session family and clears the refresh cookie; see
+[Issue #18: refresh-cookie exception](#issue-18-refresh-cookie-exception). The password
+endpoint remains bearer-authenticated and never accepts the refresh cookie.
 
 Credential DTOs redact passwords and login tokens in `toString()`. Account error
 responses use safe messages; the exception resolver and HandlerMethod argument-resolution logger are pinned

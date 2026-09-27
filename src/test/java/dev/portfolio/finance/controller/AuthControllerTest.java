@@ -211,22 +211,11 @@ class AuthControllerTest {
                 }
                 """;
 
-        User user =
-                new User(
-                        "Test",
-                        "User",
-                        TEST_EMAIL,
-                        "hashed-password"
-                );
-
-        when(authService.authenticate(
-                any(LoginRequest.class)
-        )).thenReturn(user);
-
         java.time.Instant expiresAt = java.time.Instant.parse("2026-10-27T12:00:00Z");
-        when(refreshSessionService.startSession(user))
-                .thenReturn(new dev.portfolio.finance.service.RefreshSessionService.IssuedSession(
-                        "test-jwt-token", "raw-refresh-value", expiresAt));
+        when(authService.login(
+                any(LoginRequest.class)
+        )).thenReturn(new dev.portfolio.finance.service.RefreshSessionService.IssuedSession(
+                "test-jwt-token", "raw-refresh-value", expiresAt));
 
         when(refreshCookieService.issue("raw-refresh-value", expiresAt))
                 .thenReturn("fintrack_refresh=raw-refresh-value; Path=/api/auth; HttpOnly; SameSite=Lax");
@@ -266,12 +255,9 @@ class AuthControllerTest {
                 );
 
         verify(authService)
-                .authenticate(
+                .login(
                         any(LoginRequest.class)
                 );
-
-        verify(refreshSessionService)
-                .startSession(user);
     }
 
     @Test
@@ -286,7 +272,7 @@ class AuthControllerTest {
                 }
                 """;
 
-        when(authService.authenticate(
+        when(authService.login(
                 any(LoginRequest.class)
         )).thenThrow(
                 new InvalidCredentialsException(
@@ -312,7 +298,7 @@ class AuthControllerTest {
                 refreshSessionService,
                 never()
         ).startSession(
-                any(User.class)
+                any(), any()
         );
 
         verify(

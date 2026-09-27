@@ -80,9 +80,7 @@ public class AuthController {
     public ResponseEntity<LoginResponse> login(
             @Valid @RequestBody LoginRequest request
     ) {
-        User user = authService.authenticate(request);
-        IssuedSession session = refreshSessionService.startSession(user);
-        return tokenResponse(session);
+        return tokenResponse(authService.login(request));
     }
 
     /** Refresh credentials come only from the refresh cookie; any body is ignored. */

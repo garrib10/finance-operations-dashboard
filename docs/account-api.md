@@ -64,13 +64,19 @@ is introduced.
 
 ## Token and concurrency limitations
 
-Existing JWTs remain valid until their normal expiration after a password change.
-Removing a token from a browser is not server-side revocation. Token revocation and
-refresh-token rotation belong to issue #18. The current session remains signed in
-after a successful password change.
+As of issue #18, a successful password change (`204`, empty body, unchanged
+contract) also revokes **every** refresh-session family for the user with reason
+`PASSWORD_CHANGE` and clears the refresh cookie. The user must sign in again on every
+device. The password update and the revocations commit or roll back together; a
+failed change (wrong current password, invalid new password, or a database error)
+changes nothing and does not clear the cookie. Already-issued access JWTs are
+stateless and remain valid until they expire, at most five minutes later. Profile,
+preference, and profile-photo changes do not revoke sessions. See the
+[authentication session lifecycle](auth-session-lifecycle.md#password-change).
 
-Hibernate updates only dirty user columns, preventing a profile save from
-rewriting unrelated credentials. No optimistic locking or token-version field is
-introduced. Concurrent edits to the same fields can still use last-writer-wins
-semantics, including overlapping password changes; stronger concurrency controls
-remain a separate decision.
+Password changes lock the user row, verify against the locked hash, and revoke in the
+same transaction, so overlapping password changes and logins are serialized: after a
+change commits, the old password cannot authenticate and no session created with it
+remains active. Hibernate updates only dirty user columns, preventing a profile save
+from rewriting unrelated credentials. Profile and preference edits still use
+last-writer-wins semantics; no optimistic locking or token-version field is introduced.

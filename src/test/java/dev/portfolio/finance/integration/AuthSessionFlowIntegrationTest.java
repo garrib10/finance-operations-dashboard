@@ -494,13 +494,13 @@ class AuthSessionFlowIntegrationTest {
     }
 
     @Test
-    void logoutWithConsumedTokenRevokesFamilyAsReuse() throws Exception {
+    void logoutWithConsumedTokenStillEndsFamilyAsLogout() throws Exception {
         String first = loginToken(user);
         String second = cookieValue(refresh(first));
 
         assertThat(logout(first).getResponse().getStatus()).isEqualTo(204);
 
-        assertThat(sessionOf(second).getRevocationReason()).isEqualTo(RefreshSessionRevocationReason.REUSE_DETECTED);
+        assertThat(sessionOf(second).getRevocationReason()).isEqualTo(RefreshSessionRevocationReason.LOGOUT);
         assertTerminal(refresh(second));
     }
 

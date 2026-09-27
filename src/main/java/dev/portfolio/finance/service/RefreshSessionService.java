@@ -2,13 +2,17 @@ package dev.portfolio.finance.service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import dev.portfolio.finance.config.AuthSessionProperties;
 import dev.portfolio.finance.entity.RefreshSession;
@@ -30,8 +34,11 @@ import jakarta.persistence.PersistenceException;
 /**
  * Refresh-session lifecycle: issuance at login, rotation, reuse revocation, and logout.
  *
- * <p>Every mutating transaction locks the owning user row first, then the token and
- * session rows, so later revoke-all behavior can share one lock order. Terminal
+ * <p>Lock order, used by every flow that mutates a user's sessions or credentials
+ * (login, refresh, reuse, logout, password change): 1) resolve the user ID without a
+ * lock, 2) {@code SELECT ... FOR UPDATE} the user row, 3) reload token/session rows
+ * (also {@code FOR UPDATE}), 4) mutate, 5) commit. No flow locks a session or token
+ * before the user row, so these flows cannot deadlock each other. Terminal
  * outcomes (including reuse revocation) are returned, not thrown, so their writes
  * commit before the caller responds. Callers attach cookies only after a method
  * returns, i.e. after commit.
@@ -70,12 +77,22 @@ public class RefreshSessionService {
         this.transactions = new TransactionTemplate(transactionManager);
     }
 
-    /** Starts an independent family for an already-authenticated user. */
-    public IssuedSession startSession(User authenticatedUser) {
+    /**
+     * Verifies credentials against the <em>locked</em> user row and starts an
+     * independent family in the same transaction. Because password changes take the
+     * same lock, a login checked against a superseded hash can never commit a session
+     * after the change commits. BCrypt runs while the row is locked; that bounded cost
+     * (one hash per login, per user) is accepted to keep this guarantee.
+     */
+    public IssuedSession startSession(Long userId, Predicate<User> credentialsMatch) {
         try {
-            IssuedSession issued = transactions.execute(status -> {
-                User user = userRepository.findByIdForUpdate(authenticatedUser.getId())
-                        .orElseThrow(() -> new InvalidCredentialsException("Invalid email or password"));
+            return transactions.execute(status -> {
+                User user = userRepository.findByIdForUpdate(userId)
+                        .filter(credentialsMatch)
+                        .orElseThrow(() -> {
+                            log.info("auth.login.failed category=invalid_credentials");
+                            return new InvalidCredentialsException("Invalid email or password");
+                        });
                 RefreshSession session = sessionRepository.save(
                         RefreshSession.start(user, clock, properties.refreshSessionTtl()));
                 IssuedRefreshToken token = tokenGenerator.generate();
@@ -83,12 +100,29 @@ public class RefreshSessionService {
                 log.info("auth.session.started userId={} sessionId={}", user.getId(), session.getId());
                 return new IssuedSession(jwtService.generateToken(user), token.rawToken(), session.getExpiresAt());
             });
-            return issued;
         } catch (DataAccessException | TransactionException | PersistenceException ex) {
             log.error("auth.session.persistence_failed operation=login userId={} category={}",
-                    authenticatedUser.getId(), ex.getClass().getSimpleName());
+                    userId, ex.getClass().getSimpleName());
             throw new SessionUnavailableException();
         }
+    }
+
+    /**
+     * Revokes every active family for a user. Must run inside the caller's transaction
+     * (the password change), after the caller has locked the user row, so the credential
+     * update and the revocations commit or roll back together. Already-revoked families
+     * are untouched; expired ones are left for cleanup. Token history is kept.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int revokeAllForUser(Long userId, RefreshSessionRevocationReason reason) {
+        userRepository.findByIdForUpdate(userId);
+        Instant now = clock.instant();
+        List<RefreshSession> active = sessionRepository.findUnrevokedByUserIdForUpdate(userId).stream()
+                .filter(session -> session.isActiveAt(now))
+                .toList();
+        active.forEach(session -> session.revoke(reason, clock));
+        log.info("auth.session.revoke_all userId={} reason={} count={}", userId, reason, active.size());
+        return active.size();
     }
 
     public RefreshResult refresh(PresentedRefreshCookie cookie) {
@@ -171,12 +205,11 @@ public class RefreshSessionService {
             log.info("auth.logout.noop category={} userId={} sessionId={}", terminal, ownerId, session.getId());
             return LogoutOutcome.NO_OP;
         }
-        // A consumed token here is still a replay of rotated credentials.
-        RefreshSessionRevocationReason reason = token.isConsumed()
-                ? RefreshSessionRevocationReason.REUSE_DETECTED
-                : RefreshSessionRevocationReason.LOGOUT;
-        session.revoke(reason, clock);
-        log.info("auth.logout.revoked userId={} sessionId={} reason={}", ownerId, session.getId(), reason);
+        // A consumed token still identifies its family: logout racing a just-completed
+        // rotation must end the family, and it is recorded as a logout, not reuse.
+        session.revoke(RefreshSessionRevocationReason.LOGOUT, clock);
+        log.info("auth.logout.revoked userId={} sessionId={} consumedToken={}",
+                ownerId, session.getId(), token.isConsumed());
         return LogoutOutcome.REVOKED;
     }
 

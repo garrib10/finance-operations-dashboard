@@ -2,22 +2,23 @@
 
 ## Status
 
-In progress for FinTrack v1.2.0 (issue #18). **Phases 1–2 implemented.**
+In progress for FinTrack v1.2.0 (issue #18). **Backend complete (Phases 1–3).**
 
 - Phase 1: schema, entities, repositories, configuration, UTC clock, token primitives.
 - Phase 2: login session issuance, the refresh cookie, `POST /api/auth/refresh`
   with rotation and reuse revocation, `POST /api/auth/logout`, request protection,
   stable authentication error codes, and access-JWT hardening.
+- Phase 3: password-change revoke-all, one lock order for every auth mutation,
+  login/password race protection, real-MySQL concurrency tests, bounded cleanup,
+  and logging hardening.
 
-Still pending: password-change revocation, cleanup, and real-MySQL concurrency tests
-(Phase 3); frontend renewal (Phase 4); the same-origin proxy and deployment
+Still pending: frontend renewal (Phase 4) and the same-origin proxy and deployment
 validation (Phase 5). **Do not deploy or merge before those phases.** In particular,
 the current frontend does not send `X-FinTrack-CSRF`, so its login is rejected with
 `403` until Phase 4 updates the client.
 
 Business APIs still authenticate with `Authorization: Bearer <access token>`. See the
 [CSRF security decision](security-csrf.md) for the cookie-authorized exception.
-
 ## Approved policy
 
 | Area                      | Decision                                                                |
@@ -229,32 +230,141 @@ carry the expired code. There is no access-token denylist and no database lookup
 request, so after logout or reuse revocation an already-issued access token remains
 valid until it expires (at most 5 minutes).
 
+## Password change
+
+`POST /api/account/password` (bearer-authenticated; the refresh cookie is never
+accepted) keeps its contract: `204` with an empty body. In one transaction it:
+
+1. Resolves the user ID from the authenticated principal (never from the request).
+2. Locks the user row (`SELECT … FOR UPDATE`), the same lock every session flow uses.
+3. Verifies the current password against the locked hash and rejects reuse.
+4. Stores the new BCrypt hash.
+5. Revokes every **active** family for the user with `PASSWORD_CHANGE`, timestamped
+   by the UTC clock. Already-revoked families keep their original reason and time;
+   expired families are left for cleanup. Token history is not deleted.
+6. Commits, then the response clears the refresh cookie.
+
+Wrong current passwords, invalid new passwords, and database failures change
+nothing and leave the cookie untouched (validation errors are `400`; unexpected
+failures are the account API's generic `500`). Every device must sign in again;
+Phase 4 will make the frontend treat a successful change as the end of the session.
+Already-issued access JWTs remain valid until they expire, **at most five minutes**
+later; there is no denylist. Profile, preference, and profile-photo changes never
+revoke sessions.
+
+The clearing `Set-Cookie` is returned from `/api/account/password` with
+`Path=/api/auth`. With the Phase 5 same-origin proxy the browser applies it directly.
+In direct cross-origin development the browser may ignore it (business routes do not
+use credentialed CORS); the family is revoked server-side regardless, so the stale
+cookie fails its next refresh, which clears it.
+
+`RefreshSessionService.revokeAllForUser(userId, reason)` is internal only. It requires
+an existing transaction (`Propagation.MANDATORY`), so it always commits or rolls back
+with the password update, and returns only a count. No endpoint revokes by user or
+session ID.
+
 ## Logging
 
-Fixed events with internal IDs only: `auth.login.succeeded`, `auth.login.failed`,
-`auth.session.started`, `auth.refresh.rotated`, `auth.refresh.rejected category=…`,
-`auth.refresh.reuse_detected`, `auth.logout.revoked`, `auth.logout.noop category=…`,
-`auth.session.persistence_failed`, and `auth.request_protection.rejected category=…`.
-Tomcat's cookie-parser logger is turned off because it would otherwise log rejected
-`Cookie` headers verbatim, including the refresh token. Logs never include raw or encoded tokens, hashes, `Authorization`, `Cookie`, or
-`Set-Cookie` headers, passwords, request bodies, JWT claims beyond the user ID, SQL
-bind values, or exception messages (only the exception class name).
+Fixed events with internal IDs, counts, and fixed categories only:
 
-## Locking and databases
+| Event | Fields |
+| --- | --- |
+| `auth.login.succeeded` | `userId` |
+| `auth.login.failed` | `category=invalid_credentials` |
+| `auth.session.started` | `userId`, `sessionId` |
+| `auth.refresh.rotated` | `userId`, `sessionId` |
+| `auth.refresh.rejected` | `category` (`cookie_absent`, `cookie_duplicate`, `malformed`, `unknown`, `expired`, `revoked`) |
+| `auth.refresh.reuse_detected` | `userId`, `sessionId`, `action=family_revoked` |
+| `auth.logout.revoked` / `auth.logout.noop` | `userId`, `sessionId`, `consumedToken` / `category` |
+| `auth.session.revoke_all` | `userId`, `reason`, `count` |
+| `auth.session.persistence_failed` | `operation`, `userId`, exception class name |
+| `auth.session.cleanup` | `category` (`completed`, `disabled`, `failed`), `deleted`, `batches` |
+| `auth.request_protection.rejected` | `category` |
 
-Every mutating session transaction takes the user row lock first, then the token and
-session rows. Phase 3 revoke-all (password change) must use the same order. Tests
-run on H2 in MySQL mode; they verify transactional outcomes but **do not prove MySQL
-InnoDB locking or isolation behavior**. Phase 3 adds real-MySQL concurrency tests.
+Logs never include raw or encoded tokens, hashes, `Authorization`, `Cookie`, or
+`Set-Cookie` headers, passwords, credential DTOs, request bodies, JWT claims beyond
+the user ID, SQL bind values, or exception messages (only the exception class name).
+Two third-party loggers are turned off because they print such values verbatim:
+Tomcat's cookie parser (rejected `Cookie` headers, including the refresh token) and
+Hibernate's `SqlExceptionHelper` and `org.hibernate.orm.jdbc.error` (database error text; MySQL's duplicate-key message
+contains the key, such as a token hash or an email). Tests assert sentinel passwords,
+tokens, and hashes never appear in captured output.
+## Locking and race behavior
 
+Every flow that mutates a user's credentials or sessions (login, refresh, reuse,
+logout, password change) uses one order:
+
+1. Resolve the user ID without a lock (by email, or by token hash).
+2. Lock the user row: `SELECT … FOR UPDATE`.
+3. Reload token and session rows (`FOR UPDATE`) after the lock is held.
+4. Mutate, then commit.
+5. Only then set or clear cookies.
+
+No flow locks a token or session before the user row, so they cannot deadlock one
+another. Every read of session state that a decision depends on is itself a locking
+read (`FOR UPDATE`): under InnoDB REPEATABLE READ a plain `SELECT` can return the
+transaction's earlier snapshot. The MySQL race tests caught exactly that: revoke-all
+initially used a plain `SELECT` and missed a family committed by a login that held the
+user lock just before the password change acquired it. Transactions are short and make no network calls. Profile-photo updates lock
+the same user row and touch no session rows. Cleanup deletes only families expired
+for at least seven days without taking the user lock; a rare conflict with a refresh
+of such a family is resolved by InnoDB (the refresh returns `503` or cleanup retries
+the next day).
+
+Login verifies BCrypt **while holding the user lock** (after an unlocked ID lookup;
+unknown emails still pay one BCrypt comparison). This costs one hash per login per
+user and is accepted so that password verification and session issuance use the same
+committed hash.
+
+| Race | Outcome |
+| --- | --- |
+| Same token, two refreshes | One rotates. The other sees a consumed token, revokes the family (`REUSE_DETECTED`), and gets `401`; the replacement no longer refreshes. Other families are unaffected. No grace window. |
+| Refresh vs logout | Refresh first: logout then revokes the family even though its token was just consumed (`LOGOUT`). Logout first: refresh is `401`. Either way no token in the family refreshes afterwards. |
+| Refresh vs password change | Refresh first: the password change revokes the rotated family. Password change first: refresh sees the revoked family and is `401`, creating no successor. |
+| Login (old password) vs password change | Login first: its session is revoked by the password change. Password change first: the login is checked against the new hash and fails. No session created with the old password stays active. |
+
+Invariants: after a password change commits, no family for that user is usable and
+the old password cannot create one; after logout completes, nothing in that family
+refreshes.
+
+### MySQL verification
+
+`*IT` tests run against a pinned `mysql:8.4.6` container (MySQL 8.4 LTS, supported by
+Flyway 12) via Testcontainers during `./mvnw clean verify`. They run Flyway V1–V5,
+start the application with `ddl-auto=validate`, and verify the populated V4 → V5
+upgrade and the V5 constraints on MySQL. Concurrency tests run each operation on its
+own thread, transaction, and connection. Ordered races hold the real InnoDB row lock
+and wait until `information_schema.innodb_trx` shows the competitor in `LOCK WAIT`
+before releasing, so both lock orders are exercised deterministically; barrier-started
+races check the invariants for either winner. H2 tests remain for fast unit coverage
+but do not prove MySQL locking.
+
+Docker is required for `verify`. Locally that means a running Docker-compatible
+runtime (for example Colima with `DOCKER_HOST` and
+`TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE` set); GitHub Actions' Ubuntu runners provide
+Docker already. The tests never skip when Docker is missing; the build fails instead.
+
+## Cleanup
+
+`RefreshSessionCleanupService` runs daily at 03:30 UTC (Spring's built-in scheduler)
+when `REFRESH_SESSION_CLEANUP_ENABLED=true`. It deletes families whose
+`expires_at < now - REFRESH_SESSION_RETENTION_DAYS` (default 7): with the 30-day
+lifetime, a family is removed 37 days after login at the earliest. Revocation alone
+never makes a family eligible, so reuse evidence stays for the full window. Deletion
+cascades to token history.
+
+Each run processes up to 20 batches of 500 families, oldest first, each in its own
+short transaction; IDs are selected through `idx_refresh_sessions_expires_at` and
+deleted with a bulk statement that re-checks the cutoff. Runs are idempotent and safe
+on several instances. Failures are logged as a category and never thrown; cleanup
+never runs during startup or on login/refresh.
 ## Planned phases
 
 1. **Foundation** — done.
 2. **Issuance, rotation, reuse, logout, request protection** — done.
-3. Password-change revoke-all (replacing today's behavior, where the current session
-   stays signed in after a password change), scheduled cleanup 7 days after
-   expiration, and real-MySQL concurrency tests.
-4. Frontend: in-memory access tokens, one controlled refresh on
-   `ACCESS_TOKEN_EXPIRED`, single-flight and cross-tab coordination, and logout UX.
+3. **Password-change revoke-all, locking, MySQL concurrency tests, cleanup** — done.
+4. Frontend: send `X-FinTrack-CSRF`, in-memory access tokens, one controlled refresh on
+   `ACCESS_TOKEN_EXPIRED`, single-flight and cross-tab coordination, logout UX, and
+   forced sign-out after a password change.
 5. Same-origin Vercel `/api` proxy, hosted configuration (`JWT_EXPIRATION_MS=300000`,
    Secure cookies), and deployment validation.
