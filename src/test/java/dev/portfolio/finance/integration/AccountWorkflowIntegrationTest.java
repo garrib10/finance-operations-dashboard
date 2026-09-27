@@ -55,6 +55,16 @@ class AccountWorkflowIntegrationTest {
         token = jwt.generateToken(a);
     }
 
+    @Test
+    void photoMutationsReturnUnavailableWhenDisabled() throws Exception {
+        mvc.perform(multipart(org.springframework.http.HttpMethod.PUT, "/api/account/photo")
+                .file(new org.springframework.mock.web.MockMultipartFile("photo", new byte[]{1, 2, 3}))
+                .header("Authorization", "Bearer " + token)).andExpect(status().isServiceUnavailable());
+        mvc.perform(delete("/api/account/photo").header("Authorization", "Bearer " + token))
+                .andExpect(status().isServiceUnavailable());
+        assertThat(users.findById(a.getId()).orElseThrow().getProfilePhotoKey()).isNull();
+    }
+
     private MockHttpServletRequestBuilder accountRequest(String operation) {
         return (operation.equals("password") ? post("/api/account/" + operation) : put("/api/account/" + operation))
                 .contentType("application/json");

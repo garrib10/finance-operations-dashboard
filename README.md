@@ -178,8 +178,8 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 
 | Test Suite        | Results                                                 |
 | ----------------- | ------------------------------------------------------- |
-| Backend           | **288 tests passing**                                   |
-| Backend Coverage  | **98.75% instruction coverage, 97.56% branch coverage** |
+| Backend           | **407 tests passing**                                   |
+| Backend Coverage  | **98.79% instruction coverage, 97.50% branch coverage** |
 | Frontend          | **291 tests passing across 25 test files**              |
 | Frontend Coverage | **100% statement, branch, function, and line coverage** |
 

@@ -1,18 +1,75 @@
 # Profile-photo architecture and security policy
 
-## Phase 2 boundary
+## Phase 3 boundary
 
-Issue #17 extends the existing account feature. V4, entity support, and canonical
-mapping remain unchanged. Phase 2 adds an in-memory image processor, a UUID key
-generator, and a conditional Cloudinary adapter. There are still no upload/remove
-endpoints, authenticated replacement workflows, frontend controls, or hosted
-configuration changes. Enabling the foundation does not expose an upload API.
+Issue #17 now includes authenticated backend upload and removal. V1–V4 and the
+Phase 2 image-processing/storage contracts remain unchanged. Frontend controls,
+avatar rendering, hosted configuration, and deployment are not part of this phase.
 
-`ProfilePhotoStorage` keeps the Phase 1 byte-array contract. Later orchestration
-must call `ProfilePhotoProcessor` and pass only its freshly encoded JPEG bytes to
-storage, never the original request bytes. The adapter's JPEG envelope check is a
-misuse guard, not a second untrusted-file validator. No caller supplies a filename,
-remote URL, user-selected public ID, or transformation instructions.
+`PUT /api/account/photo` accepts `multipart/form-data` with exactly one file part
+named `photo`. Extra files, duplicate parts, text fields, and query parameters are
+rejected. Filenames and client MIME claims do not determine content or keys.
+`DELETE /api/account/photo` accepts no account identifier or storage reference;
+any extra input is ignored. Both operations derive the account exclusively from
+the authenticated principal's email, using the existing stateless bearer-JWT
+security chain. Neither requires a CSRF token, consistent with the existing API.
+Both return 200 with the canonical `UserResponse`; removal returns
+`profilePhotoUrl: null`. No `profilePhotoKey` property is serialized. As before,
+the public delivery URL necessarily contains its opaque public resource path.
+
+Uploads check feature availability, resolve the account, reject empty/oversized
+parts, and read at most the configured 2 MiB limit plus one byte before invoking
+the Phase 2 processor. Only its freshly encoded JPEG bytes are uploaded under a
+new backend UUID key. No original filename, MIME type, bytes, or metadata is saved
+in the database.
+
+Provider upload happens before a short, independent database transaction. That
+transaction re-reads and locks the authenticated user's row, replaces the current
+key, and constructs the canonical response. The lock serializes concurrent photo
+mutations without keeping a database transaction open during provider calls.
+After commit, the service best-effort deletes the previous key. Cleanup failure
+does not undo or fail a successful replacement.
+
+Validation and provider failures leave the previous database key untouched. If
+persistence or commit fails after a successful upload, cleanup of the new object
+is attempted and a safe 500 response is returned. No cleanup is attempted after
+an unsuccessful provider upload: a collision must not delete an existing object,
+and ambiguous network failures can leave orphan objects. There is no durable
+cleanup table, retry worker, or background reconciliation in this issue.
+
+Removal clears the key in a short transaction, then best-effort deletes the old
+object after commit. Repeated removal succeeds with a null URL. A provider object
+that is already absent is treated as removed by the adapter. Cleanup failure does
+not restore the key. Both mutations return 503 while the feature is disabled;
+existing keys remain untouched in that state.
+
+### HTTP errors and multipart limits
+
+Errors use the existing `ApiErrorResponse` JSON structure:
+
+| Condition | Status |
+| --- | --- |
+| Missing/empty part, extra/duplicate fields, malformed multipart | 400 |
+| Corrupt image, animation, unsafe dimensions | 400 |
+| File or multipart request too large | 413 |
+| Unsupported image or request content type | 415 |
+| Missing/invalid authentication | 401 |
+| Disabled feature or provider upload failure | 503 |
+| Unexpected database failure | 500 |
+
+Servlet limits remain 2 MiB per file and 3 MiB per request. Tomcat's rejected-body
+drain allowance is bounded at 4 MiB so modestly oversized requests can receive
+the JSON 413 response. Much larger bodies may be disconnected by the container;
+this is not an unlimited draining policy. Real random-port servlet tests exercise
+these boundaries in addition to the application-level bounded-read tests.
+
+Application events include operation, internal user ID, and fixed safe categories
+for upload/replacement/removal success, provider failure, persistence failure, and
+cleanup failure. They omit filenames, storage keys, image bytes, credentials,
+provider messages, and exception causes. Framework response-body diagnostics are
+kept at INFO, alongside the existing safe exception and provider logging settings,
+to avoid exposing account data or photo URLs under broader web DEBUG logging.
+No browser-direct uploads, signatures, or remote-URL upload APIs are exposed.
 
 Dependencies added:
 
@@ -42,7 +99,7 @@ resource is needed. Java ImageIO supplies JPEG/PNG decoding and JPEG encoding.
 
 `ProfilePhotoProcessor.process(byte[])` rejects null/empty input and lengths above
 the configured 2 MiB ceiling. It does not accept filenames, MIME claims, URLs, or
-streams. Phase 3 must bound the multipart read before constructing this array;
+streams. The orchestration service bounds the multipart read before constructing this array;
 servlet limits alone do not replace that check.
 
 The inspection sequence is:
@@ -169,27 +226,22 @@ and response timeouts are 10 seconds, and provider response reads are capped at
 64 KiB. These are per-stage/inactivity bounds, not a guaranteed total wall-clock
 deadline. Client resources close with the Spring bean. No automatic application
 retry is performed, including after ambiguous timeouts. The caller retains the
-new generated key so Phase 3 can attempt cleanup/reconciliation safely.
+new generated key for cleanup after a confirmed upload followed by persistence failure.
 
 When disabled, only `DisabledProfilePhotoStorage` is selected: no Cloudinary client
 is initialized, URLs remain null, and mutations explicitly throw a DISABLED storage
-exception. Later endpoints can map this to 503. There is no filesystem fallback or
+exception. Account photo endpoints map this to 503. There is no filesystem fallback or
 no-op upload that claims success. All current tests use mocks, in-memory fixtures,
 and synthetic configuration; none calls Cloudinary.
 
-## Public delivery and future consistency behavior
+## Public delivery and consistency limits
 
 Delivery is public: anyone who possesses a photo URL can view it. Random keys
 reduce enumeration but do not provide access control. There is no public listing
 or gallery. Later UI instructions must make this privacy behavior clear. Removal
 cannot recall downloaded copies, and provider/CDN deletion may not be immediate.
 
-Later upload and replacement behavior must preserve the saved photo on validation
-or upload failure. Use bounded synchronous provider operations, attach the new
-reference in a short database transaction, and delete the old object only after
-commit. Compensate a failed database update with best-effort deletion of the new
-object. Removal clears the reference safely before remote cleanup and remains
-idempotent. Database transactions cannot roll back cloud storage.
+The workflow above cannot make database and cloud storage changes atomic.
 
 The current issue scope does not include durable cleanup tables, upload-intent
 state machines, background workers, or rate limiting. Best-effort cleanup can
@@ -201,8 +253,10 @@ are possible future hardening, not guarantees of this foundation.
 
 Focused tests cover image processing, orientation, boundary/corruption cases,
 provider and transport mocks, configuration, URL safety, serialization, entity
-persistence, canonical API mapping, and H2 clean/V3-upgrade migrations. No provider call is
-needed. Before release, rehearse V4 on the target MySQL version in an isolated
+persistence, canonical API mapping, and H2 clean/V3-upgrade migrations. Phase 3
+adds service/controller tests and random-port HTTP tests for multipart limits,
+JWT ownership, rollback, cleanup failures, and concurrent replacement. Storage is
+mocked; no provider call is needed. Before release, rehearse V4 on the target MySQL version in an isolated
 database and verify the real provider delivery convention. H2 is not proof of
 MySQL deployment compatibility. Final deployment and README documentation belong
 to Phase 5.
