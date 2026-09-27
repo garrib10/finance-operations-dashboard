@@ -98,4 +98,10 @@ describe("accountService", () => {
     await expect(removeProfilePhoto()).rejects.toMatchObject({ status: 401 });
     expect(getAuthToken()).toBeNull();
   });
+
+  it("rejects without parsing success when a proxy returns a non-JSON photo error", async () => {
+    fetchMock.mockResolvedValue(new Response("<html>413 Request Entity Too Large</html>", { status: 413 }));
+    await expect(uploadProfilePhoto(new File(["x"], "x.jpg", { type: "image/jpeg" }))).rejects.toBeInstanceOf(SyntaxError);
+    expect(getAuthToken()).toBe("account-token");
+  });
 });

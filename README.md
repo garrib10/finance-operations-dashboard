@@ -10,6 +10,7 @@
 ![Vitest](https://img.shields.io/badge/Vitest-4.1-6E9F18?logo=vitest&logoColor=white)
 ![Railway](https://img.shields.io/badge/Railway-0B0D0E?logo=railway&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Vercel-black?logo=vercel)
+![Cloudinary](https://img.shields.io/badge/Cloudinary-3448C5?logo=cloudinary&logoColor=white)
 
 FinTrack is a production-deployed full-stack personal finance application built with Java, Spring Boot, React, TypeScript, and MySQL. It provides secure account access, transaction and budget management, financial analytics, and a responsive dashboard.
 
@@ -36,8 +37,8 @@ The project demonstrates layered backend architecture, stateless JWT authenticat
 - Search, filtering, sorting, pagination, and financial analytics
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
-- **377 passing backend tests** with **98.75% instruction coverage** and **97.56% branch coverage**
-- **371 passing frontend tests** across **29 test files** with **100% statement, branch, function, and line coverage**
+- **407 passing backend tests** with **98.75% instruction coverage** and **97.56% branch coverage**
+- **374 passing frontend tests** across **29 test files** with **100% statement, branch, function, and line coverage**
 
 ---
 
@@ -48,6 +49,7 @@ The project demonstrates layered backend architecture, stateless JWT authenticat
 | Backend          | Java 21, Spring Boot 4.1, Spring Web MVC, Spring Security, Spring Data JPA, Hibernate, Bean Validation, Maven |
 | Frontend         | React 19, TypeScript 6, Vite, React Router, Recharts, custom CSS                                              |
 | Database         | MySQL, Flyway                                                                                                 |
+| Image Storage    | Cloudinary (optional, backend-only profile photos)                                                            |
 | Authentication   | JWT, BCrypt                                                                                                   |
 | Backend Testing  | JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, JaCoCo                                 |
 | Frontend Testing | Vitest, React Testing Library, jest-dom, jsdom                                                                |
@@ -106,6 +108,18 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
   controls, success messages, and a read-only email hint
 - Names and preferences survive refresh and later sign-in; failed saves preserve edits
 
+### Profile Photos
+
+- Optional JPEG or PNG profile photo (up to 2 MB) uploaded from Account Settings
+- Local preview before upload, then explicit upload, replace, and confirmed removal
+- The backend inspects, re-encodes, and resizes every image to a fresh JPEG, discarding
+  EXIF/GPS metadata, before storing it in Cloudinary
+- The header avatar and settings page update immediately; photos persist across refresh
+  and later sign-in
+- Initials remain the fallback when no photo exists, the feature is disabled, or an image
+  fails to load
+- Failed uploads or removals keep the current photo; the feature is off unless configured
+
 See [Account API](docs/account-api.md) for request fields, response shapes, and errors.
 
 ### Transactions
@@ -163,6 +177,9 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 - Authenticated-user ownership enforcement for profiles, preferences, password changes, transactions, categories, budgets, and dashboard data
 - Account mutation DTOs accept only their editable fields; ownership comes from the principal
 - Password changes do not revoke existing JWTs; refresh-token rotation/revocation is deferred to issue #18
+- Profile-photo uploads are content-inspected, size-limited, and re-encoded server-side;
+  Cloudinary credentials stay on the backend and MySQL stores only an opaque key
+  (see [Profile-photo security](docs/profile-photo-security.md))
 - Cross-user resource isolation verified through automated tests
 - Request validation and consistent API error handling
 - Production CORS allowlist for approved Vercel origins
@@ -180,7 +197,7 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 | ----------------- | ------------------------------------------------------- |
 | Backend           | **407 tests passing**                                   |
 | Backend Coverage  | **98.79% instruction coverage, 97.50% branch coverage** |
-| Frontend          | **371 tests passing across 29 test files**              |
+| Frontend          | **374 tests passing across 29 test files**              |
 | Frontend Coverage | **100% statement, branch, function, and line coverage** |
 
 These results were measured during the final issue #16 verification on September 26, 2026.
@@ -238,6 +255,8 @@ Coverage includes:
 - User-visible validation and API errors
 - Local-storage token utilities
 - Profile, preference, and password forms; stale session responses and safe 401 handling
+- Profile-photo preview, validation, upload/replace/remove states, avatar fallback, and
+  header synchronization
 - Preference-aware date rendering and all transaction request paths
 
 Run the frontend suite:
@@ -290,6 +309,8 @@ The health, registration, and login endpoints are public. All other endpoints re
 | Account        | `PUT`    | `/api/account/profile`        | Update own names; 200 canonical user            |
 | Account        | `PUT`    | `/api/account/preferences`    | Update own preferences; 200 canonical user      |
 | Account        | `POST`   | `/api/account/password`       | Change own password; 204 empty body             |
+| Account        | `PUT`    | `/api/account/photo`          | Upload/replace own photo; 200 canonical user    |
+| Account        | `DELETE` | `/api/account/photo`          | Remove own photo; 200 canonical user            |
 | Transactions   | `POST`   | `/api/transactions`           | Create a transaction                            |
 | Transactions   | `GET`    | `/api/transactions`           | Search, filter, sort, and paginate transactions |
 | Transactions   | `GET`    | `/api/transactions/{id}`      | Get a transaction                               |
@@ -375,6 +396,11 @@ Authorization: Bearer <JWT>
 - The backend connects to MySQL through Railway private networking.
 - Production configuration and secrets are supplied through environment variables.
 - Vercel contains only the public backend API URL and no database credentials.
+- Profile photos are optional. To enable them, set `PROFILE_PHOTOS_ENABLED=true`,
+  `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, and
+  `PROFILE_PHOTO_KEY_PREFIX` (for example `fintrack/production/profile-photos`) in
+  Railway only. Vercel needs no new variables. Use separate Cloudinary credentials
+  for production and nonproduction.
 - Direct React routes are supported through a Vercel SPA rewrite.
 
 ---
@@ -410,6 +436,15 @@ Required backend variables:
 - `DB_PASSWORD`
 - `JWT_SECRET`
 - `JWT_EXPIRATION_MS`
+
+Optional profile-photo variables (leave `PROFILE_PHOTOS_ENABLED=false` to run without
+Cloudinary; uploads then return 503 and initials are shown):
+
+- `PROFILE_PHOTOS_ENABLED`
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+- `PROFILE_PHOTO_KEY_PREFIX` (for example `fintrack/development/profile-photos`)
 
 Start the Spring Boot API:
 
@@ -453,7 +488,6 @@ The frontend runs at `http://localhost:5173`.
 
 - Add refresh-token support and token revocation
 - Add a custom-category workflow where selecting Other displays a field for entering and saving a new category
-- Add optional profile-photo upload with secure file validation and object storage
 - Add production monitoring and structured application metrics
 
 ---

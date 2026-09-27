@@ -1,10 +1,10 @@
 # Profile-photo architecture and security policy
 
-## Phase 3 boundary
+## Scope
 
-Issue #17 now includes authenticated backend upload and removal. V1–V4 and the
-Phase 2 image-processing/storage contracts remain unchanged. Frontend controls,
-avatar rendering, hosted configuration, and deployment are not part of this phase.
+Issue #17 provides authenticated backend upload and removal, and Account Settings
+controls with a shared avatar in the header. V1–V4 and the Phase 2
+image-processing/storage contracts remain unchanged.
 
 `PUT /api/account/photo` accepts `multipart/form-data` with exactly one file part
 named `photo`. Extra files, duplicate parts, text fields, and query parameters are
@@ -163,8 +163,7 @@ No API endpoint, upload signature, arbitrary host, or remote request is involved
 Invalid or foreign-namespace keys resolve to null without echoing their value.
 
 When disabled, all photo URLs resolve to null, even if a row already contains a
-key. The stored key is retained. Initials remain the frontend fallback; the current
-frontend is unchanged. Switching namespaces hides old-namespace photos
+key. The stored key is retained. Initials remain the frontend fallback. Switching namespaces hides old-namespace photos
 until an intentional migration is performed; do not casually change a namespace.
 
 ## Backend configuration and environment separation
@@ -200,8 +199,7 @@ configuration and fake/mocked storage, never actual provider accounts.
 
 Do not commit real credentials, uploaded photographs, or provider debug logs.
 Rotate credentials by deploying replacement credentials, verifying later storage
-operations, and then revoking the old credentials. No cloud resources or hosted
-environment variables have been created for this phase.
+operations, and then revoking the old credentials.
 
 ## Cloudinary operations and safe failures
 
@@ -238,7 +236,8 @@ and synthetic configuration; none calls Cloudinary.
 
 Delivery is public: anyone who possesses a photo URL can view it. Random keys
 reduce enumeration but do not provide access control. There is no public listing
-or gallery. Later UI instructions must make this privacy behavior clear. Removal
+or gallery. The Account Settings guidance tells users that anyone with the link
+can view their photo. Removal
 cannot recall downloaded copies, and provider/CDN deletion may not be immediate.
 
 The workflow above cannot make database and cloud storage changes atomic.
@@ -258,5 +257,30 @@ adds service/controller tests and random-port HTTP tests for multipart limits,
 JWT ownership, rollback, cleanup failures, and concurrent replacement. Storage is
 mocked; no provider call is needed. Before release, rehearse V4 on the target MySQL version in an isolated
 database and verify the real provider delivery convention. H2 is not proof of
-MySQL deployment compatibility. Final deployment and README documentation belong
-to Phase 5.
+MySQL deployment compatibility.
+
+## Frontend behavior
+
+The frontend sends `FormData` with only the `photo` part through the existing
+authenticated API client and never contacts Cloudinary directly. It holds no
+provider configuration or keys. Client checks (JPEG/PNG type, 2 MiB) are a
+convenience only; the backend remains authoritative. Previews use temporary object
+URLs that are revoked on replacement, cancellation, success, and unmount and are
+never persisted. The shared auth provider replaces the user with each canonical
+response, so the header and settings avatars update together. Avatars render only
+absolute HTTPS URLs and fall back to initials when the URL is absent, unusable, or
+fails to load. Removal uses the same browser confirmation pattern as other deletes.
+
+## Release verification checklist
+
+Automated tests mock storage. Before release, verify once against a real
+nonproduction Cloudinary environment and then production:
+
+1. Set the five backend variables (Railway only) and redeploy; confirm startup.
+2. Upload a JPEG: the header and settings avatars update without reload.
+3. Refresh and sign in again: the same photo is shown.
+4. Replace with a PNG: the new photo is shown and the old object is removed from
+   the configured prefix in the Cloudinary media library.
+5. Remove the photo: initials return everywhere and the object is removed.
+6. Try a GIF and a file over 2 MB: both are rejected with a clear message.
+7. Confirm the delivered image has no EXIF/GPS metadata.

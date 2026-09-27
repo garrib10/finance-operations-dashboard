@@ -53,6 +53,7 @@ const status = () => within(section()).getByRole("status");
 const alert = () => within(section()).getByRole("alert");
 const headerImage = () => document.querySelector(".account-menu__avatar img");
 const preview = () => screen.queryByRole("img", { name: "Preview of selected photo" });
+const guidance = "Upload a JPEG or PNG image up to 2 MB. Your photo is served from a public link, so anyone with the link can view it.";
 const choose = (...files: File[]) => fireEvent.change(input(), { target: { files } });
 
 describe("Account settings profile photo", () => {
@@ -62,7 +63,7 @@ describe("Account settings profile photo", () => {
     expect(within(section()).getByRole("img", { name: "Initials for River Walker" })).toHaveTextContent("RW");
     expect(input()).toHaveAttribute("type", "file");
     expect(input()).toHaveAttribute("accept", "image/jpeg,image/png");
-    expect(input()).toHaveAccessibleDescription("Upload a JPEG or PNG image up to 2 MB.");
+    expect(input()).toHaveAccessibleDescription(guidance);
     expect(within(section()).getByRole("button", { name: "Upload photo" })).toBeEnabled();
     expect(within(section()).queryByRole("button", { name: "Remove photo" })).not.toBeInTheDocument();
     expect(section()).not.toHaveTextContent(/cloudinary/i);
@@ -103,7 +104,7 @@ describe("Account settings profile photo", () => {
     expect(alert()).toHaveTextContent(message);
     expect(alert()).toHaveFocus();
     expect(input()).toHaveAttribute("aria-invalid", "true");
-    expect(input()).toHaveAccessibleDescription(`Upload a JPEG or PNG image up to 2 MB. ${message}`);
+    expect(input()).toHaveAccessibleDescription(`${guidance} ${message}`);
     expect(preview()).toBeNull();
     expect(createObjectURL).not.toHaveBeenCalled();
     await events.click(within(section()).getByRole("button", { name: "Upload photo" }));
@@ -231,6 +232,27 @@ describe("Account settings profile photo", () => {
     choose(png());
     await events.click(within(section()).getByRole("button", { name: "Upload photo" }));
     expect(alert()).toHaveTextContent("Animated and multiple-image files are not supported.");
+  });
+
+  it("shows a generic retry message for an unreadable server response and keeps the photo", async () => {
+    const { events } = await setup(photoUser);
+    upload.mockRejectedValue(new SyntaxError("Unexpected token '<'"));
+    choose(jpeg());
+    await events.click(within(section()).getByRole("button", { name: "Replace photo" }));
+    expect(alert()).toHaveTextContent("Unable to upload your photo. Please try again.");
+    expect(alert()).not.toHaveTextContent("Unexpected token");
+    expect(headerImage()).toHaveAttribute("src", photoUrl);
+  });
+
+  it("falls back to initials if a success response carries an unusable photo URL", async () => {
+    const { events } = await setup();
+    upload.mockResolvedValue({ ...accountUser, profilePhotoUrl: "profile-photos/raw-key" });
+    choose(jpeg());
+    await events.click(within(section()).getByRole("button", { name: "Upload photo" }));
+    expect(status()).toHaveTextContent("Profile photo uploaded.");
+    expect(headerImage()).toBeNull();
+    expect(within(section()).getByRole("img", { name: "Initials for River Walker" })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("raw-key");
   });
 
   it("follows the existing session-expiration flow on 401", async () => {

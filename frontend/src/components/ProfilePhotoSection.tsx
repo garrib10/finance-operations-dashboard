@@ -139,7 +139,7 @@ export function ProfilePhotoSection() {
         disabled={pending} aria-invalid={invalidSelection}
         aria-describedby={`profile-photo-help${invalidSelection ? " profile-photo-error" : ""}`}
         onChange={handleChange} />
-      <p id="profile-photo-help" className="profile-photo__help">Upload a JPEG or PNG image up to 2 MB.</p>
+      <p id="profile-photo-help" className="profile-photo__help">Upload a JPEG or PNG image up to 2 MB. Your photo is served from a public link, so anyone with the link can view it.</p>
     </div>
     <p ref={alertRef} id="profile-photo-error" role="alert" tabIndex={-1} className="form-error">{error}</p>
     <p ref={statusRef} role="status" tabIndex={-1}>{status}</p>
