@@ -1,8 +1,20 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import { apiDevProxy } from "./devProxy.ts";
+
+// Server-only (no VITE_ prefix), so it is never exposed to browser code.
+const devApiTarget = process.env.DEV_API_PROXY_TARGET;
 
 export default defineConfig({
   plugins: [react()],
+
+  server: {
+    proxy: apiDevProxy(devApiTarget),
+  },
+
+  preview: {
+    proxy: apiDevProxy(devApiTarget),
+  },
 
   test: {
     environment: "jsdom",

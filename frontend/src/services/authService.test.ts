@@ -1,76 +1,128 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { apiRequest } from "./api";
-import { getCurrentUser, login, register } from "./authService";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { API_BASE_URL } from "./apiConfig";
+import { getCurrentUser, login, logoutSession, refreshSession, register } from "./authService";
+import { clearAccessToken, setAccessToken } from "../utils/authToken";
 
-vi.mock("./api", () => ({
-  apiRequest: vi.fn(),
-}));
+const fetchMock = vi.fn();
 
-const mockApiRequest = vi.mocked(apiRequest);
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+  status,
+  headers: { "Content-Type": "application/json" },
+});
+
+const tokenResponse = { accessToken: "access-token", tokenType: "Bearer", expiresIn: 300 };
+
+const user = {
+  id: 1,
+  firstName: "Demo",
+  lastName: "User",
+  displayName: "Demo User",
+  preferences: { dateFormat: "MEDIUM" as const, transactionPageSize: 10 as const },
+  email: "demo@fintrack.dev",
+  createdAt: "2026-09-22T00:00:00",
+  profilePhotoUrl: null,
+};
+
+function lastInit(): RequestInit {
+  return fetchMock.mock.calls.at(-1)?.[1] as RequestInit;
+}
+
+beforeEach(() => {
+  fetchMock.mockReset();
+  vi.stubGlobal("fetch", fetchMock);
+  clearAccessToken();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("authService", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+  it("logs in with credentials, the CSRF header, and JSON only", async () => {
+    setAccessToken("stale-token");
+    const request = { email: "demo@fintrack.dev", password: "Password123!" };
+    fetchMock.mockResolvedValue(json(tokenResponse));
 
-  it("submits login credentials as a public request", async () => {
-    const request = {
-      email: "demo@fintrack.dev",
-      password: "Password123!",
-    };
-    const response = {
-      accessToken: "access-token",
-      tokenType: "Bearer",
-      expiresIn: 3600,
-    };
+    await expect(login(request)).resolves.toEqual(tokenResponse);
 
-    mockApiRequest.mockResolvedValue(response);
-
-    await expect(login(request)).resolves.toEqual(response);
-    expect(mockApiRequest).toHaveBeenCalledWith("/api/auth/login", {
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(`${API_BASE_URL}/api/auth/login`, {
       method: "POST",
       body: JSON.stringify(request),
-      authenticated: false,
+      credentials: "include",
+      headers: { "Content-Type": "application/json", "X-FinTrack-CSRF": "1" },
     });
   });
 
-  it("submits registration details as a public request", async () => {
-    const request = {
-      firstName: "Demo",
-      lastName: "User",
-      email: "demo@fintrack.dev",
-      password: "Password123!",
-    };
-    const response = {
-      id: 1,
-      firstName: "Demo",
-      lastName: "User",
-      email: "demo@fintrack.dev",
-      createdAt: "2026-09-22T00:00:00",
-    };
+  it.each([401, 403, 503])("never refreshes or retries a failed login (%s)", async (status) => {
+    fetchMock.mockResolvedValue(json({ message: "Invalid email or password", code: "ACCESS_TOKEN_EXPIRED" }, status));
 
-    mockApiRequest.mockResolvedValue(response);
+    await expect(login({ email: "a@b.c", password: "x" })).rejects.toMatchObject({ status });
 
-    await expect(register(request)).resolves.toEqual(response);
-    expect(mockApiRequest).toHaveBeenCalledWith("/api/auth/register", {
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("refreshes with an empty credentialed POST and never sends a token", async () => {
+    setAccessToken("expired-access-token");
+    fetchMock.mockResolvedValue(json(tokenResponse));
+
+    await expect(refreshSession()).resolves.toEqual(tokenResponse);
+
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(`${API_BASE_URL}/api/auth/refresh`, {
       method: "POST",
-      body: JSON.stringify(request),
-      authenticated: false,
+      credentials: "include",
+      headers: { "X-FinTrack-CSRF": "1" },
+    });
+    expect(JSON.stringify(lastInit())).not.toMatch(/expired-access-token|Authorization|refreshToken|Cookie/);
+  });
+
+  it("does not recursively refresh when refresh itself fails", async () => {
+    fetchMock.mockResolvedValue(json({ message: "Your session has expired. Please sign in again.", code: "SESSION_EXPIRED" }, 401));
+
+    await expect(refreshSession()).rejects.toMatchObject({ status: 401, code: "SESSION_EXPIRED" });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("logs out with a credentialed POST and accepts 204", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await expect(logoutSession()).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(`${API_BASE_URL}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "X-FinTrack-CSRF": "1" },
     });
   });
 
-  it("loads the current authenticated user", async () => {
-    const response = {
-      id: 1,
-      firstName: "Demo",
-      lastName: "User",
-      email: "demo@fintrack.dev",
-      createdAt: "2026-09-22T00:00:00",
-    };
+  it("reports an unconfirmed logout without retrying it", async () => {
+    fetchMock.mockResolvedValue(new Response("<html>Bad Gateway</html>", { status: 503 }));
 
-    mockApiRequest.mockResolvedValue(response);
+    await expect(logoutSession()).rejects.toMatchObject({ status: 503, message: "An unexpected error occurred." });
 
-    await expect(getCurrentUser()).resolves.toEqual(response);
-    expect(mockApiRequest).toHaveBeenCalledWith("/api/auth/me");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("submits registration as a public request that is never refreshed", async () => {
+    const request = { firstName: "Demo", lastName: "User", email: "demo@fintrack.dev", password: "Password123!" };
+    fetchMock.mockResolvedValue(json({ message: "expired", code: "ACCESS_TOKEN_EXPIRED" }, 401));
+
+    await expect(register(request)).rejects.toMatchObject({ status: 401 });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(lastInit()).toMatchObject({ method: "POST", body: JSON.stringify(request) });
+    expect(lastInit().headers).not.toHaveProperty("Authorization");
+    expect(lastInit()).not.toHaveProperty("credentials");
+  });
+
+  it("loads the current user with the in-memory bearer token", async () => {
+    setAccessToken("access-token");
+    fetchMock.mockResolvedValue(json(user));
+
+    await expect(getCurrentUser()).resolves.toEqual(user);
+
+    expect(fetchMock).toHaveBeenCalledWith(`${API_BASE_URL}/api/auth/me`, expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer access-token" }),
+    }));
   });
 });

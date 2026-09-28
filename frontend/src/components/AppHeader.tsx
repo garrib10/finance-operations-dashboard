@@ -1,21 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { getAccountName } from "../utils/accountIdentity";
+import { Avatar } from "./Avatar";
 
 function AppHeader() {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const accountTriggerRef = useRef<HTMLButtonElement>(null);
 
-  const fullName = user
-    ? `${user.firstName} ${user.lastName}`.trim()
-    : "Account";
-
-  const initials = user
-    ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
-    : "";
+  const fullName = getAccountName(user);
 
   useEffect(() => {
     if (!isAccountMenuOpen) {
@@ -49,10 +47,20 @@ function AppHeader() {
     };
   }, [isAccountMenuOpen]);
 
-  function handleLogout(): void {
-    setIsAccountMenuOpen(false);
-    logout();
-    navigate("/login");
+  // Repeat clicks are blocked by the disabled button and de-duplicated by AuthProvider.
+  async function handleLogout(): Promise<void> {
+    setIsLoggingOut(true);
+    setLogoutError("");
+    try {
+      await logout();
+      setIsAccountMenuOpen(false);
+      navigate("/login");
+    } catch {
+      // Not signed out: the server did not confirm the session was revoked.
+      setLogoutError("We couldn’t sign you out. Check your connection and try again.");
+    } finally {
+      setIsLoggingOut(false);
+    }
   }
 
   function toggleAccountMenu(): void {
@@ -87,9 +95,12 @@ function AppHeader() {
                 aria-label={`${isAccountMenuOpen ? "Close" : "Open"} account menu for ${fullName}`}
                 onClick={toggleAccountMenu}
               >
-                <span className="account-menu__initials" aria-hidden="true">
-                  {initials}
-                </span>
+                <Avatar
+                  className="account-menu__avatar"
+                  name={fullName}
+                  photoUrl={user?.profilePhotoUrl}
+                  decorative
+                />
 
                 <span className="account-menu__name">{fullName}</span>
 
@@ -109,12 +120,24 @@ function AppHeader() {
                     <span>{user?.email}</span>
                   </div>
 
+                  <nav className="account-menu__links" aria-label="Account navigation">
+                    <Link to="/profile" onClick={() => setIsAccountMenuOpen(false)}>Profile</Link>
+                    <Link to="/settings" onClick={() => setIsAccountMenuOpen(false)}>Account Settings</Link>
+                  </nav>
+
+                  {logoutError && (
+                    <p className="form-error" role="alert">
+                      {logoutError}
+                    </p>
+                  )}
+
                   <button
                     className="button button--secondary account-menu__logout"
                     type="button"
-                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    onClick={() => void handleLogout()}
                   >
-                    Logout
+                    {isLoggingOut ? "Signing out..." : "Logout"}
                   </button>
                 </div>
               )}

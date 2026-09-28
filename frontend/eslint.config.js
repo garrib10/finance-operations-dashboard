@@ -20,4 +20,11 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // Server-side code: the Vercel API proxy, its tests, and Vite dev config.
+    files: ["api/**/*.ts", "tests/**/*.ts", "devProxy.ts", "vite.config.ts"],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
 ]);

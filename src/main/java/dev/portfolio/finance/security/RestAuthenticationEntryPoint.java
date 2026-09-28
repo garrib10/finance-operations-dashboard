@@ -15,6 +15,9 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
+    public static final String ACCESS_TOKEN_EXPIRED = "ACCESS_TOKEN_EXPIRED";
+    public static final String AUTHENTICATION_REQUIRED = "AUTHENTICATION_REQUIRED";
+
     private final JsonMapper jsonMapper;
 
     public RestAuthenticationEntryPoint(JsonMapper jsonMapper) {
@@ -28,11 +31,17 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
             AuthenticationException authException
     ) throws IOException {
 
+        boolean expired = Boolean.TRUE.equals(
+                request.getAttribute(JwtAuthenticationFilter.ACCESS_TOKEN_EXPIRED_ATTRIBUTE));
+
         ApiErrorResponse errorResponse = new ApiErrorResponse(
                 LocalDateTime.now(),
                 HttpStatus.UNAUTHORIZED.value(),
                 "Unauthorized",
-                "Authentication is required to access this resource"
+                expired
+                        ? "Access token has expired"
+                        : "Authentication is required to access this resource",
+                expired ? ACCESS_TOKEN_EXPIRED : AUTHENTICATION_REQUIRED
         );
 
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
