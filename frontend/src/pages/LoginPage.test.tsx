@@ -58,7 +58,7 @@ async function submitLoginForm(
   );
 }
 
-function mockLoggedOutContext(login: AuthContextValue["login"]) {
+function mockLoggedOutContext(login: AuthContextValue["login"], sessionNotice: string | null = null) {
   mockedUseAuth.mockReturnValue({
     user: null,
     isAuthenticated: false,
@@ -70,11 +70,32 @@ function mockLoggedOutContext(login: AuthContextValue["login"]) {
     updatePreferences: vi.fn(),
     uploadProfilePhoto: vi.fn(),
     removeProfilePhoto: vi.fn(),
-    retrySessionRestore: vi.fn(async () => undefined),
+    retrySessionRestore: vi.fn(async () => undefined), sessionNotice, completePasswordChange: vi.fn(),
   });
 }
 
 describe("LoginPage", () => {
+  it.each([
+    "Your session has expired. Please sign in again.",
+    "Your password was changed. Please sign in again.",
+    "You were signed out in another tab.",
+  ])("announces why the user was signed out: %s", (notice) => {
+    mockLoggedOutContext(vi.fn(), notice);
+
+    render(<MemoryRouter initialEntries={["/login"]}><LoginPage /></MemoryRouter>);
+
+    expect(screen.getByRole("status")).toHaveTextContent(notice);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows no session notice by default", () => {
+    mockLoggedOutContext(vi.fn());
+
+    render(<MemoryRouter initialEntries={["/login"]}><LoginPage /></MemoryRouter>);
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   it("submits credentials and navigates to the dashboard by default", async () => {
     const login = vi.fn().mockResolvedValue(undefined);
     mockLoggedOutContext(login);

@@ -28,7 +28,7 @@ export function deferred<T>() {
 export function accountContext(user = accountUser) {
   return {
     user, isAuthenticated: true, isLoading: false, restorationError: null,
-    login: vi.fn(), logout: vi.fn(), retrySessionRestore: vi.fn(),
+    login: vi.fn(), logout: vi.fn(), retrySessionRestore: vi.fn(), sessionNotice: null, completePasswordChange: vi.fn(),
     updateProfile: vi.fn().mockResolvedValue(user), updatePreferences: vi.fn().mockResolvedValue(user),
     uploadProfilePhoto: vi.fn().mockResolvedValue(user), removeProfilePhoto: vi.fn().mockResolvedValue(user),
   };

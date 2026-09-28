@@ -2,13 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { updateProfile, updatePreferences, changePassword, uploadProfilePhoto, removeProfilePhoto } from "./accountService";
 import { API_BASE_URL } from "./apiConfig";
 import { accountUser, photoUrl } from "../test/accountFixtures";
-import { getAuthToken, setAuthToken } from "../utils/authToken";
+import { clearAccessToken, getAccessToken, setAccessToken } from "../utils/authToken";
+import * as authService from "./authService";
 
 const fetchMock = vi.fn();
 beforeEach(() => {
   fetchMock.mockReset();
   window.localStorage.clear();
-  setAuthToken("account-token");
+  clearAccessToken();
+  setAccessToken("account-token");
   vi.stubGlobal("fetch", fetchMock);
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -44,8 +46,8 @@ describe("accountService", () => {
       method: "POST", body: JSON.stringify({ currentPassword: " old password ", newPassword: " new long password " }),
     }));
     expect(json).not.toHaveBeenCalled();
-    expect(getAuthToken()).toBe("account-token");
-    expect(window.localStorage.length).toBe(1);
+    expect(getAccessToken()).toBe("account-token");
+    expect(window.localStorage.length).toBe(0);
     expect(window.sessionStorage.length).toBe(0);
   });
 
@@ -54,7 +56,7 @@ describe("accountService", () => {
     await expect(changePassword({ currentPassword: "wrong", newPassword: "new long password" })).rejects.toMatchObject({
       status, validationErrors: { currentPassword: "Current password is incorrect" },
     });
-    expect(getAuthToken()).toBe(status === 401 ? null : "account-token");
+    expect(getAccessToken()).toBe(status === 401 ? null : "account-token");
   });
 
   it("uploads a photo as FormData with only the photo part and lets the browser set the boundary", async () => {
@@ -90,18 +92,43 @@ describe("accountService", () => {
   ])("propagates photo status %s through the existing ApiError flow", async (status, message) => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ timestamp: "t", status, error: "Error", message }), { status }));
     await expect(uploadProfilePhoto(new File(["x"], "x.png", { type: "image/png" }))).rejects.toMatchObject({ name: "ApiError", status, message });
-    expect(getAuthToken()).toBe("account-token");
+    expect(getAccessToken()).toBe("account-token");
   });
 
   it("invalidates the session through the existing 401 handling on photo removal", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ message: "Authentication is required" }), { status: 401 }));
     await expect(removeProfilePhoto()).rejects.toMatchObject({ status: 401 });
-    expect(getAuthToken()).toBeNull();
+    expect(getAccessToken()).toBeNull();
   });
 
-  it("rejects without parsing success when a proxy returns a non-JSON photo error", async () => {
+  it("turns a proxy's non-JSON photo error into a safe ApiError without the HTML", async () => {
     fetchMock.mockResolvedValue(new Response("<html>413 Request Entity Too Large</html>", { status: 413 }));
-    await expect(uploadProfilePhoto(new File(["x"], "x.jpg", { type: "image/jpeg" }))).rejects.toBeInstanceOf(SyntaxError);
-    expect(getAuthToken()).toBe("account-token");
+    const error = await uploadProfilePhoto(new File(["x"], "x.jpg", { type: "image/jpeg" })).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ name: "ApiError", status: 413, message: "An unexpected error occurred." });
+    expect(String((error as Error).message)).not.toContain("<html>");
+    expect(getAccessToken()).toBe("account-token");
+  });
+
+  it("replays the same FormData photo once after an expired access token is refreshed", async () => {
+    const refresh = vi.spyOn(authService, "refreshSession")
+      .mockResolvedValue({ accessToken: "renewed-token", tokenType: "Bearer", expiresIn: 300 });
+    const photoUser = { ...accountUser, profilePhotoUrl: photoUrl };
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ message: "Access token has expired", code: "ACCESS_TOKEN_EXPIRED" }), { status: 401 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(photoUser)));
+    const photo = new File(["jpeg"], "me.jpg", { type: "image/jpeg" });
+
+    await expect(uploadProfilePhoto(photo)).resolves.toEqual(photoUser);
+
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [first, retry] = fetchMock.mock.calls.map(call => call[1] as RequestInit);
+    expect(first.headers).toEqual({ Authorization: "Bearer account-token" });
+    expect(retry.headers).toEqual({ Authorization: "Bearer renewed-token" });
+    expect(retry.body).toBe(first.body);
+    expect((retry.body as FormData).get("photo")).toBe(photo);
+    expect(retry.headers).not.toHaveProperty("Content-Type");
+    expect(getAccessToken()).toBe("renewed-token");
+    refresh.mockRestore();
   });
 });

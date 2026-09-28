@@ -14,7 +14,8 @@ FinTrack uses stateless JWT access-token authentication.
 
 - Spring Security uses `SessionCreationPolicy.STATELESS`.
 - The backend does not create an authenticated server-side session.
-- The frontend stores the access token in browser `localStorage`.
+- The frontend stores the access token in browser `localStorage`. *(Superseded in
+  v1.2.0: the access token is memory-only; see the issue #18 section.)*
 - The frontend explicitly sends the token through the `Authorization: Bearer <token>` header.
 - The backend does not use cookies to authenticate API requests.
 - Cross-origin requests do not include credentials because CORS credentials are disabled.
@@ -57,7 +58,7 @@ CORS restrictions also prevent unapproved origins from reading API responses thr
 
 Disabling CSRF protection does not eliminate other browser security risks.
 
-Because the current access token is stored in `localStorage`, malicious JavaScript executing within the FinTrack frontend origin could potentially access it. This is an XSS risk rather than a traditional CSRF risk.
+Because the access token was stored in `localStorage` (v1.1.0), malicious JavaScript executing within the FinTrack frontend origin could potentially access it. This is an XSS risk rather than a traditional CSRF risk. Since v1.2.0 the access token is held only in memory and the refresh token is `HttpOnly`, which removes persistent token theft but not in-page XSS abuse.
 
 FinTrack must continue to avoid unsafe HTML rendering, restrict trusted frontend code, validate data, and keep frontend dependencies reviewed and updated.
 

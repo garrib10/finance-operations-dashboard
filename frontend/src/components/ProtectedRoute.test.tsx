@@ -72,7 +72,7 @@ describe("ProtectedRoute", () => {
       updatePreferences: vi.fn(),
       uploadProfilePhoto: vi.fn(),
       removeProfilePhoto: vi.fn(),
-      retrySessionRestore: vi.fn(async () => undefined),
+      retrySessionRestore: vi.fn(async () => undefined), sessionNotice: null, completePasswordChange: vi.fn(),
     });
 
     renderProtectedRoute();
@@ -93,7 +93,7 @@ describe("ProtectedRoute", () => {
       updatePreferences: vi.fn(),
       uploadProfilePhoto: vi.fn(),
       removeProfilePhoto: vi.fn(),
-      retrySessionRestore: vi.fn(async () => undefined),
+      retrySessionRestore: vi.fn(async () => undefined), sessionNotice: null, completePasswordChange: vi.fn(),
     });
 
     render(
@@ -138,7 +138,7 @@ describe("ProtectedRoute", () => {
       updatePreferences: vi.fn(),
       uploadProfilePhoto: vi.fn(),
       removeProfilePhoto: vi.fn(),
-      retrySessionRestore: vi.fn(async () => undefined),
+      retrySessionRestore: vi.fn(async () => undefined), sessionNotice: null, completePasswordChange: vi.fn(),
     });
 
     renderProtectedRoute();
@@ -159,7 +159,7 @@ describe("ProtectedRoute", () => {
       updatePreferences: vi.fn(),
       uploadProfilePhoto: vi.fn(),
       removeProfilePhoto: vi.fn(),
-      retrySessionRestore: vi.fn(async () => undefined),
+      retrySessionRestore: vi.fn(async () => undefined), sessionNotice: null, completePasswordChange: vi.fn(),
     });
 
     renderProtectedRoute();
@@ -201,6 +201,8 @@ describe("ProtectedRoute", () => {
       uploadProfilePhoto: vi.fn(),
       removeProfilePhoto: vi.fn(),
       retrySessionRestore,
+      sessionNotice: null,
+      completePasswordChange: vi.fn(),
     });
 
     renderProtectedRoute();
@@ -227,7 +229,7 @@ describe("ProtectedRoute", () => {
       updatePreferences: vi.fn(),
       uploadProfilePhoto: vi.fn(),
       removeProfilePhoto: vi.fn(),
-      retrySessionRestore: vi.fn(async () => undefined),
+      retrySessionRestore: vi.fn(async () => undefined), sessionNotice: null, completePasswordChange: vi.fn(),
     });
 
     renderProtectedRoute();

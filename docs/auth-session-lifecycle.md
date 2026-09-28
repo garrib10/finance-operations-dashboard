@@ -2,23 +2,14 @@
 
 ## Status
 
-In progress for FinTrack v1.2.0 (issue #18). **Backend complete (Phases 1–3).**
+In progress for FinTrack v1.2.0 (issue #18). **Backend (Phases 1–3) and frontend
+(Phase 4) implemented.** Still pending: the same-origin Vercel `/api` proxy, hosted
+configuration, and deployment validation (Phase 5). **Do not deploy or merge before
+Phase 5.**
 
-- Phase 1: schema, entities, repositories, configuration, UTC clock, token primitives.
-- Phase 2: login session issuance, the refresh cookie, `POST /api/auth/refresh`
-  with rotation and reuse revocation, `POST /api/auth/logout`, request protection,
-  stable authentication error codes, and access-JWT hardening.
-- Phase 3: password-change revoke-all, one lock order for every auth mutation,
-  login/password race protection, real-MySQL concurrency tests, bounded cleanup,
-  and logging hardening.
-
-Still pending: frontend renewal (Phase 4) and the same-origin proxy and deployment
-validation (Phase 5). **Do not deploy or merge before those phases.** In particular,
-the current frontend does not send `X-FinTrack-CSRF`, so its login is rejected with
-`403` until Phase 4 updates the client.
-
-Business APIs still authenticate with `Authorization: Bearer <access token>`. See the
+Business APIs authenticate with `Authorization: Bearer <access token>`. See the
 [CSRF security decision](security-csrf.md) for the cookie-authorized exception.
+
 ## Approved policy
 
 | Area                      | Decision                                                                |
@@ -186,7 +177,7 @@ Terminal outcomes are returned rather than thrown, so reuse revocation always co
 before the `401` is written. The replacement cookie is attached only after commit. At
 most one refresh succeeds per token; the previous token then only triggers reuse.
 Concurrent refreshes of the same token (for example, two tabs) are serialized, and
-the second one revokes the family; Phase 4 adds client-side single-flight handling.
+the second one revokes the family. The frontend prevents this with per-tab single flight and a cross-tab Web Lock.
 
 ### `POST /api/auth/logout`
 
@@ -247,7 +238,7 @@ accepted) keeps its contract: `204` with an empty body. In one transaction it:
 Wrong current passwords, invalid new passwords, and database failures change
 nothing and leave the cookie untouched (validation errors are `400`; unexpected
 failures are the account API's generic `500`). Every device must sign in again;
-Phase 4 will make the frontend treat a successful change as the end of the session.
+The frontend treats a successful change as the end of the session (see Frontend session lifecycle).
 Already-issued access JWTs remain valid until they expire, **at most five minutes**
 later; there is no denylist. Profile, preference, and profile-photo changes never
 revoke sessions.
@@ -358,13 +349,68 @@ short transaction; IDs are selected through `idx_refresh_sessions_expires_at` an
 deleted with a bulk statement that re-checks the cutoff. Runs are idempotent and safe
 on several instances. Failures are logged as a category and never thrown; cleanup
 never runs during startup or on login/refresh.
+## Frontend session lifecycle
+
+- **Storage.** The access token lives only in module memory (`utils/authToken.ts`);
+  a reload loses it by design. Nothing is written to `localStorage`,
+  `sessionStorage`, IndexedDB, cookies, or URLs. The legacy `fintrack_access_token`
+  key is deleted on startup without being read. The refresh token is an `HttpOnly`
+  cookie; no frontend code can read it.
+- **Auth endpoints.** Login, refresh, and logout use `credentials: "include"` and
+  `X-FinTrack-CSRF: 1`, carry no bearer token, and are never refreshed or retried
+  automatically. Registration is a public request and is never refreshed.
+- **Restoration.** On load (and on Retry) the provider calls refresh, then `/me`
+  with the new token; `/me` is the only source of user data. A refresh 401 ends
+  restoration signed out with no alert. Other failures show the recoverable
+  "couldn’t restore your session" state with an explicit Retry; no token is kept.
+  React Strict Mode rotates the cookie once (deferred start plus single-flight).
+- **Expired requests.** Only a bearer request answered with `401` and code
+  `ACCESS_TOKEN_EXPIRED` is refreshed, and it is retried exactly once. The retry
+  never refreshes again. If another request already installed a newer token, it is
+  reused without rotating. Requests that are aborted, opted out, or have a
+  non-replayable (streamed) body are not retried; JSON strings and `FormData`
+  (photo uploads, same `File`, browser-generated boundary) replay safely. Retrying
+  a mutation is safe because `ACCESS_TOKEN_EXPIRED` is returned by the security
+  filter before any controller runs. Messages, `403`, `409`, `429`, `5xx`, and
+  network errors never trigger refresh.
+- **Single flight.** All refreshes in a tab share one promise, which clears after
+  success or failure. A refresh that finishes after the session changed (logout,
+  login) is discarded.
+- **Terminal vs temporary.** A refresh 401 during a request ends the session in
+  every tab ("Your session has expired…") and redirects to login once, keeping the
+  intended destination. A network or `503` refresh failure clears this tab's token
+  and shows the recoverable state instead; it does not claim the cookie was
+  revoked, and it does not loop.
+- **Logout.** The server must confirm (`204`) before local state is cleared.
+  Duplicate clicks send one request. If logout cannot be confirmed the user stays
+  signed in and can retry; there is no local-only fallback.
+- **Password change.** After a successful change the tab signs out without calling
+  refresh or logout (the backend already revoked every family) and shows "Your
+  password was changed. Please sign in again." Failed changes keep the session.
+  Profile, preference, and photo changes never sign out.
+- **Web Locks.** Login, refresh, and logout run under the `fintrack-auth-session`
+  lock, so tabs never rotate the cookie at the same time. A tab that waited
+  refreshes for itself with the latest cookie; access tokens are never shared.
+  Browsers without Web Locks fall back to per-tab single flight (no storage-based
+  lock).
+- **BroadcastChannel.** The `fintrack-auth` channel carries only
+  `{ type, sender }`, where type is `LOGOUT`, `PASSWORD_CHANGED`,
+  `SESSION_TERMINATED`, or `ACCOUNT_CHANGED`. Receiving tabs clear their token and
+  user and advance their session guards; on `ACCOUNT_CHANGED` a tab restores
+  itself through the cookie. Received events are never re-broadcast. Without
+  BroadcastChannel, tabs simply find out at their next refresh.
+- **Stale responses.** The provider's `sessionVersion`, `userRevision`, and
+  restoration sequence, plus the session generation in `authSession.ts`, keep late
+  responses from restoring a signed-out or different account.
+
+Proxy routing, hosted cookies, and browser verification against real deployments
+remain Phase 5 work.
+
 ## Planned phases
 
 1. **Foundation** — done.
 2. **Issuance, rotation, reuse, logout, request protection** — done.
 3. **Password-change revoke-all, locking, MySQL concurrency tests, cleanup** — done.
-4. Frontend: send `X-FinTrack-CSRF`, in-memory access tokens, one controlled refresh on
-   `ACCESS_TOKEN_EXPIRED`, single-flight and cross-tab coordination, logout UX, and
-   forced sign-out after a password change.
+4. **Frontend session lifecycle** — done.
 5. Same-origin Vercel `/api` proxy, hosted configuration (`JWT_EXPIRATION_MS=300000`,
    Secure cookies), and deployment validation.

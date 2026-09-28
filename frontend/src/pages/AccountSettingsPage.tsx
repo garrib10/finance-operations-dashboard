@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { PASSWORD_CHANGED_NOTICE } from "../context/sessionNotices";
 import { useAccountForm } from "../hooks/useAccountForm";
 import { AccountFeedback } from "../components/AccountFeedback";
 import { ProfilePhotoSection } from "../components/ProfilePhotoSection";
@@ -53,6 +54,7 @@ const passwordFields = [
 const emptyPasswords = { currentPassword: "", newPassword: "", confirmation: "" };
 
 function PasswordForm() {
+  const { completePasswordChange } = useAuth();
   const [passwords, setPasswords] = useState(emptyPasswords);
   const passwordRules = [
     { label: "At least 15 characters", met: Array.from(passwords.newPassword).length >= 15 },
@@ -73,7 +75,10 @@ function PasswordForm() {
       await changePassword({ currentPassword: passwords.currentPassword, newPassword: passwords.newPassword });
       setPasswords(emptyPasswords);
       setVisible({ currentPassword: false, newPassword: false, confirmation: false });
-    }, "Password changed. You are still signed in.", ["currentPassword", "newPassword"]);
+      // The server revoked every session; this tab (and others) must sign in again.
+      // Clearing the user makes ProtectedRoute redirect to the login page.
+      completePasswordChange();
+    }, PASSWORD_CHANGED_NOTICE, ["currentPassword", "newPassword"]);
   }}>
     <h2 id="password-heading">Change password</h2>
     <div id="password-policy">

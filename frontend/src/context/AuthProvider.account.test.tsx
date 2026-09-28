@@ -9,7 +9,7 @@ import * as authService from "../services/authService";
 import * as accountService from "../services/accountService";
 import { ApiError } from "../services/api";
 import { invalidateAuthSession } from "../services/authSession";
-import { getAuthToken, setAuthToken } from "../utils/authToken";
+import { clearAccessToken, getAccessToken } from "../utils/authToken";
 import { accountUser, deferred, photoUrl, replacementPhotoUrl } from "../test/accountFixtures";
 import type { LoginResponse, UserResponse } from "../types/auth";
 
@@ -27,7 +27,9 @@ const savedUser = { ...accountUser, ...profileRequest };
 beforeEach(() => {
   vi.resetAllMocks();
   window.localStorage.clear();
-  setAuthToken("original-token");
+  clearAccessToken();
+  vi.mocked(authService.refreshSession).mockResolvedValue({ accessToken: "original-token", tokenType: "Bearer", expiresIn: 300 });
+  vi.mocked(authService.logoutSession).mockResolvedValue(undefined);
   getUser.mockResolvedValue(accountUser);
 });
 
@@ -50,7 +52,7 @@ describe("AuthProvider account synchronization", () => {
     expect(result.current.user).toEqual(savedUser);
     expect(profile).toHaveBeenCalledWith(profileRequest);
     expect(getUser).toHaveBeenCalledTimes(1);
-    expect(getAuthToken()).toBe("original-token");
+    expect(getAccessToken()).toBe("original-token");
     expect(result.current.isLoading).toBe(false);
   });
 
@@ -62,7 +64,7 @@ describe("AuthProvider account synchronization", () => {
     expect(result.current.user).toEqual(next);
     expect(preferences).toHaveBeenCalledWith(next.preferences);
     expect(getUser).toHaveBeenCalledTimes(1);
-    expect(getAuthToken()).toBe("original-token");
+    expect(getAccessToken()).toBe("original-token");
   });
 
   it.each(["updateProfile", "updatePreferences"] as const)("preserves the user and propagates failed %s calls", async (action) => {
@@ -76,7 +78,7 @@ describe("AuthProvider account synchronization", () => {
     });
     expect(result.current.user).toEqual(accountUser);
     expect(result.current.isLoading).toBe(false);
-    expect(getAuthToken()).toBe("original-token");
+    expect(getAccessToken()).toBe("original-token");
   });
 
   it.each(["logout", "expiration"])("cannot restore a user after %s", async (event) => {
@@ -88,7 +90,7 @@ describe("AuthProvider account synchronization", () => {
     act(() => { if (event === "logout") result.current.logout(); else invalidateAuthSession(); });
     await act(async () => { pending.resolve(savedUser); await request; });
     expect(result.current.user).toBeNull();
-    expect(getAuthToken()).toBeNull();
+    expect(getAccessToken()).toBeNull();
   });
 
   it("does not replace another account with a late update", async () => {
@@ -103,7 +105,7 @@ describe("AuthProvider account synchronization", () => {
     await act(async () => { await result.current.login({ email: other.email, password: "password" }); });
     await act(async () => { pending.resolve(savedUser); await request; });
     expect(result.current.user).toEqual(other);
-    expect(getAuthToken()).toBe("other-token");
+    expect(getAccessToken()).toBe("other-token");
   });
 
   it.each(["resolve", "reject"])("ignores an older restoration that later %ss after a save", async (completion) => {
@@ -128,7 +130,7 @@ describe("AuthProvider account synchronization", () => {
     getUser.mockReturnValue(pending.promise);
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
     await waitFor(() => expect(getUser).toHaveBeenCalledOnce());
-    act(() => result.current.logout());
+    await act(async () => { await result.current.logout(); });
     await act(async () => pending.resolve(accountUser));
     expect(result.current.user).toBeNull();
     expect(result.current.isLoading).toBe(false);
@@ -140,9 +142,9 @@ describe("AuthProvider account synchronization", () => {
     login.mockReturnValue(pending.promise);
     let request!: Promise<void>;
     act(() => { request = result.current.login({ email: "a@example.com", password: "password" }); });
-    act(() => result.current.logout());
+    await act(async () => { await result.current.logout(); });
     await act(async () => { pending.resolve({ accessToken: "stale", tokenType: "Bearer", expiresIn: 3600 }); await request; });
-    expect(getAuthToken()).toBeNull();
+    expect(getAccessToken()).toBeNull();
     expect(result.current.user).toBeNull();
   });
 
@@ -200,12 +202,12 @@ describe("AuthProvider account synchronization", () => {
       expect(result.current.user).toEqual(otherUser);
       expect(result.current.isAuthenticated).toBe(true);
       expect(result.current.restorationError).toBeNull();
-      expect(getAuthToken()).toBe("other-token");
+      expect(getAccessToken()).toBe("other-token");
     },
   );
 
   it("rejects updates when signed out", async () => {
-    window.localStorage.clear();
+    vi.mocked(authService.refreshSession).mockRejectedValue(new ApiError("Your session has expired. Please sign in again.", 401, undefined, "SESSION_EXPIRED"));
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     await expect(result.current.updateProfile(profileRequest)).rejects.toThrow("Sign in");
@@ -248,7 +250,7 @@ describe("AuthProvider profile photo synchronization", () => {
     expect(result.current.user).toEqual(photoUser);
     expect(uploadPhoto).toHaveBeenCalledExactlyOnceWith(photo);
     expect(getUser).toHaveBeenCalledOnce();
-    expect(getAuthToken()).toBe("original-token");
+    expect(getAccessToken()).toBe("original-token");
   });
 
   it("replaces the user with the canonical removal response", async () => {
@@ -280,13 +282,13 @@ describe("AuthProvider profile photo synchronization", () => {
     uploadPhoto.mockReturnValue(pending.promise);
     let request!: Promise<UserResponse>;
     act(() => { request = result.current.uploadProfilePhoto(photo); });
-    act(() => result.current.logout());
+    await act(async () => { await result.current.logout(); });
     await act(async () => { pending.resolve(photoUser); await request; });
     expect(result.current.user).toBeNull();
   });
 
   it("rejects photo operations when signed out", async () => {
-    window.localStorage.clear();
+    vi.mocked(authService.refreshSession).mockRejectedValue(new ApiError("Your session has expired. Please sign in again.", 401, undefined, "SESSION_EXPIRED"));
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     await expect(result.current.uploadProfilePhoto(photo)).rejects.toThrow("Sign in");
@@ -313,7 +315,7 @@ describe("AuthProvider profile photo synchronization", () => {
     await act(async () => { await result.current.uploadProfilePhoto(photo); });
     const stored = JSON.stringify({ ...window.localStorage }) + JSON.stringify({ ...window.sessionStorage });
     expect(stored).not.toMatch(/cloudinary|blob:|data:image|profilePhoto/);
-    expect(window.localStorage.length).toBe(1);
+    expect(window.localStorage.length).toBe(0);
   });
 });
 

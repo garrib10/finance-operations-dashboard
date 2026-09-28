@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,7 +40,7 @@ function mockAuthenticatedUser(logout = vi.fn()): void {
     updatePreferences: vi.fn(),
     uploadProfilePhoto: vi.fn(),
     removeProfilePhoto: vi.fn(),
-    retrySessionRestore: vi.fn(async () => undefined),
+    retrySessionRestore: vi.fn(async () => undefined), sessionNotice: null, completePasswordChange: vi.fn(),
   });
 }
 
@@ -213,6 +213,50 @@ describe("AppHeader", () => {
     expect(screen.queryByText("demo@fintrack.dev")).not.toBeInTheDocument();
   });
 
+  it("waits for server confirmation, blocks duplicate logout, and navigates afterwards", async () => {
+    const user = userEvent.setup();
+    let confirm!: () => void;
+    const logout = vi.fn(() => new Promise<void>((resolve) => { confirm = resolve; }));
+    mockAuthenticatedUser(logout);
+    renderHeader();
+
+    await user.click(screen.getByRole("button", { name: "Open account menu for Demo User" }));
+    await user.click(screen.getByRole("button", { name: "Logout" }));
+
+    const pending = screen.getByRole("button", { name: "Signing out..." });
+    expect(pending).toBeDisabled();
+    fireEvent.click(pending);
+    expect(logout).toHaveBeenCalledOnce();
+    expect(screen.getByText("demo@fintrack.dev")).toBeInTheDocument();
+
+    await act(async () => confirm());
+
+    expect(screen.queryByText("demo@fintrack.dev")).not.toBeInTheDocument();
+  });
+
+  it("keeps the user signed in with a retryable alert when logout is not confirmed", async () => {
+    const user = userEvent.setup();
+    const logout = vi.fn()
+      .mockRejectedValueOnce(new Error("503 from /api/auth/logout with internal detail"))
+      .mockResolvedValueOnce(undefined);
+    mockAuthenticatedUser(logout);
+    renderHeader();
+
+    await user.click(screen.getByRole("button", { name: "Open account menu for Demo User" }));
+    await user.click(screen.getByRole("button", { name: "Logout" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("We couldn’t sign you out. Check your connection and try again.");
+    expect(alert).not.toHaveTextContent(/503|internal/);
+    expect(screen.getByText("demo@fintrack.dev")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Logout" }));
+
+    expect(logout).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText("demo@fintrack.dev")).not.toBeInTheDocument();
+  });
+
   it("shows authentication navigation when signed out", () => {
     mockedUseAuth.mockReturnValue({
       user: null,
@@ -225,7 +269,7 @@ describe("AppHeader", () => {
       updatePreferences: vi.fn(),
       uploadProfilePhoto: vi.fn(),
       removeProfilePhoto: vi.fn(),
-      retrySessionRestore: vi.fn(async () => undefined),
+      retrySessionRestore: vi.fn(async () => undefined), sessionNotice: null, completePasswordChange: vi.fn(),
     });
 
     renderHeader();

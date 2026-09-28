@@ -152,6 +152,10 @@
   font-size: 0.875rem;
 }
 
+.form-notice {
+  color: var(--color-warning);
+}
+
 .account-menu {
   position: relative;
   flex-shrink: 0;

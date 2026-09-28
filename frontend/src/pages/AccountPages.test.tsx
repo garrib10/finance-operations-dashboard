@@ -8,7 +8,8 @@ import AppHeader from "../components/AppHeader";
 import * as accountService from "../services/accountService";
 import * as authService from "../services/authService";
 import { ApiError } from "../services/api";
-import { setAuthToken } from "../utils/authToken";
+import { clearAccessToken, getAccessToken } from "../utils/authToken";
+import { PASSWORD_CHANGED_NOTICE } from "../context/sessionNotices";
 import { accountContext, accountUser, deferred } from "../test/accountFixtures";
 import type { UserResponse } from "../types/auth";
 import ProfilePage from "./ProfilePage";
@@ -22,7 +23,7 @@ function UserProbe() {
   return <output data-testid="canonical">{JSON.stringify(user)}</output>;
 }
 async function setup(page: "profile" | "settings") {
-  setAuthToken("test-session");
+  vi.mocked(authService.refreshSession).mockResolvedValue({ accessToken: "test-session", tokenType: "Bearer", expiresIn: 300 });
   vi.mocked(authService.getCurrentUser).mockResolvedValue(accountUser);
   render(<MemoryRouter><AuthProvider><AppHeader /><UserProbe />{page === "profile" ? <ProfilePage /> : <AccountSettingsPage />}</AuthProvider></MemoryRouter>);
   await screen.findByRole("button", { name: /account menu for River Walker/i });
@@ -36,7 +37,7 @@ function passwords(current = "old password value", next = "new password value", 
   setField("New password", next);
   setField("Confirm new password", confirmation);
 }
-beforeEach(() => { vi.resetAllMocks(); localStorage.clear(); });
+beforeEach(() => { vi.resetAllMocks(); localStorage.clear(); clearAccessToken(); });
 
 describe("Profile form", () => {
   it("prefills canonical values, trims only approved fields, updates header, and focuses success", async () => {
@@ -177,19 +178,23 @@ describe("Password form", () => {
     expect(screen.getByLabelText(invalid, { exact: true })).toHaveAttribute("aria-invalid", "true");
   });
 
-  it.each(["  a new passphrase  ", "界".repeat(24), "😀".repeat(15)])("submits exact valid bytes, excludes confirmation, clears fields and keeps session", async next => {
+  it.each(["  a new passphrase  ", "界".repeat(24), "😀".repeat(15)])("submits exact valid bytes, excludes confirmation, then ends the session", async next => {
     const user = await setup("settings");
     vi.mocked(accountService.changePassword).mockResolvedValue(undefined);
     passwords(" old password ", next);
     await user.click(screen.getByRole("button", { name: "Change password" }));
     expect(accountService.changePassword).toHaveBeenCalledExactlyOnceWith({ currentPassword: " old password ", newPassword: next });
-    expect(screen.getByLabelText("Current password")).toHaveValue("");
-    expect(screen.getByLabelText("New password", { exact: true })).toHaveValue("");
-    expect(screen.getByLabelText("Confirm new password")).toHaveValue("");
-    expect(screen.getByText("Password changed. You are still signed in.")).toHaveFocus();
-    expect(screen.getByRole("button", { name: /account menu for River Walker/i })).toBeInTheDocument();
-    expect(localStorage.getItem("fintrack_access_token")).toBe("test-session");
+    // The backend revoked every session: this tab signs out without refresh or logout calls.
+    await waitFor(() => expect(screen.getByRole("link", { name: "Login" })).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /account menu for River Walker/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId("canonical")).toHaveTextContent("null");
+    expect(getAccessToken()).toBeNull();
+    expect(authService.refreshSession).toHaveBeenCalledOnce();
+    expect(authService.logoutSession).not.toHaveBeenCalled();
+    expect(screen.queryByText(/still signed in/i)).not.toBeInTheDocument();
+    expect(PASSWORD_CHANGED_NOTICE).toBe("Your password was changed. Please sign in again.");
     expect(JSON.stringify(localStorage)).not.toContain(next);
+    expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
   });
 
@@ -202,6 +207,7 @@ describe("Password form", () => {
     expect(input).toHaveAccessibleDescription(/Please choose another value/);
     expect(input).toHaveFocus();
     expect(screen.getByRole("button", { name: /account menu for River Walker/i })).toBeInTheDocument();
+    expect(getAccessToken()).toBe("test-session");
   });
 
   it("toggles visibility with keyboard, preserving focus and input values", async () => {
@@ -335,7 +341,7 @@ it("resets checked circles after a successful password change", async () => {
   const rules = screen.getByRole("list", { name: "New password requirements" });
   expect(within(rules).getAllByText("✓")).toHaveLength(2);
   await user.click(screen.getByRole("button", { name: "Change password" }));
-  expect(screen.getByText("Password changed. You are still signed in.")).toBeInTheDocument();
+  expect(await screen.findByText(PASSWORD_CHANGED_NOTICE)).toBeInTheDocument();
   for (const rule of within(rules).getAllByRole("listitem")) {
     expect(rule.querySelector(".password-rule__indicator")).toBeEmptyDOMElement();
     expect(rule).not.toHaveClass("password-rule--met");

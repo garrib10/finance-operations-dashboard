@@ -8,7 +8,7 @@ interface LoginLocationState {
 }
 
 function LoginPage() {
-  const { login } = useAuth();
+  const { login, sessionNotice } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -57,6 +57,12 @@ function LoginPage() {
         <h1>Login</h1>
         <p>Sign in to access your FinTrack dashboard.</p>
       </div>
+
+      {sessionNotice && (
+        <p className="form-notice" role="status">
+          {sessionNotice}
+        </p>
+      )}
 
       <form className="auth-form" onSubmit={handleSubmit}>
         <div className="form-field">

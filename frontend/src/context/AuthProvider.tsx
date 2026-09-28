@@ -2,18 +2,28 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 import * as accountService from "../services/accountService";
 import type { UpdateProfileRequest, UpdatePreferencesRequest } from "../types/account";
-import { ApiError } from "../services/api";
-import { getCurrentUser, login as loginRequest } from "../services/authService";
-import { subscribeToSessionInvalidation } from "../services/authSession";
+import {
+  getCurrentUser,
+  login as loginRequest,
+  logoutSession,
+} from "../services/authService";
+import {
+  beginNewSession,
+  invalidateAuthSession,
+  subscribeToSessionInvalidation,
+} from "../services/authSession";
+import { openSessionChannel, publishSessionEvent } from "../services/sessionBroadcast";
+import { isTerminalRefreshFailure, refreshAccessToken } from "../services/sessionRefresh";
 
 import {
-  getAuthToken,
-  removeAuthToken,
-  setAuthToken,
+  clearAccessToken,
+  removeLegacyAccessToken,
+  setAccessToken,
 } from "../utils/authToken";
 
 import type { LoginRequest, UserResponse } from "../types/auth";
 import { AuthContext, type AuthContextValue } from "./AuthContext";
+import { noticeFor } from "./sessionNotices";
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -26,30 +36,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<UserResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [restorationError, setRestorationError] = useState<string | null>(null);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
 
   // Session changes invalidate pending work; successful saves invalidate older reads.
   const sessionVersion = useRef(0);
   const userRevision = useRef(0);
   const restoreSequence = useRef(0);
+  const pendingLogout = useRef<Promise<void> | null>(null);
 
+  /** Page-load and explicit-retry restoration: rotate the refresh cookie, then load /me. */
   const restoreSession = useCallback(async (): Promise<void> => {
-    const token = getAuthToken();
     const session = sessionVersion.current;
     const revision = userRevision.current;
     const sequence = ++restoreSequence.current;
     const isCurrentRead = () => session === sessionVersion.current
       && sequence === restoreSequence.current && revision === userRevision.current;
 
-    if (!token) {
-      setUser(null);
-      setRestorationError(null);
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
 
     try {
+      await refreshAccessToken();
       const currentUser = await getCurrentUser();
 
       if (!isCurrentRead()) return;
@@ -57,13 +63,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setRestorationError(null);
     } catch (error) {
       if (!isCurrentRead()) return;
+      clearAccessToken();
       setUser(null);
-
-      if (error instanceof ApiError && error.status === 401) {
-        setRestorationError(null);
-      } else {
-        setRestorationError(SESSION_RESTORATION_ERROR);
-      }
+      // A refresh 401 means there is no session to restore; anything else may be temporary.
+      setRestorationError(isTerminalRefreshFailure(error) ? null : SESSION_RESTORATION_ERROR);
     } finally {
       if (session === sessionVersion.current && sequence === restoreSequence.current) {
         setIsLoading(false);
@@ -74,13 +77,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     let isCancelled = false;
 
-    const unsubscribe = subscribeToSessionInvalidation(() => {
+    removeLegacyAccessToken();
+
+    const unsubscribe = subscribeToSessionInvalidation((event) => {
       sessionVersion.current += 1;
       setUser(null);
-      setRestorationError(null);
       setIsLoading(false);
+      if (event.reason === "TEMPORARY_FAILURE") {
+        setRestorationError(SESSION_RESTORATION_ERROR);
+        return;
+      }
+      setRestorationError(null);
+      setSessionNotice(noticeFor(event));
     });
 
+    const closeChannel = openSessionChannel((type) => {
+      invalidateAuthSession(type, "remote");
+      if (type === "ACCOUNT_CHANGED") {
+        // Another tab signed in; restore through the shared cookie with this tab's own token.
+        void restoreSession();
+      }
+    });
+
+    // Deferred so React Strict Mode's discarded first mount never starts a refresh.
     queueMicrotask(() => {
       if (!isCancelled) {
         void restoreSession();
@@ -91,38 +110,52 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isCancelled = true;
       sessionVersion.current += 1;
       unsubscribe();
+      closeChannel();
     };
   }, [restoreSession]);
 
   async function login(request: LoginRequest): Promise<void> {
     const session = ++sessionVersion.current;
+    beginNewSession();
     setUser(null);
     setIsLoading(false);
     setRestorationError(null);
     const response = await loginRequest(request);
     if (session !== sessionVersion.current) return;
 
-    setAuthToken(response.accessToken);
+    setAccessToken(response.accessToken);
     try {
       const currentUser = await getCurrentUser();
       if (session !== sessionVersion.current) return;
       setUser(currentUser);
       setRestorationError(null);
+      setSessionNotice(null);
+      publishSessionEvent("ACCOUNT_CHANGED");
     } catch (error) {
       if (session === sessionVersion.current) {
-        removeAuthToken();
+        clearAccessToken();
         setUser(null);
       }
       throw error;
     }
   }
 
-  function logout(): void {
-    sessionVersion.current += 1;
-    removeAuthToken();
-    setUser(null);
-    setIsLoading(false);
-    setRestorationError(null);
+  function logout(): Promise<void> {
+    if (!pendingLogout.current) {
+      // Local state is cleared only after the server confirms the family is revoked.
+      pendingLogout.current = logoutSession()
+        .then(() => {
+          invalidateAuthSession("LOGOUT");
+        })
+        .finally(() => {
+          pendingLogout.current = null;
+        });
+    }
+    return pendingLogout.current;
+  }
+
+  function completePasswordChange(): void {
+    invalidateAuthSession("PASSWORD_CHANGED");
   }
 
   async function saveAccount(save: () => Promise<UserResponse>): Promise<UserResponse> {
@@ -161,8 +194,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isAuthenticated: user !== null,
     isLoading,
     restorationError,
+    sessionNotice,
     login,
     logout,
+    completePasswordChange,
     retrySessionRestore: restoreSession,
   };
 

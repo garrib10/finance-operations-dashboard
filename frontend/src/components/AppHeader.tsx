@@ -8,6 +8,8 @@ function AppHeader() {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const accountTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -45,10 +47,20 @@ function AppHeader() {
     };
   }, [isAccountMenuOpen]);
 
-  function handleLogout(): void {
-    setIsAccountMenuOpen(false);
-    logout();
-    navigate("/login");
+  // Repeat clicks are blocked by the disabled button and de-duplicated by AuthProvider.
+  async function handleLogout(): Promise<void> {
+    setIsLoggingOut(true);
+    setLogoutError("");
+    try {
+      await logout();
+      setIsAccountMenuOpen(false);
+      navigate("/login");
+    } catch {
+      // Not signed out: the server did not confirm the session was revoked.
+      setLogoutError("We couldn’t sign you out. Check your connection and try again.");
+    } finally {
+      setIsLoggingOut(false);
+    }
   }
 
   function toggleAccountMenu(): void {
@@ -113,12 +125,19 @@ function AppHeader() {
                     <Link to="/settings" onClick={() => setIsAccountMenuOpen(false)}>Account Settings</Link>
                   </nav>
 
+                  {logoutError && (
+                    <p className="form-error" role="alert">
+                      {logoutError}
+                    </p>
+                  )}
+
                   <button
                     className="button button--secondary account-menu__logout"
                     type="button"
-                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    onClick={() => void handleLogout()}
                   >
-                    Logout
+                    {isLoggingOut ? "Signing out..." : "Logout"}
                   </button>
                 </div>
               )}

@@ -8,7 +8,7 @@ import * as accountService from "../services/accountService";
 import * as authService from "../services/authService";
 import { ApiError } from "../services/api";
 import { invalidateAuthSession } from "../services/authSession";
-import { setAuthToken } from "../utils/authToken";
+import { clearAccessToken } from "../utils/authToken";
 import { MAX_PHOTO_BYTES } from "../utils/profilePhoto";
 import { accountUser, deferred, photoUrl, replacementPhotoUrl } from "../test/accountFixtures";
 import type { UserResponse } from "../types/auth";
@@ -30,6 +30,7 @@ const revokeObjectURL = vi.fn();
 beforeEach(() => {
   vi.resetAllMocks();
   localStorage.clear();
+  clearAccessToken();
   objectUrlCount = 0;
   createObjectURL.mockImplementation((file: Blob) => `blob:preview-${++objectUrlCount}-${(file as File).name}`);
   Object.assign(URL, { createObjectURL, revokeObjectURL });
@@ -40,7 +41,7 @@ afterEach(() => {
 });
 
 async function setup(user: UserResponse = accountUser) {
-  setAuthToken("test-session");
+  vi.mocked(authService.refreshSession).mockResolvedValue({ accessToken: "test-session", tokenType: "Bearer", expiresIn: 300 });
   vi.mocked(authService.getCurrentUser).mockResolvedValue(user);
   const view = render(<MemoryRouter><AuthProvider><AppHeader /><AccountSettingsPage /></AuthProvider></MemoryRouter>);
   await screen.findByRole("button", { name: /account menu for River Walker/i });
@@ -351,7 +352,7 @@ describe("Account settings profile photo", () => {
 });
 
 describe("photo preservation across other account changes", () => {
-  it("keeps the photo after preference and password saves", async () => {
+  it("keeps the photo after a preference save, then signs out cleanly after a password change", async () => {
     const { events } = await setup(photoUser);
     vi.mocked(accountService.updatePreferences).mockResolvedValue({ ...photoUser, preferences: { dateFormat: "ISO", transactionPageSize: 10 } });
     vi.mocked(accountService.changePassword).mockResolvedValue(undefined);
@@ -364,8 +365,10 @@ describe("photo preservation across other account changes", () => {
     fireEvent.change(screen.getByLabelText("New password", { exact: true }), { target: { value: "new password value" } });
     fireEvent.change(screen.getByLabelText("Confirm new password", { exact: true }), { target: { value: "new password value" } });
     await events.click(screen.getByRole("button", { name: "Change password" }));
-    expect(await screen.findByText("Password changed. You are still signed in.")).toBeInTheDocument();
-    expect(headerImage()).toHaveAttribute("src", photoUrl);
-    expect(within(section()).getByRole("img", { name: "Profile photo for River Walker" })).toBeInTheDocument();
+    // Every session was revoked: the header signs out and no stale photo remains on screen.
+    expect(await screen.findByRole("link", { name: "Login" })).toBeInTheDocument();
+    expect(headerImage()).toBeNull();
+    expect(screen.queryByRole("img", { name: "Profile photo for River Walker" })).not.toBeInTheDocument();
+    expect(authService.logoutSession).not.toHaveBeenCalled();
   });
 });
