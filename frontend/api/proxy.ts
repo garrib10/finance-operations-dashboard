@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 /**
  * Vercel Function behind the `/api/:fintrackPath*` rewrite in vercel.json.
  * BACKEND_ORIGIN is a server-only project variable (never VITE_-prefixed) naming
