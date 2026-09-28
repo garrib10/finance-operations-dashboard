@@ -8,17 +8,24 @@ bearer-only, with a narrow cookie-authorized exception for refresh and logout. S
 
 This decision applies to the current stateless JWT authentication architecture. It must be reviewed if FinTrack changes how authentication credentials are stored or transmitted.
 
-## Current Authentication Model
+**Summary as of v1.2.0:** FinTrack is *not* cookie-free. Business endpoints are
+bearer-only; the `HttpOnly` refresh cookie is accepted only by refresh and logout,
+which (with login) require an exact `Origin` and `X-FinTrack-CSRF: 1`. The sections
+below record the original v1.1.0 decision, then the v1.2.0 amendment.
 
-FinTrack uses stateless JWT access-token authentication.
+## Original Authentication Model (v1.1.0)
+
+FinTrack v1.1.0 used stateless JWT access-token authentication.
 
 - Spring Security uses `SessionCreationPolicy.STATELESS`.
 - The backend does not create an authenticated server-side session.
 - The frontend stores the access token in browser `localStorage`. *(Superseded in
   v1.2.0: the access token is memory-only; see the issue #18 section.)*
 - The frontend explicitly sends the token through the `Authorization: Bearer <token>` header.
-- The backend does not use cookies to authenticate API requests.
-- Cross-origin requests do not include credentials because CORS credentials are disabled.
+- The backend does not use cookies to authenticate business API requests. *(Still
+  true in v1.2.0; refresh and logout are the only cookie-authorized endpoints.)*
+- Cross-origin requests do not include credentials because CORS credentials are
+  disabled. *(v1.2.0: enabled only for login, refresh, and logout.)*
 - CORS access is restricted to explicitly configured frontend origins.
 
 ## Decision
@@ -178,8 +185,43 @@ protection server-side regardless of CORS. CORS is still kept tight:
   or headers are refused.
 
 Development, staging, and production keep separate origin lists through
-`FRONTEND_URLS`. The same-origin Vercel `/api` proxy planned for Phase 5 will make
-frontend auth calls same-origin; these checks remain in place behind it.
+`FRONTEND_URLS`.
+
+### Same-origin proxy topology
+
+In staging and production the browser calls `/api/*` on the Vercel frontend host;
+the `api/proxy.ts` function forwards server-to-server to the Railway backend named by
+the server-only `BACKEND_ORIGIN` ([deployment guide](deployment.md)). From the
+browser's view every request is same-origin, so the refresh cookie is a first-party
+cookie of the frontend host and `SameSite=Lax` works without third-party cookies.
+
+The proxy forwards the browser's `Origin`, `Referer`, `X-FinTrack-CSRF`, `Cookie`, and
+`Authorization` unchanged, so every check above still runs on the backend.
+`FRONTEND_URLS` therefore lists the Vercel frontend origin, not the Railway origin.
+The proxy cannot be steered to another host: the upstream comes only from
+`BACKEND_ORIGIN`, and the path may only select a location under `/api/` there.
+
+Locally the Vite dev server proxies `/api` to `http://localhost:8080` with
+`changeOrigin` off, so the backend sees `Origin: http://localhost:5173`, the local
+`FRONTEND_URLS` default.
+
+### Why the refresh cookie cannot reach business APIs
+
+The cookie's `Path=/api/auth` keeps browsers from sending it to `/api/account`,
+`/api/transactions`, `/api/budgets`, or other business paths. Even if it were sent,
+Spring Security never turns it into a principal: business endpoints, including
+profile, password, and photo changes, require `Authorization: Bearer`. Tests assert
+a refresh cookie alone gets `401` on those endpoints.
+
+### Staging and production verification
+
+- POST `/api/auth/login` without `X-FinTrack-CSRF` → `403 REQUEST_FORBIDDEN`.
+- POST `/api/auth/refresh` with a different `Origin` → `403`.
+- `/api/transactions` with only the refresh cookie → `401`.
+- The refresh cookie shows `HttpOnly; Secure; SameSite=Lax; Path=/api/auth` with no
+  `Domain` in DevTools, and `document.cookie` does not include it.
+
+See the full [staging smoke checklist](deployment.md#staging-smoke-checklist).
 
 ### Residual risk
 

@@ -6,21 +6,29 @@ describe("apiConfig", () => {
     vi.resetModules();
   });
 
-  it("uses the configured API base URL", async () => {
-    vi.stubEnv("VITE_API_BASE_URL", "https://api.fintrack.example");
-    vi.resetModules();
-
+  it("uses same-origin relative URLs", async () => {
     const { API_BASE_URL } = await import("./apiConfig");
 
-    expect(API_BASE_URL).toBe("https://api.fintrack.example");
+    expect(API_BASE_URL).toBe("");
+    expect(`${API_BASE_URL}/api/auth/login`).toBe("/api/auth/login");
   });
 
-  it("uses the local API URL when no configured URL exists", async () => {
-    vi.stubEnv("VITE_API_BASE_URL", undefined);
+  it("ignores the obsolete cross-origin VITE_API_BASE_URL", async () => {
+    vi.stubEnv("VITE_API_BASE_URL", "https://backend.example.com");
     vi.resetModules();
 
     const { API_BASE_URL } = await import("./apiConfig");
 
-    expect(API_BASE_URL).toBe("http://localhost:8080");
+    expect(API_BASE_URL).toBe("");
+  });
+
+  it("never produces a doubled slash or doubled /api prefix", async () => {
+    const { API_BASE_URL } = await import("./apiConfig");
+
+    for (const path of ["/api/auth/refresh", "/api/account/photo", "/api/transactions?page=0"]) {
+      const url = `${API_BASE_URL}${path}`;
+      expect(url.startsWith("/api/")).toBe(true);
+      expect(url).not.toMatch(/\/\/|\/api\/api/);
+    }
   });
 });

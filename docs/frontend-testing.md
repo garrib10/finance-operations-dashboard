@@ -38,8 +38,9 @@ reports, build output, logs, local environment files, or database backups.
 
 To run the application against your local database, start `./scripts/run-local.sh`
 from the root and `npm run dev` from `frontend` in separate terminals. Run only one
-backend instance on port 8080. Confirm `VITE_API_BASE_URL` points to the intended
-local API. Do not point local mutation tests at production.
+backend instance on port 8080. The Vite dev server proxies `/api` to
+`http://localhost:8080` (override with `DEV_API_PROXY_TARGET`); `VITE_API_BASE_URL` is
+no longer used. Do not point local mutation tests at production.
 
 Vitest uses jsdom and disables Node's built-in web storage for Node 25 or later.
 These component tests verify semantics and interactions, not actual browser layout,
@@ -122,6 +123,40 @@ approval separately. No hosted settings or data are changed by Phase 5.
 Record browser/version, viewport/zoom, assistive technology, release revision, and
 pass/fail evidence without credentials. A checklist is not evidence that these
 browser/staging checks have already passed.
+
+## Issue #18 (v1.2.0) verification snapshot
+
+Measured on September 27, 2026 on the issue #18 branch, locally, with no hosted
+service contacted:
+
+| Check | Result |
+| --- | --- |
+| `JAVA_HOME=$(/usr/libexec/java_home -v 21) ./mvnw --batch-mode clean verify` | BUILD SUCCESS |
+| Surefire (unit and H2 integration) | 709 tests in 62 classes; 0 failures, errors, or skips |
+| Failsafe (`*IT`, real MySQL 8.4.6 via Testcontainers) | 23 tests in 4 classes; 0 failures, errors, or skips |
+| Total backend tests | 732 |
+| JaCoCo instructions / branches | 98.78% (8440/8544) / 96.49% (742/769) |
+| JaCoCo lines / methods | 98.59% (1886/1913) / 98.30% (463/471) |
+| `npm ci` | Passed; 0 vulnerabilities |
+| `npm run lint -- --max-warnings=0` | Passed |
+| `npm run test:coverage` | 540 tests in 33 files passed |
+| Frontend statements / branches | 100% (1137/1137) / 100% (721/721) |
+| Frontend functions / lines | 100% (284/284) / 100% (1070/1070) |
+| Proxy, routing, and dev-proxy tests (`frontend/tests/`) | 76 tests in 3 files, included above |
+| `npm run build` | TypeScript and Vite passed; existing >500 kB chunk warning |
+| Bundle scan | No server-only names or values in `dist/` (no source maps emitted) |
+| `npm audit` | 0 vulnerabilities |
+
+The MySQL tests need a running Docker-compatible runtime. With Colima, export
+`DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` and
+`TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock`. GitHub-hosted runners
+provide Docker already, and CI needs no hosted credentials. Tests never contact
+Railway, Vercel, Cloudinary, or a real database.
+
+Automation does not prove hosted cookie handling, the Vercel proxy on real
+infrastructure, browser restart behavior, or cross-browser Web Locks and
+BroadcastChannel behavior. Those belong to the
+[staging smoke checklist](deployment.md#staging-smoke-checklist).
 
 ## Final issue #16 verification snapshot
 

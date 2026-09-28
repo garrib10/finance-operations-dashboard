@@ -262,5 +262,20 @@ rules, the named indexes, the unique hash constraint, all CHECK constraints, cas
 deletion, and idempotent repeat migration. A separate test applies Hibernate's
 MySQL schema-validation type matching to the V5 column types, so production
 `ddl-auto=validate` accepts the new entities. As with V3 and V4, rehearse clean and
-populated-V4 upgrades against the target MySQL version before deployment. Real
-MySQL locking and concurrency coverage is planned for a later phase.
+populated-V4 upgrades against the target MySQL version before deployment.
+
+### MySQL verification and session cleanup
+
+`./mvnw clean verify` also runs `*IT` tests against a pinned `mysql:8.4.6` container
+(Testcontainers; requires Docker). They apply V1–V5 to real MySQL, start the app with
+`ddl-auto=validate`, upgrade a populated V4 schema, and exercise every V5 constraint,
+the token-hash unique key, the cascade, and the indexes. Concurrency tests race login,
+refresh, logout, and password change on real InnoDB row locks. One of them found that
+revoke-all needed a locking read (`SELECT … FOR UPDATE`) under REPEATABLE READ; see
+the [session lifecycle](auth-session-lifecycle.md#locking-and-race-behavior).
+
+Rows are removed only by the daily cleanup job: a family is deleted once
+`expires_at` is more than seven days in the past, in bounded batches that use
+`idx_refresh_sessions_expires_at`, and its token history is removed by
+`ON DELETE CASCADE`. Revocation alone never deletes anything. Only token hashes are
+ever stored. V1–V5 are immutable once applied; any schema change needs V6 or later.

@@ -2,13 +2,51 @@
 
 ## Status
 
-In progress for FinTrack v1.2.0 (issue #18). **Backend (Phases 1–3) and frontend
-(Phase 4) implemented.** Still pending: the same-origin Vercel `/api` proxy, hosted
-configuration, and deployment validation (Phase 5). **Do not deploy or merge before
-Phase 5.**
+Implemented for FinTrack v1.2.0 (issue #18): backend (Phases 1–3), frontend
+(Phase 4), and same-origin deployment proxy (Phase 5). Staging verification is
+still to be done by following the [deployment guide](deployment.md); do not promote
+to production until its smoke checklist passes.
 
 Business APIs authenticate with `Authorization: Bearer <access token>`. See the
 [CSRF security decision](security-csrf.md) for the cookie-authorized exception.
+
+## Lifecycle at a glance
+
+1. **Login.** The browser POSTs credentials to `/api/auth/login` (same origin, with
+   `X-FinTrack-CSRF: 1`). The backend verifies the password against the locked user row.
+2. **Refresh-session creation.** A new family (one per login/device) is created with a
+   30-day absolute expiration; the token's SHA-256 hash is stored, never the token.
+3. **Access token in memory.** The response carries a five-minute access JWT, which
+   the frontend keeps only in JavaScript memory (never in any browser storage).
+4. **Refresh cookie.** The raw refresh token is set as `__Secure-fintrack_refresh`
+   (`HttpOnly; Secure; SameSite=Lax; Path=/api/auth`, no `Domain`); JavaScript cannot
+   read it.
+5. **Business request.** Every API call sends `Authorization: Bearer <access token>`.
+6. **Expiration.** After five minutes the backend answers `401 ACCESS_TOKEN_EXPIRED`.
+7. **Single-flight refresh.** One refresh per tab (Web Lock across tabs) calls
+   `/api/auth/refresh` with the cookie.
+8. **Rotation.** The presented token is marked consumed and a new one issued in the same
+   family; the absolute expiration never moves (no sliding extension).
+9. **Retry.** The original request is retried once with the new access token.
+10. **Reload.** A reload loses the in-memory token; restoration calls refresh, then `/me`.
+11. **Logout.** `/api/auth/logout` revokes the current family and clears the cookie; the
+    frontend signs out only after the server confirms.
+12. **Password change.** Revokes every family for the user; every tab and device must
+    sign in again. Profile, preference, and photo changes never revoke.
+13. **Reuse detection.** Presenting an already-consumed token revokes its whole family.
+14. **Multiple devices.** Each login is an independent family; logout and reuse affect
+    only one family.
+15. **Cross-tab coordination.** BroadcastChannel tells other tabs about logout,
+    password change, session termination, and account changes, without tokens.
+16. **Cleanup.** Families are deleted seven days after their absolute expiration.
+17. **Deployment proxy.** In staging/production the browser only talks to the Vercel
+    host; `api/proxy.ts` forwards to the backend (see [Deployment proxy](#deployment-proxy)).
+18. **Failure handling.** A refresh `401` signs out everywhere; network/`5xx` failures
+    show a recoverable Retry state without claiming the session ended.
+
+Access JWTs are stateless and there is no denylist: after logout, reuse revocation, or
+a password change, an already-issued access token can still work for **up to five
+minutes**. There is no public session-management UI.
 
 ## Approved policy
 
@@ -104,10 +142,10 @@ is a same-origin `/api` proxy. `REFRESH_COOKIE_SECURE` defaults to `true`, and t
 `prod` profile pins it to `true`. None of these values are secrets, and none may use
 a `VITE_` prefix. Cookie name, path, and domain are fixed, not configurable.
 
-**Access lifetime during development.** The approved value is 5 minutes, and
-`.env.example` uses it. Until refresh is wired in, local development may temporarily
-set `JWT_EXPIRATION_MS=3600000` to avoid frequent re-logins. When refresh-token
-support is released, every hosted environment must set `JWT_EXPIRATION_MS=300000`.
+**Access lifetime.** Every environment uses 5 minutes (`JWT_EXPIRATION_MS=300000`),
+including local development: silent refresh keeps users signed in, so there is no
+reason for longer access tokens. Hosted values are listed in the
+[deployment guide](deployment.md#variables).
 
 ## Refresh cookie
 
@@ -244,10 +282,10 @@ later; there is no denylist. Profile, preference, and profile-photo changes neve
 revoke sessions.
 
 The clearing `Set-Cookie` is returned from `/api/account/password` with
-`Path=/api/auth`. With the Phase 5 same-origin proxy the browser applies it directly.
-In direct cross-origin development the browser may ignore it (business routes do not
-use credentialed CORS); the family is revoked server-side regardless, so the stale
-cookie fails its next refresh, which clears it.
+`Path=/api/auth`. Because the browser reaches the backend through the same-origin
+proxy (Vite locally, Vercel when hosted), it applies that header directly. Even if a
+browser ignored it, the family is already revoked server-side, so the stale cookie
+fails its next refresh, which clears it.
 
 `RefreshSessionService.revokeAllForUser(userId, reason)` is internal only. It requires
 an existing transaction (`Propagation.MANDATORY`), so it always commits or rolls back
@@ -403,14 +441,27 @@ never runs during startup or on login/refresh.
   restoration sequence, plus the session generation in `authSession.ts`, keep late
   responses from restoring a signed-out or different account.
 
-Proxy routing, hosted cookies, and browser verification against real deployments
-remain Phase 5 work.
+Hosted cookie behavior and real-browser checks are covered by the
+[staging smoke checklist](deployment.md#staging-smoke-checklist).
 
-## Planned phases
+## Deployment proxy
+
+The browser never calls the backend host. `vercel.json` sends `/api/*` to the
+`api/proxy.ts` function before the SPA fallback, and the function forwards to
+`${BACKEND_ORIGIN}/api/<path>` (server-only variable, validated as an https origin).
+It forwards only the headers the app needs (`Authorization`, `Cookie`, `Origin`,
+`Referer`, `X-FinTrack-CSRF`, `Content-Type`, `Accept`, `Accept-Language`), keeps raw
+bodies (multipart boundaries intact), passes every `Set-Cookie` through unchanged, and
+marks every response `Cache-Control: no-store`. Upstream failures become sanitized
+`502`/`503`/`504` responses, which the frontend treats as temporary. Locally the Vite
+dev server proxies `/api` to `http://localhost:8080` the same way. Details, variables,
+and the rollout plan: [deployment guide](deployment.md).
+
+## Delivery phases
 
 1. **Foundation** — done.
 2. **Issuance, rotation, reuse, logout, request protection** — done.
 3. **Password-change revoke-all, locking, MySQL concurrency tests, cleanup** — done.
 4. **Frontend session lifecycle** — done.
-5. Same-origin Vercel `/api` proxy, hosted configuration (`JWT_EXPIRATION_MS=300000`,
-   Secure cookies), and deployment validation.
+5. **Same-origin proxy, deployment configuration, final documentation** — done.
+   Staging rollout and smoke testing follow the [deployment guide](deployment.md).
