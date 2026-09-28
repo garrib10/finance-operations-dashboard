@@ -153,6 +153,20 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Real MySQL for *IT integration tests (Failsafe); test scope only.
+             Versions come from the Spring Boot dependency BOM. -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-mysql</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Database migrations -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -172,6 +186,22 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- Integration tests (*IT.java, real MySQL via Testcontainers) run during
+                 integration-test and fail the build in verify. Surefire keeps running
+                 *Test/*Tests classes, so nothing runs twice. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
 
             <!-- JaCoCo code coverage -->
@@ -200,6 +230,15 @@
                     <execution>
                         <id>report</id>
                         <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <!-- Regenerates the report after Failsafe so it covers unit and
+                         integration tests; both append to the same jacoco.exec. -->
+                    <execution>
+                        <id>report-with-integration-tests</id>
+                        <phase>post-integration-test</phase>
                         <goals>
                             <goal>report</goal>
                         </goals>

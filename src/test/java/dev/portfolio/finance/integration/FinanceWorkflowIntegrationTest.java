@@ -494,7 +494,7 @@ class FinanceWorkflowIntegrationTest {
 
         MvcResult loginResult =
                 mockMvc.perform(
-                                post("/api/auth/login")
+                                dev.portfolio.finance.support.AuthRequests.protectedAuth(post("/api/auth/login"))
                                         .contentType(
                                                 MediaType.APPLICATION_JSON
                                         )

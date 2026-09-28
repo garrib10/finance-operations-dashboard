@@ -31,7 +31,10 @@ class AccountControllerTest {
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new AccountController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new AccountController(service, new dev.portfolio.finance.security.RefreshCookieService(
+                new dev.portfolio.finance.config.AuthSessionProperties(java.time.Duration.ofMinutes(5), java.time.Duration.ofDays(30),
+                        true, dev.portfolio.finance.config.AuthSessionProperties.SameSite.LAX, true, java.time.Duration.ofDays(7)),
+                java.time.Clock.systemUTC())))
                 .setControllerAdvice(new AccountExceptionHandler(new GlobalExceptionHandler())).build();
     }
 

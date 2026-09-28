@@ -76,6 +76,11 @@ class AccountPhotoWorkflowIntegrationTest {
                 .timeout(java.time.Duration.ofSeconds(30)).header("Content-Type", type)
                 .method(method, HttpRequest.BodyPublishers.ofByteArray(body));
         if (bearer != null) builder.header("Authorization", "Bearer " + bearer);
+        if (path.equals("/api/auth/login")) {
+            builder.header("Origin", dev.portfolio.finance.support.AuthRequests.ORIGIN)
+                    .header(dev.portfolio.finance.support.AuthRequests.CSRF_HEADER,
+                            dev.portfolio.finance.support.AuthRequests.CSRF_VALUE);
+        }
         return client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
 

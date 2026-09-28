@@ -40,20 +40,36 @@ Successful registration redirects to `/login`. Successful login returns to the a
 
 ## Authentication behavior
 
-FinTrack uses stateless JWT access-token authentication.
+FinTrack uses short-lived (five-minute) JWT access tokens plus a refresh-token
+session (issue #18). See [authentication session lifecycle](auth-session-lifecycle.md).
 
-The frontend stores the access token in browser `localStorage` using `fintrack_access_token`.
+The access token is held **only in JavaScript memory**; nothing is written to
+`localStorage`, `sessionStorage`, or cookies by the frontend. A legacy
+`fintrack_access_token` key left by earlier releases is deleted on startup and never
+reused. The refresh token is an `HttpOnly` cookie that JavaScript cannot read.
 
-On application startup:
+On application startup (and every page reload):
 
-1. The frontend checks for a stored access token.
-2. If no token exists, session restoration finishes without authentication.
-3. If a token exists, the frontend calls `GET /api/auth/me`.
-4. If the request succeeds, the authenticated user is restored.
-5. An authenticated 401 for the current token removes it and clears the user.
-6. A network/server restoration failure preserves the token, shows a recovery message, and offers Retry or Sign in again; protected content stays hidden.
+1. The frontend calls `POST /api/auth/refresh` (credentialed, with `X-FinTrack-CSRF: 1`).
+2. On success it stores the returned access token in memory and calls `GET /api/auth/me`.
+3. If both succeed, the authenticated user is restored.
+4. A refresh 401 means there is no session: restoration finishes signed out, with no alert.
+5. A network/server failure (for example 503) shows a recovery message with Retry;
+   protected content stays hidden and no in-memory token is kept.
 
-Logging out removes the stored token and clears the authenticated user.
+Login sends credentials with `credentials: "include"` and `X-FinTrack-CSRF: 1`; login
+failures are never refreshed or retried. Logout calls `POST /api/auth/logout` and
+signs out only after the server confirms (204). If logout cannot be confirmed, the
+user stays signed in and sees "We couldn’t sign you out. Check your connection and
+try again."
+
+A successful password change signs the user out on every tab and shows "Your
+password was changed. Please sign in again." on the login page. An expired session
+shows "Your session has expired. Please sign in again."; a logout in another tab
+shows "You were signed out in another tab."
+
+A request rejected with `401` and code `ACCESS_TOKEN_EXPIRED` refreshes once and is
+retried once (including photo uploads). Other 401s sign the tab out.
 
 Authenticated API 401 responses invalidate the current session centrally; protected
 routes redirect to Login. A late 401 belonging to a different, previous token does
@@ -265,8 +281,11 @@ The test run must fail with a clear environment-readiness message if the backend
 
 Until corresponding improvements are deployed:
 
-- Password changes and browser logout do not revoke already-issued JWTs (issue #18)
-- Temporary restoration failures require explicit retry; they preserve the stored token
+- Already-issued access JWTs stay valid for up to five minutes after logout or a
+  password change (no access-token denylist)
+- Temporary restoration failures require explicit retry
+- Two tabs refreshing at the same instant are serialized with Web Locks where the
+  browser supports it; automation should not depend on exact refresh timing
 - Check for persisted records before retrying create actions
 - Do not expect automatic account cleanup
 - Verify current-month and timezone-sensitive behavior against production

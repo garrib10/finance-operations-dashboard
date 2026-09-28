@@ -21,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @ExtendWith(MockitoExtension.class)
 class AccountServiceTest {
     @Mock private UserRepository users;
+    @Mock private RefreshSessionService refreshSessions;
     private final PasswordEncoder encoder = new BCryptPasswordEncoder();
     private AccountService service;
     private User user;
@@ -30,12 +31,20 @@ class AccountServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AccountService(users, encoder, dev.portfolio.finance.support.ProfilePhotoTestSupport.mapper());
+        service = new AccountService(users, encoder, dev.portfolio.finance.support.ProfilePhotoTestSupport.mapper(),
+                refreshSessions);
         user = new User("First", "Last", EMAIL, encoder.encode(OLD));
     }
 
     private void found() {
         when(users.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+    }
+
+    /** Password changes resolve the ID, then reload the user under the row lock. */
+    private void locked() {
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", 5L);
+        when(users.findIdByEmail(EMAIL)).thenReturn(Optional.of(5L));
+        when(users.findByIdForUpdate(5L)).thenReturn(Optional.of(user));
     }
 
     private void saved() {
@@ -81,8 +90,10 @@ class AccountServiceTest {
 
     @Test
     void encodesExactNewPasswordAndPreservesOtherFields() {
-        found();
-        service.changePassword(EMAIL, new ChangePasswordRequest(OLD, NEXT));
+        locked();
+        when(refreshSessions.revokeAllForUser(5L, dev.portfolio.finance.entity.RefreshSessionRevocationReason.PASSWORD_CHANGE))
+                .thenReturn(2);
+        assertThat(service.changePassword(EMAIL, new ChangePasswordRequest(OLD, NEXT))).isEqualTo(2);
         assertThat(encoder.matches(OLD, user.getPasswordHash())).isFalse();
         assertThat(encoder.matches(NEXT, user.getPasswordHash())).isTrue();
         assertThat(encoder.matches(NEXT.trim(), user.getPasswordHash())).isFalse();
@@ -91,11 +102,17 @@ class AccountServiceTest {
         assertThat(user.getDateFormat()).isEqualTo(DateFormatPreference.MEDIUM);
         assertThat(user.getTransactionPageSize()).isEqualTo(10);
         verify(users).save(user);
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(users, refreshSessions);
+        order.verify(users).findByIdForUpdate(5L);
+        order.verify(users).save(user);
+        order.verify(refreshSessions).revokeAllForUser(5L,
+                dev.portfolio.finance.entity.RefreshSessionRevocationReason.PASSWORD_CHANGE);
+        verify(users, never()).findByEmail(any());
     }
 
     @Test
     void rejectsIncorrectCurrentPasswordWithoutWriting() {
-        found();
+        locked();
         user.changeProfilePhotoKey(dev.portfolio.finance.support.ProfilePhotoTestSupport.KEY);
         String hash = user.getPasswordHash();
         assertThatThrownBy(() -> service.changePassword(EMAIL, new ChangePasswordRequest("wrong", NEXT)))
@@ -103,11 +120,12 @@ class AccountServiceTest {
                         ex -> assertThat(ex.getFields()).containsEntry("currentPassword", "Current password is incorrect"));
         assertThat(user.getPasswordHash()).isEqualTo(hash);
         verify(users, never()).save(any());
+        verify(refreshSessions, never()).revokeAllForUser(any(), any());
     }
 
     @Test
     void rejectsReusedPasswordWithoutWriting() {
-        found();
+        locked();
         user.changeProfilePhotoKey(dev.portfolio.finance.support.ProfilePhotoTestSupport.KEY);
         String hash = user.getPasswordHash();
         assertThatThrownBy(() -> service.changePassword(EMAIL, new ChangePasswordRequest(OLD, OLD)))
@@ -115,11 +133,13 @@ class AccountServiceTest {
                         ex -> assertThat(ex.getFields()).containsKey("newPassword"));
         assertThat(user.getPasswordHash()).isEqualTo(hash);
         verify(users, never()).save(any());
+        verify(refreshSessions, never()).revokeAllForUser(any(), any());
     }
 
     @Test
     void unknownPrincipalIsHandledSafely() {
         when(users.findByEmail(EMAIL)).thenReturn(Optional.empty());
+        when(users.findIdByEmail(EMAIL)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.updateProfile(EMAIL, new UpdateProfileRequest("A", "B", "C")))
                 .isInstanceOf(InvalidCredentialsException.class).hasMessage("Authentication is required to access this resource");
         assertThatThrownBy(() -> service.updatePreferences(EMAIL, new UpdatePreferencesRequest(DateFormatPreference.ISO, 25)))
@@ -127,5 +147,6 @@ class AccountServiceTest {
         assertThatThrownBy(() -> service.changePassword(EMAIL, new ChangePasswordRequest(OLD, NEXT)))
                 .isInstanceOf(InvalidCredentialsException.class);
         verify(users, never()).save(any());
+        verify(refreshSessions, never()).revokeAllForUser(any(), any());
     }
 }

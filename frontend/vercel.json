@@ -1,7 +1,12 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/api/:fintrackPath*",
+      "destination": "/api/proxy"
+    },
+    {
+      "source": "/((?!api(?:/|$)).*)",
       "destination": "/"
     }
   ]

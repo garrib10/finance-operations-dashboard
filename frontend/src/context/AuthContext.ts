@@ -12,8 +12,13 @@ export interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   restorationError: string | null;
+  /** Why the user was signed out (expired session, password change, another tab). */
+  sessionNotice: string | null;
   login: (request: LoginRequest) => Promise<void>;
-  logout: () => void;
+  /** Resolves after the server confirms logout; rejects without signing out otherwise. */
+  logout: () => Promise<void>;
+  /** Ends this session after the server changed the password and revoked every family. */
+  completePasswordChange: () => void;
   retrySessionRestore: () => Promise<void>;
 }
 

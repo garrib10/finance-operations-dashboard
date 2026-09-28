@@ -18,9 +18,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/account")
 public class AccountController {
     private final AccountService accountService;
+    private final dev.portfolio.finance.security.RefreshCookieService refreshCookieService;
 
-    public AccountController(AccountService accountService) {
+    public AccountController(AccountService accountService,
+                             dev.portfolio.finance.security.RefreshCookieService refreshCookieService) {
         this.accountService = accountService;
+        this.refreshCookieService = refreshCookieService;
     }
 
     @PutMapping("/profile")
@@ -39,6 +42,10 @@ public class AccountController {
     public ResponseEntity<Void> changePassword(
             Authentication authentication, @Valid @RequestBody ChangePasswordRequest request) {
         accountService.changePassword(authentication.getName(), request);
-        return ResponseEntity.noContent().build();
+        // Reached only after the password and revocations commit; any failure above
+        // returns an error without touching the cookie.
+        return ResponseEntity.noContent()
+                .header(org.springframework.http.HttpHeaders.SET_COOKIE, refreshCookieService.clear())
+                .build();
     }
 }

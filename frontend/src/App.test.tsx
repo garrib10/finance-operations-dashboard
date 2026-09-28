@@ -21,7 +21,7 @@ function renderApp(path: string, authenticated = true) {
     isAuthenticated: authenticated,
     isLoading: false,
     restorationError: null,
-    login: vi.fn(), logout: vi.fn(), retrySessionRestore: vi.fn(),
+    login: vi.fn(), logout: vi.fn(), retrySessionRestore: vi.fn(), sessionNotice: null, completePasswordChange: vi.fn(),
     updateProfile: vi.fn(), updatePreferences: vi.fn(), uploadProfilePhoto: vi.fn(), removeProfilePhoto: vi.fn(),
   };
   return render(<AuthContext.Provider value={context}>

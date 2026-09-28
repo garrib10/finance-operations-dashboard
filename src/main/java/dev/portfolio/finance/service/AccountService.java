@@ -5,6 +5,7 @@ import dev.portfolio.finance.dto.account.UpdatePreferencesRequest;
 import dev.portfolio.finance.dto.account.UpdateProfileRequest;
 import dev.portfolio.finance.dto.auth.UserResponse;
 import dev.portfolio.finance.dto.auth.UserResponseMapper;
+import dev.portfolio.finance.entity.RefreshSessionRevocationReason;
 import dev.portfolio.finance.entity.User;
 import dev.portfolio.finance.exception.account.AccountValidationException;
 import dev.portfolio.finance.exception.auth.InvalidCredentialsException;
@@ -18,11 +19,14 @@ public class AccountService {
     private final UserResponseMapper responseMapper;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RefreshSessionService refreshSessionService;
 
-    public AccountService(UserRepository userRepository, PasswordEncoder passwordEncoder, UserResponseMapper responseMapper) {
+    public AccountService(UserRepository userRepository, PasswordEncoder passwordEncoder,
+                          UserResponseMapper responseMapper, RefreshSessionService refreshSessionService) {
         this.responseMapper = responseMapper;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.refreshSessionService = refreshSessionService;
     }
 
     @Transactional
@@ -39,9 +43,19 @@ public class AccountService {
         return responseMapper.toResponse(userRepository.save(user));
     }
 
+    /**
+     * Locks the user row (the same lock as login/refresh/logout), verifies against the
+     * locked hash, stores the new hash, and revokes every refresh family, all in one
+     * transaction. Validation failures throw before any write, so nothing changes.
+     * Already-issued access JWTs remain valid until they expire (at most five minutes).
+     * Returns the number of families revoked.
+     */
     @Transactional
-    public void changePassword(String authenticatedEmail, ChangePasswordRequest request) {
-        User user = resolveUser(authenticatedEmail);
+    public int changePassword(String authenticatedEmail, ChangePasswordRequest request) {
+        Long userId = userRepository.findIdByEmail(authenticatedEmail)
+                .orElseThrow(() -> new InvalidCredentialsException("Authentication is required to access this resource"));
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new InvalidCredentialsException("Authentication is required to access this resource"));
         if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
             throw new AccountValidationException("currentPassword", "Current password is incorrect");
         }
@@ -50,6 +64,7 @@ public class AccountService {
         }
         user.changePasswordHash(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);
+        return refreshSessionService.revokeAllForUser(userId, RefreshSessionRevocationReason.PASSWORD_CHANGE);
     }
 
     private User resolveUser(String authenticatedEmail) {

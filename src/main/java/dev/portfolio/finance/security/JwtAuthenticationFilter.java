@@ -12,8 +12,13 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+/** Bearer access tokens only; refresh cookies never authenticate a request. */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    /** Request attribute read by the entry point; set only for an expired, validly signed token. */
+    public static final String ACCESS_TOKEN_EXPIRED_ATTRIBUTE =
+            JwtAuthenticationFilter.class.getName() + ".ACCESS_TOKEN_EXPIRED";
 
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
@@ -40,27 +45,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        String token = authHeader.substring(7);
+        AccessTokenValidation result = jwtService.validate(authHeader.substring(7));
 
-        if (!jwtService.isTokenValid(token)) {
-            filterChain.doFilter(request, response);
-            return;
+        if (result.status() == AccessTokenValidation.Status.EXPIRED) {
+            request.setAttribute(ACCESS_TOKEN_EXPIRED_ATTRIBUTE, Boolean.TRUE);
         }
 
-        String email;
-        try {
-            email = jwtService.extractEmail(token);
-        } catch (io.jsonwebtoken.JwtException | IllegalArgumentException ex) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        if (email != null
+        if (result.isValid()
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
 
             UserDetails userDetails;
             try {
-                userDetails = userDetailsService.loadUserByUsername(email);
+                userDetails = userDetailsService.loadUserByUsername(result.email());
             } catch (UsernameNotFoundException ex) {
                 SecurityContextHolder.clearContext();
                 filterChain.doFilter(request, response);

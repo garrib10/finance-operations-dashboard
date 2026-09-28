@@ -75,7 +75,7 @@ class AccountWorkflowIntegrationTest {
     }
 
     private String login(String email, String password, int status) throws Exception {
-        return mvc.perform(post("/api/auth/login").contentType("application/json")
+        return mvc.perform(dev.portfolio.finance.support.AuthRequests.protectedAuth(post("/api/auth/login")).contentType("application/json")
                 .content(json(Map.of("email", email, "password", password))))
                 .andExpect(status().is(status)).andReturn().getResponse().getContentAsString();
     }
