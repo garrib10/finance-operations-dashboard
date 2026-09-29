@@ -45,7 +45,7 @@ describe("authToken", () => {
   });
 
   it("deletes a legacy localStorage token without restoring or reading it", () => {
-    window.localStorage.setItem("fintrack_access_token", SECRET);
+    window.localStorage.setItem("fintrack_access_token", "legacy-placeholder");
     window.localStorage.setItem("unrelated", "kept");
     const getItem = vi.spyOn(Storage.prototype, "getItem");
     const log = vi.spyOn(console, "log");
