@@ -23,6 +23,16 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      # coverage-v8 pins its vitest peer to an exact version, so they must move together
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+    ignore:
+      # typescript-eslint only supports typescript <6.1; revisit when it adds TS 7
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # Actions used by CI workflows
   - package-ecosystem: "github-actions"
