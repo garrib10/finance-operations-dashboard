@@ -1,13 +1,30 @@
-const TOKEN_KEY = "fintrack_access_token";
+/**
+ * The access token lives only in this module's memory. It is never persisted, so a
+ * reload loses it and the app restores the session through the refresh cookie.
+ * The refresh token itself is an HttpOnly cookie that JavaScript cannot read.
+ */
+let accessToken: string | null = null;
 
-export function getAuthToken(): string | null {
-  return window.localStorage.getItem(TOKEN_KEY);
+/** Key used by releases that stored the access token in localStorage. */
+const LEGACY_TOKEN_KEY = "fintrack_access_token";
+
+export function getAccessToken(): string | null {
+  return accessToken;
 }
 
-export function setAuthToken(token: string): void {
-  window.localStorage.setItem(TOKEN_KEY, token);
+export function setAccessToken(token: string): void {
+  accessToken = token;
 }
 
-export function removeAuthToken(): void {
-  window.localStorage.removeItem(TOKEN_KEY);
+export function clearAccessToken(): void {
+  accessToken = null;
+}
+
+/** Deletes a token left by an earlier release without reading, decoding, or reusing it. */
+export function removeLegacyAccessToken(): void {
+  try {
+    window.localStorage.removeItem(LEGACY_TOKEN_KEY);
+  } catch {
+    // Storage can be unavailable (privacy modes); there is nothing to remove then.
+  }
 }

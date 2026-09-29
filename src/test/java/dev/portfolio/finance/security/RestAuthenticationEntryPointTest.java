@@ -85,4 +85,24 @@ class RestAuthenticationEntryPointTest {
                 )
         );
     }
+
+    @Test
+    void genericFailureUsesAuthenticationRequiredCode() throws Exception {
+        entryPoint.commence(request, response, new BadCredentialsException("x"));
+
+        assertTrue(response.getContentAsString().contains("\"code\":\"AUTHENTICATION_REQUIRED\""));
+    }
+
+    @Test
+    void expiredAccessTokenUsesStableExpiredCode() throws Exception {
+        request.setAttribute(JwtAuthenticationFilter.ACCESS_TOKEN_EXPIRED_ATTRIBUTE, Boolean.TRUE);
+
+        entryPoint.commence(request, response, new BadCredentialsException("jwt parser detail"));
+
+        String body = response.getContentAsString();
+        assertEquals(401, response.getStatus());
+        assertTrue(body.contains("\"code\":\"ACCESS_TOKEN_EXPIRED\""));
+        assertTrue(body.contains("\"message\":\"Access token has expired\""));
+        assertTrue(!body.contains("jwt parser detail") && !body.contains("Exception"));
+    }
 }

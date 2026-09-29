@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,8 +29,13 @@ class UserServiceTest {
     @Mock
     private CategoryInitializationService categoryInitializationService;
 
-    @InjectMocks
     private UserService userService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        userService = new UserService(userRepository, passwordEncoder, categoryInitializationService,
+                dev.portfolio.finance.support.ProfilePhotoTestSupport.mapper());
+    }
 
     @Test
     void shouldRegisterUserWithNormalizedEmailAndHashedPassword() {
@@ -41,7 +45,7 @@ class UserServiceTest {
                         "  Test  ",
                         "  User  ",
                         "  TEST@EXAMPLE.COM  ",
-                        "Password123!"
+                        " River meadow lantern 42! "
                 );
 
         String normalizedEmail =
@@ -53,7 +57,7 @@ class UserServiceTest {
         when(userRepository.existsByEmail(normalizedEmail))
                 .thenReturn(false);
 
-        when(passwordEncoder.encode("Password123!"))
+        when(passwordEncoder.encode(" River meadow lantern 42! "))
                 .thenReturn(passwordHash);
 
         when(userRepository.save(
@@ -109,11 +113,16 @@ class UserServiceTest {
                 response.email()
         );
 
+        assertEquals("Test User", response.displayName());
+        org.junit.jupiter.api.Assertions.assertNull(response.profilePhotoUrl());
+        assertEquals(dev.portfolio.finance.entity.DateFormatPreference.MEDIUM, response.preferences().dateFormat());
+        assertEquals(10, response.preferences().transactionPageSize());
+
         verify(userRepository)
                 .existsByEmail(normalizedEmail);
 
         verify(passwordEncoder)
-                .encode("Password123!");
+                .encode(" River meadow lantern 42! ");
 
         verify(categoryInitializationService)
                 .createDefaultCategories(savedUser);
@@ -127,7 +136,7 @@ class UserServiceTest {
                         "Test",
                         "User",
                         "  TEST@EXAMPLE.COM  ",
-                        "Password123!"
+                        " River meadow lantern 42! "
                 );
 
         String normalizedEmail =

@@ -1,6 +1,6 @@
 # FinTrack Application Testing Contract
 
-This document defines the deployed FinTrack behavior that automated tests may rely on.
+This document defines the branch implementation contract. Confirm the deployed revision before applying these expectations to a hosted environment; issue #16 is not deployed by this documentation update.
 
 The Selenium automation suite is maintained in a separate repository. FinTrack does not include Selenium dependencies, WebDriver configuration, or Selenium test code.
 
@@ -28,33 +28,54 @@ Automation must use environment variables for deployed URLs rather than hard-cod
 | `/`               | Protected   | Displays the Dashboard                               |
 | `/transactions`   | Protected   | Displays transaction management                      |
 | `/budgets`        | Protected   | Displays budget management                           |
+| `/profile`        | Protected   | Edit own names; view read-only email                 |
+| `/settings`       | Protected   | Edit preferences and change password                 |
 | Any unknown route | Conditional | Redirects to `/`, which then requires authentication |
 
 The Dashboard route is `/`, not `/dashboard`.
 
 When an unauthenticated user opens a protected route, FinTrack redirects the user to `/login`.
 
-Successful registration redirects to `/login`. Successful login redirects to `/`.
+Successful registration redirects to `/login`. Successful login returns to the attempted protected route (including query/hash), or `/` when no destination was saved.
 
 ## Authentication behavior
 
-FinTrack uses stateless JWT access-token authentication.
+FinTrack uses short-lived (five-minute) JWT access tokens plus a refresh-token
+session (issue #18). See [authentication session lifecycle](auth-session-lifecycle.md).
 
-The frontend stores the access token in browser `localStorage` using `fintrack_access_token`.
+The access token is held **only in JavaScript memory**; nothing is written to
+`localStorage`, `sessionStorage`, or cookies by the frontend. A legacy
+`fintrack_access_token` key left by earlier releases is deleted on startup and never
+reused. The refresh token is an `HttpOnly` cookie that JavaScript cannot read.
 
-On application startup:
+On application startup (and every page reload):
 
-1. The frontend checks for a stored access token.
-2. If no token exists, session restoration finishes without authentication.
-3. If a token exists, the frontend calls `GET /api/auth/me`.
-4. If the request succeeds, the authenticated user is restored.
-5. If the request fails, the current implementation removes the token and clears the user.
+1. The frontend calls `POST /api/auth/refresh` (credentialed, with `X-FinTrack-CSRF: 1`).
+2. On success it stores the returned access token in memory and calls `GET /api/auth/me`.
+3. If both succeed, the authenticated user is restored.
+4. A refresh 401 means there is no session: restoration finishes signed out, with no alert.
+5. A network/server failure (for example 503) shows a recovery message with Retry;
+   protected content stays hidden and no in-memory token is kept.
 
-Logging out removes the stored token and clears the authenticated user.
+Login sends credentials with `credentials: "include"` and `X-FinTrack-CSRF: 1`; login
+failures are never refreshed or retried. Logout calls `POST /api/auth/logout` and
+signs out only after the server confirms (204). If logout cannot be confirmed, the
+user stays signed in and sees "We couldn’t sign you out. Check your connection and
+try again."
 
-The current implementation treats every `/api/auth/me` restoration failure as an invalid session, including temporary network and server failures. Automated tests must follow this behavior until session-restoration resilience is implemented.
+A successful password change signs the user out on every tab and shows "Your
+password was changed. Please sign in again." on the login page. An expired session
+shows "Your session has expired. Please sign in again."; a logout in another tab
+shows "You were signed out in another tab."
 
-Authenticated API 401 responses are not yet handled globally by redirecting every active page to Login. Selenium tests must not assume that every API 401 causes an automatic redirect until the corresponding enhancement is deployed.
+A request rejected with `401` and code `ACCESS_TOKEN_EXPIRED` refreshes once and is
+retried once (including photo uploads). Other 401s sign the tab out.
+
+Authenticated API 401 responses invalidate the current session centrally; protected
+routes redirect to Login. A late 401 belonging to a different, previous token does
+not invalidate the newer session. Account responses from a previous session and
+restoration responses predating a successful save cannot replace newer user state.
+Incorrect current-password errors use 400 and keep the session active.
 
 Invalid credentials submitted through the Login form remain a Login form error.
 
@@ -70,12 +91,12 @@ All other application endpoints require a valid JWT.
 
 ## Registration validation
 
-| Field      | Rule                                          |
-| ---------- | --------------------------------------------- |
-| First name | Required; maximum 100 characters              |
-| Last name  | Required; maximum 100 characters              |
-| Email      | Required; valid email; maximum 255 characters |
-| Password   | Required; between 8 and 72 characters         |
+| Field      | Rule                                                              |
+| ---------- | ----------------------------------------------------------------- |
+| First name | Required; maximum 100 characters                                  |
+| Last name  | Required; maximum 100 characters                                  |
+| Email      | Required; valid email; maximum 255 characters                     |
+| Password   | Required; at least 15 Unicode code points, at most 72 UTF-8 bytes |
 
 Email addresses must be unique. Successful-registration automation must use a unique fictional email address.
 
@@ -108,7 +129,7 @@ Authenticated users can create, view, edit, delete, search, filter, sort, and pa
 
 Supported transaction types are `INCOME` and `EXPENSE`.
 
-Transaction records are user-owned. A user must not be able to access another userâ€™s transactions through record IDs.
+Transaction records are user-owned. A user must not be able to access another user's transactions through record IDs.
 
 ### Transaction test data
 
@@ -116,7 +137,7 @@ Automation should use unique descriptions such as `selenium-<run-id>-income` and
 
 Before retrying a failed create action, automation must confirm whether the record was already persisted. This prevents duplicate data when persistence succeeds but the UI refresh fails.
 
-Until deterministic secondary sorting is deployed, tests should avoid creating transactions with tied values when asserting exact ordering.
+Transactions with tied sort values use transaction ID as a secondary key in the same direction.
 
 ## Budget behavior
 
@@ -144,7 +165,7 @@ Automation should reserve category, month, and year combinations for individual 
 The Budget Period selector includes:
 
 - The default supported year range
-- Every year represented by the userâ€™s saved budgets
+- Every year represented by the user's saved budgets
 - No duplicate year options
 - Years sorted numerically
 
@@ -174,11 +195,11 @@ Dashboard data is scoped to the authenticated user.
 | Total Income         | Sum of all `INCOME` transactions                                                              |
 | Total Expenses       | Sum of all `EXPENSE` transactions                                                             |
 | Current Balance      | Total Income minus Total Expenses                                                             |
-| Monthly Income       | Sum of `INCOME` transactions in the serverâ€™s current calendar month                         |
-| Monthly Expenses     | Sum of `EXPENSE` transactions in the serverâ€™s current calendar month                        |
+| Monthly Income       | Sum of `INCOME` transactions in the server's current calendar month                           |
+| Monthly Expenses     | Sum of `EXPENSE` transactions in the server's current calendar month                          |
 | Recent Transactions  | Up to five transactions ordered by transaction date descending, then creation time descending |
 | Spending by Category | Current-month `EXPENSE` totals grouped by category                                            |
-| Monthly Budgets      | Budgets matching the serverâ€™s current month and year                                        |
+| Monthly Budgets      | Budgets matching the server's current month and year                                          |
 
 ## Stable automation selectors
 
@@ -201,7 +222,7 @@ Tests should not depend on generated CSS class names, DOM position, or visual la
 
 ## Timezone and date assumptions
 
-FinTrack uses Java `LocalDate.now()` for server-side current-month calculations. The resulting current date depends on the Railway runtimeâ€™s configured timezone, which may differ from the machine executing Selenium.
+FinTrack uses Java `LocalDate.now()` for server-side current-month calculations. The resulting current date depends on the Railway runtime's configured timezone, which may differ from the machine executing Selenium.
 
 Therefore:
 
@@ -260,11 +281,45 @@ The test run must fail with a clear environment-readiness message if the backend
 
 Until corresponding improvements are deployed:
 
-- Do not expect every authenticated API 401 to redirect automatically
-- Temporary session-restoration failures remove the stored token
-- Avoid tied transaction sort values when testing exact ordering
+- Already-issued access JWTs stay valid for up to five minutes after logout or a
+  password change (no access-token denylist)
+- Temporary restoration failures require explicit retry
+- Two tabs refreshing at the same instant are serialized with Web Locks where the
+  browser supports it; automation should not depend on exact refresh timing
 - Check for persisted records before retrying create actions
 - Do not expect automatic account cleanup
 - Verify current-month and timezone-sensitive behavior against production
 
 When these behaviors change, update this contract and the corresponding Selenium expectations in the same delivery cycle.
+
+## Profile and account settings contract
+
+`GET /api/auth/me` and both account PUT responses return the canonical user:
+`id`, `firstName`, `lastName`, `displayName`, `email`, `createdAt`, and
+`preferences` containing `dateFormat` and numeric `transactionPageSize`.
+All account operations require bearer authentication and derive ownership from the
+principal. No target user ID or email is accepted as an editable field.
+
+- `PUT /api/account/profile`: all three names are required, trimmed, and at most
+  100 Java/JavaScript string units. Email is read-only and excluded from requests.
+- `PUT /api/account/preferences`: `MEDIUM` or `ISO`, and numeric 10, 25, or 50.
+  Both PUTs return 200 and update AuthContext immediately; failures retain edits.
+- Date formatting applies to Dashboard recent transactions and Transaction rows,
+  preserving date-only calendar values. Page size applies to all Transaction list
+  requests; a change reloads page zero with current filters and sorting.
+- `POST /api/account/password`: sends only `currentPassword` and `newPassword`;
+  confirmation stays in the browser. Success is 204, clears all password inputs,
+  and leaves the session active. The old password then fails login; the new one succeeds.
+- New passwords follow registration policy: at least 15 Unicode code points,
+  at most 72 UTF-8 bytes, no trimming/normalization or composition requirement.
+  All-blank/common passwords and current-password reuse are rejected.
+- Incorrect current password and validation failures return safe field-specific 400
+  errors. Genuine authentication failures retain centralized 401 handling.
+- Logout and password changes do not revoke previously issued JWTs. Refresh-token
+  rotation/revocation belongs to issue #18.
+
+Prefer labels such as `Display name`, `Date format`, `Transactions per page`,
+`Current password`, `New password`, and `Confirm new password`. The names of save,
+reset, and visibility buttons are stable accessible selectors. Do not assert colors
+alone: requirement indicators include checkmarks and accessible Met/Not met text.
+See [the staging checklist](frontend-testing.md) for manual accessibility coverage.
