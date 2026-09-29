@@ -1,0 +1,82 @@
+# Account API
+
+All account endpoints require `Authorization: Bearer <access token>`. The backend
+resolves the user exclusively from the authenticated principal's email. Request
+body properties, query parameters, and headers cannot select another account.
+Extra JSON properties are ignored under the existing mapper configuration; only
+the explicitly defined DTO fields are applied. Email cannot be changed.
+
+| Method | Endpoint                   | Request fields                         | Success                      |
+| ------ | -------------------------- | -------------------------------------- | ---------------------------- |
+| GET    | `/api/auth/me`             | None                                   | 200, canonical user response |
+| PUT    | `/api/account/profile`     | `firstName`, `lastName`, `displayName` | 200, canonical user response |
+| PUT    | `/api/account/preferences` | `dateFormat`, `transactionPageSize`    | 200, canonical user response |
+| POST   | `/api/account/password`    | `currentPassword`, `newPassword`       | 204, empty body              |
+| PUT    | `/api/account/photo`       | Multipart file part `photo` only       | 200, canonical user response |
+| DELETE | `/api/account/photo`       | None                                   | 200, canonical user response |
+
+The canonical user response contains `id`, `firstName`, `lastName`, `displayName`,
+`email`, `createdAt`, `preferences` (`dateFormat`, `transactionPageSize`), and
+`profilePhotoUrl` (an HTTPS URL, or `null` when no photo is stored or the feature is
+disabled). Photo uploads accept one static JPEG or PNG up to 2 MiB; removal is
+idempotent. Photo errors return 400, 413, 415, or 503; see
+[Profile-photo security](profile-photo-security.md) for limits and failure behavior.
+Password values, hashes, tokens, and authorization headers are never included in
+account responses. The public login endpoint intentionally returns an access token.
+
+Both PUT operations require all fields in their editable subset. Names are
+trimmed, required, and limited to 100 characters. Preferences support `MEDIUM`
+or `ISO` for date format, and 10, 25, or 50 for transaction page size. Updates
+preserve other account fields and relationships. The existing entity lifecycle
+preserves `createdAt` and advances `updatedAt` on writes.
+
+Password changes verify the exact current password with BCrypt and reject reuse
+of the current password. New passwords use the shared registration policy:
+minimum 15 Unicode code points, maximum 72 UTF-8 bytes, spaces and Unicode
+allowed, and a local common-password blocklist. Passwords are not trimmed or
+normalized. There are no uppercase, digit, or symbol composition requirements.
+Existing shorter passwords remain eligible for login and current-password checks.
+
+## Errors
+
+Validation errors return HTTP 400 with the existing envelope:
+
+```json
+{
+  "timestamp": "2026-09-25T12:00:00",
+  "status": 400,
+  "error": "Validation Failed",
+  "fields": { "currentPassword": "Current password is incorrect" }
+}
+```
+
+Password reuse produces `fields.newPassword`. Neither error returns 401, so a
+frontend session must remain active. Invalid fields return field errors; malformed
+JSON returns a safe 400 message. Unexpected account failures return a generic 500
+message. Missing, malformed, invalid, or expired authentication returns the normal
+401 envelope. A token referring to a user who no longer exists also returns 401.
+
+Do not enable DEBUG logging for Spring's ExceptionHandlerExceptionResolver or
+HandlerMethod loggers: validation and argument-resolution parse errors can contain
+rejected credentials. Both are pinned at INFO even when broader web DEBUG is enabled. Credential request DTOs and
+the login response redact secrets in `toString()`; no account request-body logging
+is introduced.
+
+## Token and concurrency limitations
+
+As of issue #18, a successful password change (`204`, empty body, unchanged
+contract) also revokes **every** refresh-session family for the user with reason
+`PASSWORD_CHANGE` and clears the refresh cookie. The user must sign in again on every
+device. The password update and the revocations commit or roll back together; a
+failed change (wrong current password, invalid new password, or a database error)
+changes nothing and does not clear the cookie. Already-issued access JWTs are
+stateless and remain valid until they expire, at most five minutes later. Profile,
+preference, and profile-photo changes do not revoke sessions. See the
+[authentication session lifecycle](auth-session-lifecycle.md#password-change).
+
+Password changes lock the user row, verify against the locked hash, and revoke in the
+same transaction, so overlapping password changes and logins are serialized: after a
+change commits, the old password cannot authenticate and no session created with it
+remains active. Hibernate updates only dirty user columns, preventing a profile save
+from rewriting unrelated credentials. Profile and preference edits still use
+last-writer-wins semantics; no optimistic locking or token-version field is introduced.

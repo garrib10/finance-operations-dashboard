@@ -68,7 +68,11 @@ describe("ProtectedRoute", () => {
       restorationError: null,
       login: vi.fn(),
       logout: vi.fn(),
-      retrySessionRestore: vi.fn(async () => undefined),
+      updateProfile: vi.fn(),
+      updatePreferences: vi.fn(),
+      uploadProfilePhoto: vi.fn(),
+      removeProfilePhoto: vi.fn(),
+      retrySessionRestore: vi.fn(async () => undefined), sessionNotice: null, completePasswordChange: vi.fn(),
     });
 
     renderProtectedRoute();
@@ -85,7 +89,11 @@ describe("ProtectedRoute", () => {
       restorationError: null,
       login: vi.fn(),
       logout: vi.fn(),
-      retrySessionRestore: vi.fn(async () => undefined),
+      updateProfile: vi.fn(),
+      updatePreferences: vi.fn(),
+      uploadProfilePhoto: vi.fn(),
+      removeProfilePhoto: vi.fn(),
+      retrySessionRestore: vi.fn(async () => undefined), sessionNotice: null, completePasswordChange: vi.fn(),
     });
 
     render(
@@ -115,15 +123,22 @@ describe("ProtectedRoute", () => {
         id: 1,
         firstName: "Demo",
         lastName: "User",
+        displayName: "Demo User",
+        preferences: { dateFormat: "MEDIUM" as const, transactionPageSize: 10 as const },
         email: "demo@fintrack.dev",
         createdAt: "2026-09-09T00:00:00",
+        profilePhotoUrl: null,
       },
       isAuthenticated: true,
       isLoading: false,
       restorationError: null,
       login: vi.fn(),
       logout: vi.fn(),
-      retrySessionRestore: vi.fn(async () => undefined),
+      updateProfile: vi.fn(),
+      updatePreferences: vi.fn(),
+      uploadProfilePhoto: vi.fn(),
+      removeProfilePhoto: vi.fn(),
+      retrySessionRestore: vi.fn(async () => undefined), sessionNotice: null, completePasswordChange: vi.fn(),
     });
 
     renderProtectedRoute();
@@ -140,7 +155,11 @@ describe("ProtectedRoute", () => {
         "We couldn’t restore your session. Check your connection and try again.",
       login: vi.fn(),
       logout: vi.fn(),
-      retrySessionRestore: vi.fn(async () => undefined),
+      updateProfile: vi.fn(),
+      updatePreferences: vi.fn(),
+      uploadProfilePhoto: vi.fn(),
+      removeProfilePhoto: vi.fn(),
+      retrySessionRestore: vi.fn(async () => undefined), sessionNotice: null, completePasswordChange: vi.fn(),
     });
 
     renderProtectedRoute();
@@ -177,7 +196,13 @@ describe("ProtectedRoute", () => {
         "We couldn’t restore your session. Check your connection and try again.",
       login: vi.fn(),
       logout: vi.fn(),
+      updateProfile: vi.fn(),
+      updatePreferences: vi.fn(),
+      uploadProfilePhoto: vi.fn(),
+      removeProfilePhoto: vi.fn(),
       retrySessionRestore,
+      sessionNotice: null,
+      completePasswordChange: vi.fn(),
     });
 
     renderProtectedRoute();
@@ -200,7 +225,11 @@ describe("ProtectedRoute", () => {
         "We couldn’t restore your session. Check your connection and try again.",
       login: vi.fn(),
       logout: vi.fn(),
-      retrySessionRestore: vi.fn(async () => undefined),
+      updateProfile: vi.fn(),
+      updatePreferences: vi.fn(),
+      uploadProfilePhoto: vi.fn(),
+      removeProfilePhoto: vi.fn(),
+      retrySessionRestore: vi.fn(async () => undefined), sessionNotice: null, completePasswordChange: vi.fn(),
     });
 
     renderProtectedRoute();

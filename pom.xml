@@ -6,7 +6,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.0</version>
+        <version>4.1.1</version>
         <relativePath />
     </parent>
     <groupId>dev.portfolio</groupId>
@@ -69,7 +69,7 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>3.0.0</version>
+            <version>3.1.1</version>
         </dependency>
 
         <!-- Spring Security -->
@@ -97,6 +97,18 @@
             <artifactId>jjwt-jackson</artifactId>
             <version>0.13.0</version>
             <scope>runtime</scope>
+        </dependency>
+        <!-- Provider adapter only; no SDK types escape the storage boundary. -->
+        <dependency>
+            <groupId>com.cloudinary</groupId>
+            <artifactId>cloudinary-http5</artifactId>
+            <version>2.4.0</version>
+        </dependency>
+        <!-- Read JPEG EXIF orientation before discarding metadata. -->
+        <dependency>
+            <groupId>com.drewnoakes</groupId>
+            <artifactId>metadata-extractor</artifactId>
+            <version>2.21.0</version>
         </dependency>
         <!-- Testing -->
         <!-- General testing:
@@ -141,6 +153,20 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Real MySQL for *IT integration tests (Failsafe); test scope only.
+             Versions come from the Spring Boot dependency BOM. -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-mysql</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Database migrations -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -162,11 +188,27 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
 
+            <!-- Integration tests (*IT.java, real MySQL via Testcontainers) run during
+                 integration-test and fail the build in verify. Surefire keeps running
+                 *Test/*Tests classes, so nothing runs twice. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- JaCoCo code coverage -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.14</version>
+                <version>0.8.15</version>
 
                 <executions>
 
@@ -188,6 +230,15 @@
                     <execution>
                         <id>report</id>
                         <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <!-- Regenerates the report after Failsafe so it covers unit and
+                         integration tests; both append to the same jacoco.exec. -->
+                    <execution>
+                        <id>report-with-integration-tests</id>
+                        <phase>post-integration-test</phase>
                         <goals>
                             <goal>report</goal>
                         </goals>

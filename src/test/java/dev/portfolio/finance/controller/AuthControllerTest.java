@@ -49,6 +49,12 @@ class AuthControllerTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private dev.portfolio.finance.service.RefreshSessionService refreshSessionService;
+
+    @Mock
+    private dev.portfolio.finance.security.RefreshCookieService refreshCookieService;
+
     private MockMvc mockMvc;
 
     private TestingAuthenticationToken authentication;
@@ -60,7 +66,10 @@ class AuthControllerTest {
                         userService,
                         authService,
                         jwtService,
-                        userRepository
+                        userRepository,
+                        dev.portfolio.finance.support.ProfilePhotoTestSupport.mapper(),
+                        refreshSessionService,
+                        refreshCookieService
                 );
 
         mockMvc =
@@ -88,7 +97,7 @@ class AuthControllerTest {
                   "firstName": "Test",
                   "lastName": "User",
                   "email": "test@example.com",
-                  "password": "Password123!"
+                  "password": "River meadow lantern 42!"
                 }
                 """;
 
@@ -97,6 +106,7 @@ class AuthControllerTest {
                         1L,
                         "Test",
                         "User",
+                        "Test User",
                         TEST_EMAIL,
                         LocalDateTime.of(
                                 2026,
@@ -104,7 +114,10 @@ class AuthControllerTest {
                                 8,
                                 12,
                                 0
-                        )
+                        ),
+                        new dev.portfolio.finance.dto.account.AccountPreferencesResponse(
+                                dev.portfolio.finance.entity.DateFormatPreference.MEDIUM, 10
+                        ), null
                 );
 
         when(userService.register(
@@ -198,23 +211,17 @@ class AuthControllerTest {
                 }
                 """;
 
-        User user =
-                new User(
-                        "Test",
-                        "User",
-                        TEST_EMAIL,
-                        "hashed-password"
-                );
-
-        when(authService.authenticate(
+        java.time.Instant expiresAt = java.time.Instant.parse("2026-10-27T12:00:00Z");
+        when(authService.login(
                 any(LoginRequest.class)
-        )).thenReturn(user);
+        )).thenReturn(new dev.portfolio.finance.service.RefreshSessionService.IssuedSession(
+                "test-jwt-token", "raw-refresh-value", expiresAt));
 
-        when(jwtService.generateToken(user))
-                .thenReturn("test-jwt-token");
+        when(refreshCookieService.issue("raw-refresh-value", expiresAt))
+                .thenReturn("fintrack_refresh=raw-refresh-value; Path=/api/auth; HttpOnly; SameSite=Lax");
 
-        when(jwtService.getExpirationMs())
-                .thenReturn(3600000L);
+        when(jwtService.getExpirationSeconds())
+                .thenReturn(300L);
 
         // Act + Assert
         mockMvc.perform(
@@ -235,16 +242,22 @@ class AuthControllerTest {
                 )
                 .andExpect(
                         jsonPath("$.expiresIn")
-                                .value(3600)
+                                .value(300)
+                )
+                .andExpect(
+                        org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                                .string("Set-Cookie", "fintrack_refresh=raw-refresh-value; Path=/api/auth; HttpOnly; SameSite=Lax")
+                )
+                .andExpect(
+                        org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                                .string(org.hamcrest.Matchers.not(
+                                        org.hamcrest.Matchers.containsString("raw-refresh-value")))
                 );
 
         verify(authService)
-                .authenticate(
+                .login(
                         any(LoginRequest.class)
                 );
-
-        verify(jwtService)
-                .generateToken(user);
     }
 
     @Test
@@ -259,7 +272,7 @@ class AuthControllerTest {
                 }
                 """;
 
-        when(authService.authenticate(
+        when(authService.login(
                 any(LoginRequest.class)
         )).thenThrow(
                 new InvalidCredentialsException(
@@ -275,7 +288,18 @@ class AuthControllerTest {
                 )
                 .andExpect(
                         status().isUnauthorized()
+                )
+                .andExpect(
+                        org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                                .doesNotExist("Set-Cookie")
                 );
+
+        verify(
+                refreshSessionService,
+                never()
+        ).startSession(
+                any(), any()
+        );
 
         verify(
                 jwtService,

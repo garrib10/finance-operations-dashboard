@@ -16,7 +16,37 @@ import dev.portfolio.finance.entity.User;
 class UserRepositoryTest {
 
     @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+
+    @Autowired
     private UserRepository userRepository;
+
+    @Test
+    void persistsAndClearsPhotoKeyWithoutChangingAccountFields() {
+        User user = new User("Photo", "User", "photo@example.com", "hashed-password");
+        assertThat(user.getProfilePhotoKey()).isNull();
+        user.updatePreferences(dev.portfolio.finance.entity.DateFormatPreference.ISO, 25);
+        user.changeProfilePhotoKey(dev.portfolio.finance.support.ProfilePhotoTestSupport.KEY);
+        userRepository.saveAndFlush(user);
+        entityManager.clear();
+        User loaded = userRepository.findByEmail(user.getEmail()).orElseThrow();
+        assertThat(loaded.getProfilePhotoKey()).isEqualTo(dev.portfolio.finance.support.ProfilePhotoTestSupport.KEY);
+        assertThat(new tools.jackson.databind.json.JsonMapper().writeValueAsString(loaded))
+                .doesNotContain("profilePhotoKey", dev.portfolio.finance.support.ProfilePhotoTestSupport.KEY);
+        var createdAt = loaded.getCreatedAt();
+        loaded.changeProfilePhotoKey(null);
+        userRepository.saveAndFlush(loaded);
+        entityManager.clear();
+        User cleared = userRepository.findByEmail(user.getEmail()).orElseThrow();
+        assertThat(cleared.getProfilePhotoKey()).isNull();
+        assertThat(cleared.getFirstName()).isEqualTo("Photo");
+        assertThat(cleared.getLastName()).isEqualTo("User");
+        assertThat(cleared.getDisplayName()).isEqualTo("Photo User");
+        assertThat(cleared.getPasswordHash()).isEqualTo("hashed-password");
+        assertThat(cleared.getDateFormat()).isEqualTo(dev.portfolio.finance.entity.DateFormatPreference.ISO);
+        assertThat(cleared.getTransactionPageSize()).isEqualTo(25);
+        assertThat(cleared.getCreatedAt()).isEqualTo(createdAt);
+    }
 
     @Test
     void shouldFindUserByEmail() {
@@ -28,7 +58,8 @@ class UserRepositoryTest {
                 "hashed-password"
         );
 
-        userRepository.save(user);
+        userRepository.saveAndFlush(user);
+        entityManager.clear();
 
         var result =
                 userRepository.findByEmail("test@example.com");
@@ -41,6 +72,10 @@ class UserRepositoryTest {
 
         assertThat(result.get().getFirstName())
                 .isEqualTo("Test");
+
+        assertThat(result.get().getDisplayName()).isEqualTo("Test User");
+        assertThat(result.get().getDateFormat()).isEqualTo(dev.portfolio.finance.entity.DateFormatPreference.MEDIUM);
+        assertThat(result.get().getTransactionPageSize()).isEqualTo(10);
 
         assertThat(result.get().getLastName())
                 .isEqualTo("User");

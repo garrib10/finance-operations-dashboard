@@ -25,7 +25,7 @@ class FinanceWorkflowIntegrationTest {
             "integration@example.com";
 
     private static final String TEST_PASSWORD =
-            "Password123!";
+            "River meadow lantern 42!";
 
     @Autowired
     private MockMvc mockMvc;
@@ -494,7 +494,7 @@ class FinanceWorkflowIntegrationTest {
 
         MvcResult loginResult =
                 mockMvc.perform(
-                                post("/api/auth/login")
+                                dev.portfolio.finance.support.AuthRequests.protectedAuth(post("/api/auth/login"))
                                         .contentType(
                                                 MediaType.APPLICATION_JSON
                                         )

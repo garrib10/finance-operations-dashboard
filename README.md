@@ -10,10 +10,11 @@
 ![Vitest](https://img.shields.io/badge/Vitest-4.1-6E9F18?logo=vitest&logoColor=white)
 ![Railway](https://img.shields.io/badge/Railway-0B0D0E?logo=railway&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Vercel-black?logo=vercel)
+![Cloudinary](https://img.shields.io/badge/Cloudinary-3448C5?logo=cloudinary&logoColor=white)
 
 FinTrack is a production-deployed full-stack personal finance application built with Java, Spring Boot, React, TypeScript, and MySQL. It provides secure account access, transaction and budget management, financial analytics, and a responsive dashboard.
 
-The project demonstrates layered backend architecture, stateless JWT authentication, user-scoped data access, automated testing, and full-stack deployment across Vercel and Railway.
+The project demonstrates layered backend architecture, short-lived JWTs with rotating refresh-token sessions, user-scoped data access, automated testing, and full-stack deployment across Vercel and Railway.
 
 > **Demo project:** FinTrack uses fictional financial data only. It does not connect to banks, process real transactions, or provide financial advice.
 
@@ -31,13 +32,17 @@ The project demonstrates layered backend architecture, stateless JWT authenticat
 ## Project Highlights
 
 - Full-stack React and Spring Boot application deployed through Vercel and Railway
-- Stateless JWT authentication with BCrypt password hashing
+- Five-minute JWT access tokens held only in memory, renewed through rotating
+  refresh tokens in a secure `HttpOnly` cookie, with reuse detection and revocation
+- Password changes sign out every device; multi-tab sessions stay in sync
+- Same-origin Vercel `/api` proxy, so the refresh cookie is always first-party
+- BCrypt password hashing
 - User-scoped transactions, categories, budgets, and dashboard data
 - Search, filtering, sorting, pagination, and financial analytics
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
-- **170 passing backend tests** with **98% instruction coverage** and **94% branch coverage**
-- **141 passing frontend tests** across **20 test files** with **100% statement, branch, function, and line coverage**
+- **732 passing backend tests** (709 unit + 23 MySQL integration) with **98.78% instruction coverage** and **96.49% branch coverage**
+- **540 passing frontend tests** across **33 test files** with **100% statement, branch, function, and line coverage**
 
 ---
 
@@ -48,6 +53,7 @@ The project demonstrates layered backend architecture, stateless JWT authenticat
 | Backend          | Java 21, Spring Boot 4.1, Spring Web MVC, Spring Security, Spring Data JPA, Hibernate, Bean Validation, Maven |
 | Frontend         | React 19, TypeScript 6, Vite, React Router, Recharts, custom CSS                                              |
 | Database         | MySQL, Flyway                                                                                                 |
+| Image Storage    | Cloudinary (optional, backend-only profile photos)                                                            |
 | Authentication   | JWT, BCrypt                                                                                                   |
 | Backend Testing  | JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, JaCoCo                                 |
 | Frontend Testing | Vitest, React Testing Library, jest-dom, jsdom                                                                |
@@ -74,7 +80,7 @@ Spring Data JPA / Hibernate
 MySQL Database
 ```
 
-The frontend communicates with the backend through `VITE_API_BASE_URL`. The backend owns authentication, authorization, validation, business logic, and persistence. MySQL credentials and backend secrets are stored only in Railway; they are never exposed to Vercel or browser code.
+The browser calls relative `/api/...` paths on the Vercel host; a small server-side Vercel function forwards them to the Railway backend, so authentication cookies stay first-party (locally, the Vite dev server does the same). The backend owns authentication, authorization, validation, business logic, and persistence. MySQL credentials and backend secrets are stored only in Railway; they are never exposed to Vercel or browser code.
 
 ---
 
@@ -83,13 +89,48 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 ### Authentication
 
 - User registration and login
-- Session restoration after browser refresh
-- Protected application routes
-- Centralized handling for expired or invalid authenticated sessions
-- Attempted-route restoration after signing in again
-- Temporary restoration failures preserve the stored session and provide a manual retry action
-- Logout and session clearing
+- Five-minute access tokens kept only in memory (never in browser storage)
+- Rotating refresh tokens in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie; stored
+  server-side only as SHA-256 hashes
+- Silent renewal: an expired access token triggers one shared refresh and one retry
+- Session restoration after reload by refreshing, then loading the canonical user
+- Reuse of an old refresh token revokes that whole session family
+- Independent sessions per device; logout ends only the current one
+- Password changes revoke every session and require signing in again
+- Cross-tab coordination with Web Locks and BroadcastChannel (no tokens shared)
+- Protected application routes and attempted-route restoration after signing in again
+- Temporary refresh failures show a recoverable retry state instead of signing out
+- Logout completes only after the server confirms the session was revoked
 - Accessible user-account dropdown with account details, keyboard dismissal, focus restoration, and logout
+
+### Profile and Account Settings
+
+- Protected `/profile` and `/settings` pages, available from the account dropdown
+- Editable display name, first name, and last name; email remains read-only
+- Immediate header identity updates using the canonical saved user response
+- Persisted date format: `MEDIUM` (Sep 25, 2026) or `ISO` (2026-09-25)
+- Persisted transaction page size: 10, 25, or 50; changes restart pagination at page zero
+- Password changes require the correct current password and frontend confirmation
+- New passwords require at least 15 Unicode code points and at most 72 UTF-8 bytes;
+  spaces and Unicode are allowed without trimming or normalization. Common passwords,
+  all-blank passwords, and reuse of the current password are rejected.
+- Accessible field errors, focus management, live password-rule checks, visibility
+  controls, success messages, and a read-only email hint
+- Names and preferences survive refresh and later sign-in; failed saves preserve edits
+
+### Profile Photos
+
+- Optional JPEG or PNG profile photo (up to 2 MB) uploaded from Account Settings
+- Local preview before upload, then explicit upload, replace, and confirmed removal
+- The backend inspects, re-encodes, and resizes every image to a fresh JPEG, discarding
+  EXIF/GPS metadata, before storing it in Cloudinary
+- The header avatar and settings page update immediately; photos persist across refresh
+  and later sign-in
+- Initials remain the fallback when no photo exists, the feature is disabled, or an image
+  fails to load
+- Failed uploads or removals keep the current photo; the feature is off unless configured
+
+See [Account API](docs/account-api.md) for request fields, response shapes, and errors.
 
 ### Transactions
 
@@ -139,11 +180,20 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 
 ## Security
 
-- Stateless authentication using signed JWT access tokens
-- Documented [CSRF security decision for stateless JWT authentication](docs/security-csrf.md)
+- Five-minute signed JWT access tokens plus opaque, rotating refresh tokens
+  (see the [authentication session lifecycle](docs/auth-session-lifecycle.md))
+- Refresh and logout accept the cookie only with an exact `Origin` and a custom
+  CSRF header; the cookie can never authenticate business APIs
+  (see the [CSRF decision](docs/security-csrf.md))
 - Password hashing with BCrypt
 - Protected frontend routes and backend API endpoints
-- Authenticated-user ownership enforcement for transactions, categories, budgets, and dashboard data
+- Authenticated-user ownership enforcement for profiles, preferences, password changes, transactions, categories, budgets, and dashboard data
+- Account mutation DTOs accept only their editable fields; ownership comes from the principal
+- Password changes revoke every refresh session; an already-issued access token can
+  still work for at most five minutes (there is no access-token denylist)
+- Profile-photo uploads are content-inspected, size-limited, and re-encoded server-side;
+  Cloudinary credentials stay on the backend and MySQL stores only an opaque key
+  (see [Profile-photo security](docs/profile-photo-security.md))
 - Cross-user resource isolation verified through automated tests
 - Request validation and consistent API error handling
 - Production CORS allowlist for approved Vercel origins
@@ -157,20 +207,22 @@ The frontend communicates with the backend through `VITE_API_BASE_URL`. The back
 
 ## Testing & Quality
 
-| Test Suite        | Results                                              |
-| ----------------- | ---------------------------------------------------- |
-| Backend           | **170 tests passing**                                |
-| Backend Coverage  | **98% instruction coverage, 94% branch coverage**    |
-| Frontend          | **141 tests passing across 20 test files**           |
-| Frontend Coverage | **100% statement,branch,function and line coverage** |
+| Test Suite        | Results                                                 |
+| ----------------- | ------------------------------------------------------- |
+| Backend           | **732 tests passing** (709 unit, 23 MySQL integration)  |
+| Backend Coverage  | **98.78% instruction coverage, 96.49% branch coverage** |
+| Frontend          | **540 tests passing across 33 test files**              |
+| Frontend Coverage | **100% statement, branch, function, and line coverage** |
 
-For deployed routes, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
+For branch behavior, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
 For schema versioning, migration conventions, existing-database adoption, and backup expectations, see [Database Migrations](docs/database-migrations.md).
 
+See the [frontend and staging testing guide](docs/frontend-testing.md) for commands and the issue #16 smoke checklist.
+
 ### Backend Testing
 
-The backend test suite uses JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, Flyway and JaCoCo.
+The backend test suite uses JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, Flyway, Testcontainers (MySQL 8.4), and JaCoCo.
 
 Coverage includes:
 
@@ -186,13 +238,15 @@ Coverage includes:
 - Dashboard aggregation
 - Full authenticated application workflows
 - Flyway clean-schema migrations, existing-schema adoption, migration history, and failure handling
+- Refresh-token rotation, reuse revocation, logout, and password-change revoke-all
+- Real MySQL races (login, refresh, logout, password change) in both lock orders
 
-Backend tests use a dedicated `test` profile and an H2 in-memory database configured for MySQL compatibility.
+Unit and most integration tests use a dedicated `test` profile with H2 in MySQL mode. `*IT` tests run against a real MySQL 8.4 container through Testcontainers during `verify`, so Docker must be running (locally, for example, Colima).
 
 Run the backend suite:
 
 ```bash
-./mvnw clean test
+./mvnw --batch-mode clean verify
 ```
 
 The JaCoCo HTML report is generated at:
@@ -213,13 +267,19 @@ Coverage includes:
 - Transaction CRUD, filtering, sorting, and pagination
 - Budget CRUD, analytics, charts, and business rules
 - User-visible validation and API errors
-- Local-storage token utilities
+- Memory-only token storage, refresh-and-retry-once, single-flight refresh, and
+  cross-tab Web Locks/BroadcastChannel coordination
+- The Vercel API proxy (header, cookie, multipart, and SSRF handling) and routing rules
+- Profile, preference, and password forms; stale session responses and safe 401 handling
+- Profile-photo preview, validation, upload/replace/remove states, avatar fallback, and
+  header synchronization
+- Preference-aware date rendering and all transaction request paths
 
 Run the frontend suite:
 
 ```bash
 cd frontend
-npm test -- --run
+npm run test:coverage
 ```
 
 ---
@@ -261,7 +321,12 @@ The health, registration, and login endpoints are public. All other endpoints re
 | Health         | `GET`    | `/api/health`                 | Check application health                        |
 | Authentication | `POST`   | `/api/auth/register`          | Register a user                                 |
 | Authentication | `POST`   | `/api/auth/login`             | Authenticate and receive a JWT                  |
-| Authentication | `GET`    | `/api/auth/me`                | Get the authenticated user                      |
+| Authentication | `GET`    | `/api/auth/me`                | Get own canonical user; 200                     |
+| Account        | `PUT`    | `/api/account/profile`        | Update own names; 200 canonical user            |
+| Account        | `PUT`    | `/api/account/preferences`    | Update own preferences; 200 canonical user      |
+| Account        | `POST`   | `/api/account/password`       | Change own password; 204 empty body             |
+| Account        | `PUT`    | `/api/account/photo`          | Upload/replace own photo; 200 canonical user    |
+| Account        | `DELETE` | `/api/account/photo`          | Remove own photo; 200 canonical user            |
 | Transactions   | `POST`   | `/api/transactions`           | Create a transaction                            |
 | Transactions   | `GET`    | `/api/transactions`           | Search, filter, sort, and paginate transactions |
 | Transactions   | `GET`    | `/api/transactions/{id}`      | Get a transaction                               |
@@ -342,12 +407,21 @@ Authorization: Bearer <JWT>
 | Spring Boot API | Railway  |
 | MySQL database  | Railway  |
 
-- Vercel builds and deploys the React application from the `frontend` directory.
+- Vercel builds and deploys the React application from the `frontend` directory,
+  including the `api/proxy.ts` function that forwards `/api/*` to Railway.
 - Railway runs the Java 21 API with the `prod` Spring profile.
 - The backend connects to MySQL through Railway private networking.
 - Production configuration and secrets are supplied through environment variables.
-- Vercel contains only the public backend API URL and no database credentials.
-- Direct React routes are supported through a Vercel SPA rewrite.
+- Vercel holds only the server-side `BACKEND_ORIGIN` (the backend's public origin) and
+  no database or provider credentials.
+- Profile photos are optional. To enable them, set `PROFILE_PHOTOS_ENABLED=true`,
+  `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, and
+  `PROFILE_PHOTO_KEY_PREFIX` (for example `fintrack/production/profile-photos`) in
+  Railway only. Vercel needs no new variables. Use separate Cloudinary credentials
+  for production and nonproduction.
+- Direct React routes are supported through a Vercel SPA rewrite that never captures `/api`.
+- See the [deployment guide](docs/deployment.md) for per-environment variables, the
+  staging rollout, rollback, and the smoke checklist.
 
 ---
 
@@ -381,7 +455,19 @@ Required backend variables:
 - `DB_USERNAME`
 - `DB_PASSWORD`
 - `JWT_SECRET`
-- `JWT_EXPIRATION_MS`
+- `JWT_EXPIRATION_MS` (`300000`)
+
+Refresh-session variables have safe defaults; set `REFRESH_COOKIE_SECURE=false` for
+local HTTP. See `.env.example`.
+
+Optional profile-photo variables (leave `PROFILE_PHOTOS_ENABLED=false` to run without
+Cloudinary; uploads then return 503 and initials are shown):
+
+- `PROFILE_PHOTOS_ENABLED`
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+- `PROFILE_PHOTO_KEY_PREFIX` (for example `fintrack/development/profile-photos`)
 
 Start the Spring Boot API:
 
@@ -389,7 +475,7 @@ Start the Spring Boot API:
 ./scripts/run-local.sh
 ```
 
-Flyway applies pending database migrations during application startup. For setup, adoption, and migration rules, see [Database Migrations](docs/database-migrations.md).
+Flyway applies pending database migrations during application startup. V3 adds display names and persisted account preferences, and V5 adds the refresh-session and token-history tables. For setup, adoption, and migration rules, see [Database Migrations](docs/database-migrations.md).
 
 The backend runs at `http://localhost:8080`.
 
@@ -405,11 +491,8 @@ cd frontend
 npm install
 ```
 
-Create `frontend/.env.local`:
-
-```env
-VITE_API_BASE_URL=http://localhost:8080
-```
+No frontend environment file is needed: the Vite dev server proxies `/api` to the
+backend at `http://localhost:8080`. `VITE_API_BASE_URL` is no longer used.
 
 Start the Vite development server:
 
@@ -423,10 +506,7 @@ The frontend runs at `http://localhost:5173`.
 
 ## Future Improvements
 
-- Add refresh-token support and token revocation
 - Add a custom-category workflow where selecting Other displays a field for entering and saving a new category
-- Expand the user-account dropdown with profile management, account settings, password-change controls, and account preferences
-- Add optional profile-photo upload with secure file validation and object storage
 - Add production monitoring and structured application metrics
 
 ---
