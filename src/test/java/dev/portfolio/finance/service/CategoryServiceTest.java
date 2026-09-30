@@ -1,24 +1,32 @@
 package dev.portfolio.finance.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.util.Optional;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import dev.portfolio.finance.dto.category.CategoryResponse;
 import dev.portfolio.finance.dto.category.CreateCategoryRequest;
 import dev.portfolio.finance.dto.category.UpdateCategoryRequest;
+import dev.portfolio.finance.entity.BuiltInCategory;
 import dev.portfolio.finance.entity.Category;
+import dev.portfolio.finance.entity.CategoryIcon;
 import dev.portfolio.finance.entity.User;
 import dev.portfolio.finance.exception.category.CategoryNotFoundException;
 import dev.portfolio.finance.exception.category.DuplicateCategoryException;
+import dev.portfolio.finance.exception.category.InvalidCategoryNameException;
 import dev.portfolio.finance.repository.CategoryRepository;
 import dev.portfolio.finance.repository.UserRepository;
 import dev.portfolio.finance.support.TestDataFactory;
@@ -53,12 +61,12 @@ class CategoryServiceTest {
         when(userRepository.findByEmail(TEST_EMAIL))
                 .thenReturn(Optional.of(user));
 
-        when(categoryRepository.existsByUserIdAndNameIgnoreCase(
+        when(categoryRepository.existsByUserIdAndNormalizedName(
                 user.getId(),
-                "Groceries"
+                "groceries"
         )).thenReturn(false);
 
-        when(categoryRepository.save(
+        when(categoryRepository.saveAndFlush(
                 org.mockito.ArgumentMatchers.any(Category.class)
         )).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -84,13 +92,13 @@ class CategoryServiceTest {
                 .findByEmail(TEST_EMAIL);
 
         verify(categoryRepository)
-                .existsByUserIdAndNameIgnoreCase(
+                .existsByUserIdAndNormalizedName(
                         user.getId(),
-                        "Groceries"
+                        "groceries"
                 );
 
         verify(categoryRepository)
-                .save(
+                .saveAndFlush(
                         org.mockito.ArgumentMatchers.any(Category.class)
                 );
     }
@@ -109,9 +117,9 @@ class CategoryServiceTest {
         when(userRepository.findByEmail(TEST_EMAIL))
                 .thenReturn(Optional.of(user));
 
-        when(categoryRepository.existsByUserIdAndNameIgnoreCase(
+        when(categoryRepository.existsByUserIdAndNormalizedName(
                 user.getId(),
-                "Groceries"
+                "groceries"
         )).thenReturn(true);
 
         // Act + Assert
@@ -124,7 +132,7 @@ class CategoryServiceTest {
         );
 
         verify(categoryRepository, never())
-                .save(
+                .saveAndFlush(
                         org.mockito.ArgumentMatchers.any(Category.class)
                 );
     }
@@ -229,9 +237,10 @@ class CategoryServiceTest {
                 user.getId()
         )).thenReturn(Optional.of(category));
 
-        when(categoryRepository.existsByUserIdAndNameIgnoreCase(
+        when(categoryRepository.existsByUserIdAndNormalizedNameAndIdNot(
                 user.getId(),
-                "Groceries"
+                "groceries",
+                category.getId()
         )).thenReturn(true);
 
         // Act + Assert
@@ -245,7 +254,7 @@ class CategoryServiceTest {
         );
 
         verify(categoryRepository, never())
-                .save(category);
+                .saveAndFlush(category);
     }
 
     @Test
@@ -301,7 +310,7 @@ void shouldReturnAllCategoriesForAuthenticatedUser() {
     when(userRepository.findByEmail(TEST_EMAIL))
             .thenReturn(Optional.of(user));
 
-    when(categoryRepository.findAllByUserIdOrderByNameAsc(
+    when(categoryRepository.findAllByUserIdOrderByNameAscIdAsc(
             user.getId()
     )).thenReturn(
             List.of(
@@ -333,7 +342,7 @@ void shouldReturnAllCategoriesForAuthenticatedUser() {
     );
 
     verify(categoryRepository)
-            .findAllByUserIdOrderByNameAsc(
+            .findAllByUserIdOrderByNameAscIdAsc(
                     user.getId()
             );
 }
@@ -364,12 +373,13 @@ void shouldUpdateCategoryWhenOwnedByAuthenticatedUser() {
             user.getId()
     )).thenReturn(Optional.of(category));
 
-    when(categoryRepository.existsByUserIdAndNameIgnoreCase(
+    when(categoryRepository.existsByUserIdAndNormalizedNameAndIdNot(
             user.getId(),
-            "Restaurants"
+            "restaurants",
+            category.getId()
     )).thenReturn(false);
 
-    when(categoryRepository.save(category))
+    when(categoryRepository.saveAndFlush(category))
             .thenReturn(category);
 
     // Act
@@ -392,13 +402,14 @@ void shouldUpdateCategoryWhenOwnedByAuthenticatedUser() {
     );
 
     verify(categoryRepository)
-            .existsByUserIdAndNameIgnoreCase(
+            .existsByUserIdAndNormalizedNameAndIdNot(
                     user.getId(),
-                    "Restaurants"
+                    "restaurants",
+                    category.getId()
             );
 
     verify(categoryRepository)
-            .save(category);
+            .saveAndFlush(category);
 }
 
 @Test
@@ -437,7 +448,7 @@ void shouldThrowCategoryNotFoundWhenUpdatingMissingCategory() {
     );
 
     verify(categoryRepository, never())
-            .save(
+            .saveAndFlush(
                     org.mockito.ArgumentMatchers.any(Category.class)
             );
 }
@@ -502,7 +513,7 @@ void shouldUpdateBudgetEnabledWhenCategoryNameIsUnchanged() {
             user.getId()
     )).thenReturn(Optional.of(category));
 
-    when(categoryRepository.save(category))
+    when(categoryRepository.saveAndFlush(category))
             .thenReturn(category);
 
     // Act
@@ -525,12 +536,163 @@ void shouldUpdateBudgetEnabledWhenCategoryNameIsUnchanged() {
     );
 
     verify(categoryRepository, never())
-            .existsByUserIdAndNameIgnoreCase(
-                    user.getId(),
-                    "Groceries"
+            .existsByUserIdAndNormalizedNameAndIdNot(
+                    org.mockito.ArgumentMatchers.any(),
+                    org.mockito.ArgumentMatchers.any(),
+                    org.mockito.ArgumentMatchers.any()
             );
 
     verify(categoryRepository)
-            .save(category);
+            .saveAndFlush(category);
+}
+
+@Test
+void shouldCreateCustomTaggedCategoryWithCollapsedWhitespace() {
+    User user = TestDataFactory.createUser();
+
+    when(userRepository.findByEmail(TEST_EMAIL))
+            .thenReturn(Optional.of(user));
+    when(categoryRepository.saveAndFlush(
+            org.mockito.ArgumentMatchers.any(Category.class)
+    )).thenAnswer(invocation -> invocation.getArgument(0));
+
+    CategoryResponse response = categoryService.createCategory(
+            TEST_EMAIL,
+            new CreateCategoryRequest(" Eating \t\u00A0 Out ", false)
+    );
+
+    ArgumentCaptor<Category> saved = ArgumentCaptor.forClass(Category.class);
+    verify(categoryRepository).saveAndFlush(saved.capture());
+    assertEquals("Eating Out", response.name());
+    assertEquals("Eating Out", saved.getValue().getName());
+    assertEquals("eating out", saved.getValue().getNormalizedName());
+    assertFalse(saved.getValue().isBuiltIn());
+    assertEquals(CategoryIcon.TAG, saved.getValue().getIcon());
+    verify(categoryRepository).existsByUserIdAndNormalizedName(user.getId(), "eating out");
+}
+
+@Test
+void shouldRejectInvalidCategoryNameBeforeQueryingOrSaving() {
+    User user = TestDataFactory.createUser();
+
+    when(userRepository.findByEmail(TEST_EMAIL))
+            .thenReturn(Optional.of(user));
+
+    InvalidCategoryNameException exception = assertThrows(
+            InvalidCategoryNameException.class,
+            () -> categoryService.createCategory(
+                    TEST_EMAIL,
+                    new CreateCategoryRequest("Bad\u0000Name", true)
+            )
+    );
+
+    assertEquals(InvalidCategoryNameException.Reason.CONTROL_CHARACTER, exception.getReason());
+    verify(categoryRepository, never()).existsByUserIdAndNormalizedName(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    verify(categoryRepository, never()).saveAndFlush(
+            org.mockito.ArgumentMatchers.any(Category.class));
+}
+
+@Test
+void shouldMapConcurrentNormalizedNameViolationToDuplicate() {
+    User user = TestDataFactory.createUser();
+
+    when(userRepository.findByEmail(TEST_EMAIL))
+            .thenReturn(Optional.of(user));
+    when(categoryRepository.saveAndFlush(
+            org.mockito.ArgumentMatchers.any(Category.class)
+    )).thenThrow(new DataIntegrityViolationException(
+            "could not execute statement",
+            new RuntimeException(null, new RuntimeException(
+                    "Duplicate entry for key 'categories.UK_CATEGORIES_USER_NORMALIZED_NAME'"))
+    ));
+
+    DuplicateCategoryException exception = assertThrows(
+            DuplicateCategoryException.class,
+            () -> categoryService.createCategory(
+                    TEST_EMAIL,
+                    new CreateCategoryRequest("Groceries", true)
+            )
+    );
+
+    assertEquals("Category already exists", exception.getMessage());
+}
+
+@Test
+void shouldRethrowUnrelatedIntegrityViolation() {
+    User user = TestDataFactory.createUser();
+    DataIntegrityViolationException unrelated =
+            new DataIntegrityViolationException("violates fk_categories_user");
+
+    when(userRepository.findByEmail(TEST_EMAIL))
+            .thenReturn(Optional.of(user));
+    when(categoryRepository.saveAndFlush(
+            org.mockito.ArgumentMatchers.any(Category.class)
+    )).thenThrow(unrelated);
+
+    DataIntegrityViolationException thrown = assertThrows(
+            DataIntegrityViolationException.class,
+            () -> categoryService.createCategory(
+                    TEST_EMAIL,
+                    new CreateCategoryRequest("Groceries", true)
+            )
+    );
+
+    assertSame(unrelated, thrown);
+}
+
+@Test
+void shouldChangeDisplayCasingWithoutDuplicateCheckAndKeepBuiltInMetadata() {
+    User user = TestDataFactory.createUser();
+    Category category = Category.builtIn(user, BuiltInCategory.GROCERIES);
+
+    when(userRepository.findByEmail(TEST_EMAIL))
+            .thenReturn(Optional.of(user));
+    when(categoryRepository.findByIdAndUserId(CATEGORY_ID, user.getId()))
+            .thenReturn(Optional.of(category));
+    when(categoryRepository.saveAndFlush(category))
+            .thenReturn(category);
+
+    CategoryResponse response = categoryService.updateCategory(
+            TEST_EMAIL,
+            CATEGORY_ID,
+            new UpdateCategoryRequest("GROCERIES", true)
+    );
+
+    assertEquals("GROCERIES", response.name());
+    assertEquals("groceries", category.getNormalizedName());
+    assertTrue(category.isBuiltIn());
+    assertEquals(CategoryIcon.SHOPPING_CART, category.getIcon());
+    verify(categoryRepository, never()).existsByUserIdAndNormalizedNameAndIdNot(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
+}
+
+@Test
+void shouldRecomputeNormalizedNameOnRenameAndKeepBuiltInMetadata() {
+    User user = TestDataFactory.createUser();
+    Category category = Category.builtIn(user, BuiltInCategory.HOUSING);
+
+    when(userRepository.findByEmail(TEST_EMAIL))
+            .thenReturn(Optional.of(user));
+    when(categoryRepository.findByIdAndUserId(CATEGORY_ID, user.getId()))
+            .thenReturn(Optional.of(category));
+    when(categoryRepository.saveAndFlush(category))
+            .thenReturn(category);
+
+    categoryService.updateCategory(
+            TEST_EMAIL,
+            CATEGORY_ID,
+            new UpdateCategoryRequest("  Home   Costs ", false)
+    );
+
+    assertEquals("Home Costs", category.getName());
+    assertEquals("home costs", category.getNormalizedName());
+    assertFalse(category.isBudgetEnabled());
+    assertTrue(category.isBuiltIn());
+    assertEquals(CategoryIcon.HOUSE, category.getIcon());
+    verify(categoryRepository).existsByUserIdAndNormalizedNameAndIdNot(
+            user.getId(), "home costs", category.getId());
 }
 }

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +23,7 @@ import dev.portfolio.finance.dto.category.CreateCategoryRequest;
 import dev.portfolio.finance.exception.GlobalExceptionHandler;
 import dev.portfolio.finance.exception.category.CategoryNotFoundException;
 import dev.portfolio.finance.exception.category.DuplicateCategoryException;
+import dev.portfolio.finance.exception.category.InvalidCategoryNameException;
 import dev.portfolio.finance.service.CategoryService;
 import dev.portfolio.finance.dto.category.CategoryResponse;
 import dev.portfolio.finance.dto.category.UpdateCategoryRequest;
@@ -153,6 +155,56 @@ class CategoryControllerTest {
                 .andExpect(
                         status().isConflict()
                 );
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenCategoryNameCannotBeNormalized()
+            throws Exception {
+
+        when(categoryService.createCategory(
+                any(String.class),
+                any(CreateCategoryRequest.class)
+        )).thenThrow(
+                new InvalidCategoryNameException(
+                        InvalidCategoryNameException.Reason.CONTROL_CHARACTER
+                )
+        );
+
+        mockMvc.perform(
+                        post("/api/categories")
+                                .principal(authentication)
+                                .contentType("application/json")
+                                .content("""
+                                        {
+                                          "name": "Bad\\u0000Name",
+                                          "budgetEnabled": true
+                                        }
+                                        """)
+                )
+                .andExpect(
+                        status().isBadRequest()
+                )
+                .andExpect(
+                        jsonPath("$.message").value("Category name contains unsupported characters")
+                );
+    }
+
+    @Test
+    void shouldNotExposeInternalCategoryMetadataInResponses()
+            throws Exception {
+
+        when(categoryService.getCategoryById(TEST_EMAIL, 1L))
+                .thenReturn(new CategoryResponse(1L, "Groceries", true,
+                        LocalDateTime.now(), LocalDateTime.now()));
+
+        mockMvc.perform(
+                        get("/api/categories/1")
+                                .principal(authentication)
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.normalizedName").doesNotExist())
+                .andExpect(jsonPath("$.builtIn").doesNotExist())
+                .andExpect(jsonPath("$.iconKey").doesNotExist());
     }
 
     @Test

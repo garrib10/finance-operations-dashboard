@@ -1,0 +1,116 @@
+# Categories
+
+Every category belongs to exactly one user. Transactions and budgets reference a
+category by ID, never by name. This page records the category policy established in
+issue #19 phase 1 (migration V6). Details of the migration itself are in
+[database migrations](database-migrations.md#v6-category-normalization-built-in-metadata-icons-and-ownership).
+
+## Built-in and custom categories
+
+Each new user receives their own 13 **built-in** rows (`built_in = true`). They are
+defined in `BuiltInCategory`:
+
+| Category | Icon key | Budget enabled |
+| --- | --- | --- |
+| Housing | `house` | yes |
+| Groceries | `shopping-cart` | yes |
+| Dining | `utensils` | yes |
+| Transportation | `car` | yes |
+| Utilities | `lightbulb` | yes |
+| Insurance | `shield` | yes |
+| Healthcare | `heart-pulse` | yes |
+| Entertainment | `clapperboard` | yes |
+| Shopping | `shopping-bag` | yes |
+| Travel | `plane` | yes |
+| Income | `circle-dollar-sign` | no |
+| Savings | `piggy-bank` | no |
+| Other | `tag` | yes |
+
+A category created through `POST /api/categories` is **custom** (`built_in = false`)
+and gets the generic `tag` icon, even if its name matches a default. Clients cannot
+set ownership, built-in status, or the icon: the owner comes from the authenticated
+user, and `built_in` is not updatable after insert.
+
+There are no shared or ownerless categories, no hierarchy, no archiving, and no
+name snapshots on financial records.
+
+## Name normalization
+
+`CategoryNameNormalizer` is the only application implementation. It produces two
+values from the submitted name:
+
+- **Display name** (`name`, shown to users): Unicode NFC; every run of whitespace
+  (Java `Character.isWhitespace` or `isSpaceChar`, including non-breaking and
+  ideographic spaces) collapsed to one ASCII space; leading and trailing whitespace
+  removed. It must not be empty, must not contain other control characters or
+  malformed surrogate pairs, and must be at most 100 UTF-16 code units after this
+  cleanup. Invalid names are rejected, never truncated.
+- **Comparison name** (`normalized_name`, internal only): the display name lowercased
+  with `Locale.ROOT`, then NFC again.
+
+Consequences of this policy:
+
+- `Groceries`, `GROCERIES`, and `  groceries ` are the same category name.
+- Composed `Café` (`é`) and decomposed `Cafe` + U+0301 are the same.
+- `Café` and `Cafe` are **different** (accents are significant).
+- It is lowercase equality, not full case folding: `Straße` and `STRASSE` are
+  **different**.
+- The result never depends on the server's default locale.
+
+Invalid names return `400 Bad Request` with a fixed message that never echoes the
+input: `Category name is required`, `Category name contains unsupported characters`, or
+`Category name must be 100 characters or fewer`.
+
+V6 has a frozen copy of this algorithm for the legacy backfill. Changing
+`CategoryNameNormalizer` later does not change V6; a policy change needs a new
+migration that re-normalizes stored rows.
+
+## Per-user uniqueness
+
+`uk_categories_user_normalized_name (user_id, normalized_name)` is authoritative, with
+an exact binary collation on MySQL (`utf8mb4_0900_bin`). Different users may use the
+same name, but one user cannot have two categories with the same comparison name.
+
+The service checks first for a friendly `409 Conflict` ("Category already exists"). Two
+concurrent requests can both pass that check, so a violation of the unique constraint
+on save is also mapped to the same `409`. Renaming only the case or spacing of a
+category's own name is allowed.
+
+## Icons
+
+`CategoryIcon` is the backend-owned catalog of approved semantic keys: lowercase words
+joined by hyphens, at most 64 characters. The database stores only the key, never SVG,
+HTML, CSS classes, component names, URLs, file paths, or uploaded images. The frontend
+decides how each key is drawn. `ck_categories_icon_key_format` rejects anything that
+isn't a slug, and loading an unknown key fails loudly in `CategoryIconConverter`.
+Adding an icon means adding a `CategoryIcon` constant (no migration needed for a new
+slug).
+
+## Ownership safeguards
+
+Services load categories only by `(id, user_id)`. The database also enforces this:
+`fk_transactions_category_owner` and `fk_budgets_category_owner` reference
+`categories (id, user_id)`, so a transaction or budget can never point at another
+user's category, even through direct SQL. Deleting a category that transactions or
+budgets still reference is rejected by the foreign keys.
+
+## Legacy classification limitation
+
+Existing rows were classified by V6. Their origin cannot be reconstructed, so a row
+whose name normalizes to a canonical default name is treated as built-in (with that
+default's icon), and every other row is custom with `tag`. A renamed default is
+therefore custom. V6 does not add missing defaults or rename anything.
+
+## Not implemented yet (phase 2 and later)
+
+These are intentionally unchanged in phase 1:
+
+- Renaming or deleting built-in categories is still allowed (no built-in
+  restrictions yet). Renaming keeps `built_in` and the icon.
+- Deleting a category that is in use still fails at the database with the existing
+  error behavior; there is no controlled in-use error contract yet.
+- API responses do not include `builtIn` or `iconKey`, and requests cannot choose an
+  icon.
+- Transactions and budgets cannot create a category inline, and there is no category
+  filter.
+- No frontend category management, selectors, or icon rendering.

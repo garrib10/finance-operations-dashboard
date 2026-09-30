@@ -96,5 +96,28 @@ class CategoryInitializationServiceTest {
                         .anyMatch(category ->
                                 category.getName().isBlank())
         );
+
+        assertTrue(
+                categories.stream()
+                        .allMatch(Category::isBuiltIn)
+        );
+
+        assertEquals(
+                List.of("house", "shopping-cart", "utensils", "car", "lightbulb", "shield",
+                        "heart-pulse", "clapperboard", "shopping-bag", "plane",
+                        "circle-dollar-sign", "piggy-bank", "tag"),
+                categories.stream()
+                        .map(category -> category.getIcon().key())
+                        .toList()
+        );
+
+        assertEquals(
+                categories.stream()
+                        .map(category -> category.getName().toLowerCase(java.util.Locale.ROOT))
+                        .toList(),
+                categories.stream()
+                        .map(Category::getNormalizedName)
+                        .toList()
+        );
     }
 }

@@ -63,7 +63,7 @@ class TransactionSpecificationTest {
         );
 
         groceriesCategory = categoryRepository.save(
-                new Category(
+                Category.custom(
                         primaryUser,
                         "Groceries",
                         true
@@ -71,7 +71,7 @@ class TransactionSpecificationTest {
         );
 
         incomeCategory = categoryRepository.save(
-                new Category(
+                Category.custom(
                         primaryUser,
                         "Income",
                         false
@@ -79,7 +79,7 @@ class TransactionSpecificationTest {
         );
 
         otherUserCategory = categoryRepository.save(
-                new Category(
+                Category.custom(
                         otherUser,
                         "Groceries",
                         true

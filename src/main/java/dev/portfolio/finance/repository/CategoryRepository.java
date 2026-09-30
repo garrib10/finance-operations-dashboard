@@ -7,15 +7,23 @@ import dev.portfolio.finance.entity.Category;
 
 public interface CategoryRepository extends JpaRepository<Category, Long> {
 
-    List<Category> findAllByUserIdOrderByNameAsc(Long userId);
+    /** Name order, with the ID as a tie-break so collation-equal names still sort stably. */
+    List<Category> findAllByUserIdOrderByNameAscIdAsc(Long userId);
 
     Optional<Category> findByIdAndUserId(
             Long id,
             Long userId
     );
 
-    boolean existsByUserIdAndNameIgnoreCase(
+    /** Friendly early check; {@code uk_categories_user_normalized_name} is authoritative. */
+    boolean existsByUserIdAndNormalizedName(
             Long userId,
-            String name
+            String normalizedName
+    );
+
+    boolean existsByUserIdAndNormalizedNameAndIdNot(
+            Long userId,
+            String normalizedName,
+            Long id
     );
 }
