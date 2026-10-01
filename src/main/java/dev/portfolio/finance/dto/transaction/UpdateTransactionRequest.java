@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import java.time.LocalDate;
 import dev.portfolio.finance.entity.TransactionType;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -25,6 +26,12 @@ public record UpdateTransactionRequest(
         @DecimalMin(
                 value = "0.01",
                 message = "Amount must be greater than 0"
+        )
+        // Matches the DECIMAL(12,2) column: larger values or extra decimals are a 400, not a database error.
+        @Digits(
+                integer = 10,
+                fraction = 2,
+                message = "Amount can have at most 10 whole digits and 2 decimal places"
         )
         BigDecimal amount,
 

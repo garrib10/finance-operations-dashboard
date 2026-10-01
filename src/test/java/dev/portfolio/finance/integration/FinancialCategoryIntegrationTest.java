@@ -104,12 +104,14 @@ class FinancialCategoryIntegrationTest {
                 "\"newCategory\": {\"name\": \"Never Saved\"}", "EXPENSE", "0", "Bad"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fields.amount").exists());
-        // The database rejects the transaction after the category insert (amount exceeds
-        // DECIMAL(12,2)): both roll back. Pre-existing: this surfaces as an unhandled 500.
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> send(post("/api/transactions"), owner,
-                        transactionBody("\"newCategory\": {\"name\": \"Also Never Saved\"}", "EXPENSE",
-                                "99999999999999.00", "Too big")))
-                .hasRootCauseInstanceOf(java.sql.SQLException.class);
+        // Too large or too precise for the DECIMAL(12,2) column: a field error, nothing written.
+        for (String amount : List.of("99999999999999.00", "10000000000.00", "12.345")) {
+            send(post("/api/transactions"), owner, transactionBody(
+                    "\"newCategory\": {\"name\": \"Also Never Saved\"}", "EXPENSE", amount, "Too big"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.fields.amount").value(
+                            "Amount can have at most 10 whole digits and 2 decimal places"));
+        }
         // Duplicate new category (including a built-in name): 409, no transaction.
         for (String name : List.of("groceries", "HOUSING")) {
             send(post("/api/transactions"), owner, transactionBody(
@@ -224,10 +226,11 @@ class FinancialCategoryIntegrationTest {
 
         send(post("/api/budgets"), owner, budgetBody("\"newCategory\": {\"name\": \"Never Saved\"}", 13, 2026))
                 .andExpect(status().isBadRequest());
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> send(post("/api/budgets"), owner,
-                        budgetBody("\"newCategory\": {\"name\": \"Too Big\"}", 9, 2026)
-                                .replace("\"monthlyLimit\": 100.00", "\"monthlyLimit\": 99999999999999.00")))
-                .hasRootCauseInstanceOf(java.sql.SQLException.class);
+        send(post("/api/budgets"), owner, budgetBody("\"newCategory\": {\"name\": \"Too Big\"}", 9, 2026)
+                .replace("\"monthlyLimit\": 100.00", "\"monthlyLimit\": 99999999999999.00"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields.monthlyLimit").value(
+                        "Monthly limit can have at most 10 whole digits and 2 decimal places"));
         send(post("/api/budgets"), owner, budgetBody("\"newCategory\": {\"name\": \"GROCERIES\"}", 10, 2026))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("CATEGORY_DUPLICATE"));

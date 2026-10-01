@@ -6,6 +6,7 @@ import dev.portfolio.finance.dto.category.NewCategoryRequest;
 import dev.portfolio.finance.validation.ExactlyOneCategorySelection;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -20,6 +21,12 @@ public record CreateBudgetRequest(
         @DecimalMin(
                 value = "0.01",
                 message = "Monthly limit must be greater than 0"
+        )
+        // Matches the DECIMAL(12,2) column: larger values or extra decimals are a 400, not a database error.
+        @Digits(
+                integer = 10,
+                fraction = 2,
+                message = "Monthly limit can have at most 10 whole digits and 2 decimal places"
         )
         BigDecimal monthlyLimit,
 

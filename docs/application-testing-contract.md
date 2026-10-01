@@ -123,7 +123,7 @@ Authenticated users can create, view, edit, delete, search, filter, sort, and pa
 | ---------------- | -------------------------------------------------- |
 | Category         | Exactly one of `categoryId` (must belong to the authenticated user) or `newCategory` (creates a custom category in the same write; see [categories API](categories-api.md#categories-in-transactions-and-budgets)) |
 | Type             | Required                                           |
-| Amount           | Required and must be at least `0.01`               |
+| Amount           | Required; at least `0.01`; at most 10 whole digits and 2 decimal places (`9999999999.99`) |
 | Description      | Required; maximum 255 characters                   |
 | Transaction date | Required                                           |
 
@@ -156,7 +156,7 @@ Authenticated users can create, view, edit, and delete their own monthly budgets
 | Field         | Rule                                               |
 | ------------- | -------------------------------------------------- |
 | Category      | Exactly one of `categoryId` (must belong to the authenticated user) or `newCategory` (creates a custom category in the same write) |
-| Monthly limit | Required and must be at least `0.01`               |
+| Monthly limit | Required; at least `0.01`; at most 10 whole digits and 2 decimal places (`9999999999.99`) |
 | Month         | Must be between `1` and `12`                       |
 | Year          | Must be `2000` or later                            |
 
