@@ -41,8 +41,8 @@ The project demonstrates layered backend architecture, short-lived JWTs with rot
 - Search, filtering, sorting, pagination, and financial analytics
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
-- **732 passing backend tests** (709 unit + 23 MySQL integration) with **98.78% instruction coverage** and **96.49% branch coverage**
-- **540 passing frontend tests** across **33 test files** with **100% statement, branch, function, and line coverage**
+- **915 passing backend tests** (877 unit + 38 MySQL integration) with **98.82% instruction coverage** and **95.61% branch coverage**
+- **647 passing frontend tests** across **40 test files** with **99.49% statement, 98.43% branch, 99.5% function, and 100% line coverage**
 
 ---
 
@@ -207,12 +207,12 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 
 ## Testing & Quality
 
-| Test Suite        | Results                                                 |
-| ----------------- | ------------------------------------------------------- |
-| Backend           | **732 tests passing** (709 unit, 23 MySQL integration)  |
-| Backend Coverage  | **98.78% instruction coverage, 96.49% branch coverage** |
-| Frontend          | **540 tests passing across 33 test files**              |
-| Frontend Coverage | **100% statement, branch, function, and line coverage** |
+| Test Suite        | Results                                                             |
+| ----------------- | ------------------------------------------------------------------- |
+| Backend           | **915 tests passing** (877 unit, 38 MySQL integration)              |
+| Backend Coverage  | **98.82% instruction coverage, 95.61% branch coverage**             |
+| Frontend          | **647 tests passing across 40 test files**                          |
+| Frontend Coverage | **99.49% statements, 98.43% branches, 99.5% functions, 100% lines** |
 
 For branch behavior, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
