@@ -2,13 +2,13 @@ package dev.portfolio.finance.entity;
 
 import java.util.Objects;
 import jakarta.persistence.Column;
-import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import dev.portfolio.finance.exception.category.CategoryBuiltInException;
 import dev.portfolio.finance.validation.CategoryNameNormalizer;
 import dev.portfolio.finance.validation.NormalizedCategoryName;
 
@@ -46,9 +46,12 @@ public class Category extends BaseEntity {
     @Column(name = "built_in", nullable = false, updatable = false)
     private boolean builtIn;
 
-    @Convert(converter = CategoryIconConverter.class)
+    /**
+     * Stored as the raw key so a row with a key outside today's catalog still loads;
+     * {@link #getIcon()} maps it to a safe value without rewriting the row.
+     */
     @Column(name = "icon_key", nullable = false, length = 64)
-    private CategoryIcon icon;
+    private String iconKey;
 
     protected Category() {
     }
@@ -63,7 +66,7 @@ public class Category extends BaseEntity {
         this.user = Objects.requireNonNull(user, "user");
         this.budgetEnabled = budgetEnabled;
         this.builtIn = builtIn;
-        this.icon = Objects.requireNonNull(icon, "icon");
+        this.iconKey = Objects.requireNonNull(icon, "icon").key();
         applyName(name);
     }
 
@@ -74,6 +77,16 @@ public class Category extends BaseEntity {
             boolean budgetEnabled
     ) {
         return new Category(user, name, budgetEnabled, false, CategoryIcon.TAG);
+    }
+
+    /** A user-created category with a chosen approved icon. */
+    public static Category custom(
+            User user,
+            NormalizedCategoryName name,
+            boolean budgetEnabled,
+            CategoryIcon icon
+    ) {
+        return new Category(user, name, budgetEnabled, false, icon);
     }
 
     /** Normalizes {@code name}; throws {@code InvalidCategoryNameException} when invalid. */
@@ -112,17 +125,38 @@ public class Category extends BaseEntity {
         return builtIn;
     }
 
+    /** The approved icon, or {@link CategoryIcon#TAG} when the stored key is not in the catalog. */
     public CategoryIcon getIcon() {
-        return icon;
+        return CategoryIcon.fromKey(iconKey).orElse(CategoryIcon.TAG);
     }
 
-    /** Renames and updates the budget flag; ownership, built-in status, and icon are kept. */
+    /** The stored key exactly as persisted (internal; responses use {@link #getIcon()}). */
+    public String getIconKey() {
+        return iconKey;
+    }
+
+    /**
+     * Renames and updates the budget flag of a custom category; ownership, built-in
+     * status, and the icon are kept. Built-in categories are immutable.
+     */
     public void update(
             NormalizedCategoryName name,
             boolean budgetEnabled
     ) {
+        requireCustom();
         applyName(name);
         this.budgetEnabled = budgetEnabled;
+    }
+
+    public void changeIcon(CategoryIcon icon) {
+        requireCustom();
+        this.iconKey = Objects.requireNonNull(icon, "icon").key();
+    }
+
+    private void requireCustom() {
+        if (builtIn) {
+            throw new CategoryBuiltInException();
+        }
     }
 
     private void applyName(NormalizedCategoryName name) {

@@ -14,7 +14,6 @@ import dev.portfolio.finance.exception.auth.DuplicateEmailException;
 import dev.portfolio.finance.exception.auth.InvalidCredentialsException;
 import dev.portfolio.finance.exception.transaction.TransactionNotFoundException;
 import dev.portfolio.finance.exception.category.DuplicateCategoryException;
-import dev.portfolio.finance.exception.category.InvalidCategoryNameException;
 import dev.portfolio.finance.exception.category.CategoryNotFoundException;
 import dev.portfolio.finance.exception.transaction.InvalidTransactionFilterException;
 import dev.portfolio.finance.exception.budget.BudgetNotFoundException;
@@ -106,27 +105,12 @@ public class GlobalExceptionHandler {
                     LocalDateTime.now(),
                     HttpStatus.CONFLICT.value(),
                     "Conflict",
-                    ex.getMessage()
+                    ex.getMessage(),
+                    "CATEGORY_DUPLICATE"
             );
 
             return ResponseEntity
                     .status(HttpStatus.CONFLICT)
-                    .body(response);
-        }
-
-        @ExceptionHandler(InvalidCategoryNameException.class)
-        public ResponseEntity<ApiErrorResponse> handleInvalidCategoryName(
-                InvalidCategoryNameException ex
-        ) {
-            ApiErrorResponse response = new ApiErrorResponse(
-                    LocalDateTime.now(),
-                    HttpStatus.BAD_REQUEST.value(),
-                    "Bad Request",
-                    ex.getMessage()
-            );
-
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
                     .body(response);
         }
 
@@ -138,7 +122,8 @@ public class GlobalExceptionHandler {
                     LocalDateTime.now(),
                     HttpStatus.NOT_FOUND.value(),
                     "Not Found",
-                    ex.getMessage()
+                    ex.getMessage(),
+                    "CATEGORY_NOT_FOUND"
             );
 
             return ResponseEntity

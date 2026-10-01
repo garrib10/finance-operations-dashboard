@@ -94,4 +94,10 @@ public interface TransactionRepository
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate
     );
+
+    /** Whether any of this user's transactions references the category (existence only). */
+    boolean existsByCategoryIdAndUserId(
+            Long categoryId,
+            Long userId
+    );
 }

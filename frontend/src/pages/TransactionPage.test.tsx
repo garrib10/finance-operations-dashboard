@@ -24,6 +24,8 @@ const categories: CategoryResponse[] = [
     id: 1,
     name: "Groceries",
     budgetEnabled: true,
+    builtIn: true,
+    iconKey: "shopping-cart",
     createdAt: "2026-09-01T10:00:00",
     updatedAt: "2026-09-01T10:00:00",
   },

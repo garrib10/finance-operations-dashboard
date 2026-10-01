@@ -3,6 +3,8 @@ package dev.portfolio.finance.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
+import dev.portfolio.finance.exception.category.CategoryBuiltInException;
 import dev.portfolio.finance.exception.category.InvalidCategoryNameException;
 import dev.portfolio.finance.support.TestDataFactory;
 import dev.portfolio.finance.validation.CategoryNameNormalizer;
@@ -45,8 +47,9 @@ class CategoryTest {
     }
 
     @Test
-    void updateRecomputesTheNormalizedNameAndKeepsOwnerBuiltInStatusAndIcon() {
-        Category category = Category.builtIn(user, BuiltInCategory.TRAVEL);
+    void updateRecomputesTheNormalizedNameAndKeepsOwnerCustomStatusAndIcon() {
+        Category category = Category.custom(user, CategoryNameNormalizer.normalize("Trips"), true,
+                CategoryIcon.PLANE);
 
         category.update(CategoryNameNormalizer.normalize(" Vacations "), false);
 
@@ -54,8 +57,41 @@ class CategoryTest {
         assertThat(category.getNormalizedName()).isEqualTo("vacations");
         assertThat(category.isBudgetEnabled()).isFalse();
         assertThat(category.getUser()).isSameAs(user);
-        assertThat(category.isBuiltIn()).isTrue();
+        assertThat(category.isBuiltIn()).isFalse();
         assertThat(category.getIcon()).isEqualTo(CategoryIcon.PLANE);
+        assertThat(category.getIconKey()).isEqualTo("plane");
+    }
+
+    @Test
+    void customIconCanChangeToAnotherApprovedIcon() {
+        Category category = Category.custom(user, "Pets", true);
+
+        category.changeIcon(CategoryIcon.HEART_PULSE);
+
+        assertThat(category.getIcon()).isEqualTo(CategoryIcon.HEART_PULSE);
+        assertThatThrownBy(() -> category.changeIcon(null)).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void builtInCategoriesRejectEveryMutation() {
+        Category category = Category.builtIn(user, BuiltInCategory.TRAVEL);
+
+        assertThatThrownBy(() -> category.update(CategoryNameNormalizer.normalize("Vacations"), false))
+                .isInstanceOf(CategoryBuiltInException.class);
+        assertThatThrownBy(() -> category.changeIcon(CategoryIcon.TAG))
+                .isInstanceOf(CategoryBuiltInException.class);
+        assertThat(category.getName()).isEqualTo("Travel");
+        assertThat(category.isBudgetEnabled()).isTrue();
+        assertThat(category.getIcon()).isEqualTo(CategoryIcon.PLANE);
+    }
+
+    @Test
+    void unknownStoredIconKeyFallsBackToTagWithoutChangingTheStoredValue() {
+        Category category = Category.custom(user, "Legacy", true);
+        ReflectionTestUtils.setField(category, "iconKey", "retired-icon");
+
+        assertThat(category.getIcon()).isEqualTo(CategoryIcon.TAG);
+        assertThat(category.getIconKey()).isEqualTo("retired-icon");
     }
 
     @Test
@@ -64,7 +100,7 @@ class CategoryTest {
         assertThatThrownBy(() -> Category.custom(user, (dev.portfolio.finance.validation.NormalizedCategoryName) null,
                 true)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> Category.custom(user, "   ", true)).isInstanceOf(InvalidCategoryNameException.class);
-        assertThatThrownBy(() -> Category.builtIn(user, BuiltInCategory.OTHER).update(null, true))
+        assertThatThrownBy(() -> Category.custom(user, "Other", true).update(null, true))
                 .isInstanceOf(NullPointerException.class);
     }
 }

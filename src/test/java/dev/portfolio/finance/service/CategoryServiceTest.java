@@ -24,12 +24,18 @@ import dev.portfolio.finance.entity.BuiltInCategory;
 import dev.portfolio.finance.entity.Category;
 import dev.portfolio.finance.entity.CategoryIcon;
 import dev.portfolio.finance.entity.User;
+import dev.portfolio.finance.exception.category.CategoryBuiltInException;
+import dev.portfolio.finance.exception.category.CategoryInUseException;
 import dev.portfolio.finance.exception.category.CategoryNotFoundException;
+import dev.portfolio.finance.exception.category.CategoryValidationException;
 import dev.portfolio.finance.exception.category.DuplicateCategoryException;
 import dev.portfolio.finance.exception.category.InvalidCategoryNameException;
 import dev.portfolio.finance.repository.CategoryRepository;
+import dev.portfolio.finance.repository.BudgetRepository;
+import dev.portfolio.finance.repository.TransactionRepository;
 import dev.portfolio.finance.repository.UserRepository;
 import dev.portfolio.finance.support.TestDataFactory;
+import dev.portfolio.finance.validation.CategoryNameNormalizer;
 
 
 @ExtendWith(MockitoExtension.class)
@@ -43,6 +49,12 @@ class CategoryServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private TransactionRepository transactionRepository;
+
+    @Mock
+    private BudgetRepository budgetRepository;
 
     @InjectMocks
     private CategoryService categoryService;
@@ -642,9 +654,10 @@ void shouldRethrowUnrelatedIntegrityViolation() {
 }
 
 @Test
-void shouldChangeDisplayCasingWithoutDuplicateCheckAndKeepBuiltInMetadata() {
+void shouldChangeDisplayCasingWithoutDuplicateCheckAndKeepIcon() {
     User user = TestDataFactory.createUser();
-    Category category = Category.builtIn(user, BuiltInCategory.GROCERIES);
+    Category category = Category.custom(user, CategoryNameNormalizer.normalize("Groceries"), true,
+            CategoryIcon.SHOPPING_CART);
 
     when(userRepository.findByEmail(TEST_EMAIL))
             .thenReturn(Optional.of(user));
@@ -661,8 +674,9 @@ void shouldChangeDisplayCasingWithoutDuplicateCheckAndKeepBuiltInMetadata() {
 
     assertEquals("GROCERIES", response.name());
     assertEquals("groceries", category.getNormalizedName());
-    assertTrue(category.isBuiltIn());
+    assertFalse(category.isBuiltIn());
     assertEquals(CategoryIcon.SHOPPING_CART, category.getIcon());
+    assertEquals("shopping-cart", response.iconKey());
     verify(categoryRepository, never()).existsByUserIdAndNormalizedNameAndIdNot(
             org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any(),
@@ -670,9 +684,10 @@ void shouldChangeDisplayCasingWithoutDuplicateCheckAndKeepBuiltInMetadata() {
 }
 
 @Test
-void shouldRecomputeNormalizedNameOnRenameAndKeepBuiltInMetadata() {
+void shouldRecomputeNormalizedNameOnRenameAndKeepIconWhenOmitted() {
     User user = TestDataFactory.createUser();
-    Category category = Category.builtIn(user, BuiltInCategory.HOUSING);
+    Category category = Category.custom(user, CategoryNameNormalizer.normalize("Housing Costs"), true,
+            CategoryIcon.HOUSE);
 
     when(userRepository.findByEmail(TEST_EMAIL))
             .thenReturn(Optional.of(user));
@@ -690,9 +705,220 @@ void shouldRecomputeNormalizedNameOnRenameAndKeepBuiltInMetadata() {
     assertEquals("Home Costs", category.getName());
     assertEquals("home costs", category.getNormalizedName());
     assertFalse(category.isBudgetEnabled());
-    assertTrue(category.isBuiltIn());
+    assertFalse(category.isBuiltIn());
     assertEquals(CategoryIcon.HOUSE, category.getIcon());
     verify(categoryRepository).existsByUserIdAndNormalizedNameAndIdNot(
             user.getId(), "home costs", category.getId());
+}
+
+// ---------------------------------------------------------------- Phase 2 policies
+
+private Category owned(Category category, long id) {
+    org.springframework.test.util.ReflectionTestUtils.setField(category, "id", id);
+    return category;
+}
+
+private void givenUserOwns(User user, Category category) {
+    when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+    when(categoryRepository.findByIdAndUserId(category.getId(), user.getId())).thenReturn(Optional.of(category));
+}
+
+@Test
+void createDefaultsToTagWhenIconOmittedOrBlankAndStoresAnApprovedIcon() {
+    User user = TestDataFactory.createUser();
+    when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+    when(categoryRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(Category.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+    assertEquals("tag", categoryService.createCategory(TEST_EMAIL,
+            new CreateCategoryRequest("Pets", true, null)).iconKey());
+    assertEquals("tag", categoryService.createCategory(TEST_EMAIL,
+            new CreateCategoryRequest("Gifts", true, "  ")).iconKey());
+    CategoryResponse withIcon = categoryService.createCategory(TEST_EMAIL,
+            new CreateCategoryRequest("Gym", false, "heart-pulse"));
+
+    assertEquals("heart-pulse", withIcon.iconKey());
+    assertFalse(withIcon.builtIn());
+    assertFalse(withIcon.budgetEnabled());
+}
+
+@Test
+void createRejectsAnIconOutsideTheCatalogBeforeSaving() {
+    User user = TestDataFactory.createUser();
+    when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+
+    CategoryValidationException exception = assertThrows(CategoryValidationException.class,
+            () -> categoryService.createCategory(TEST_EMAIL, new CreateCategoryRequest("Pets", true, "<svg>")));
+
+    assertEquals(java.util.Map.of("iconKey", "Icon must be one of the approved category icons"),
+            exception.getFields());
+    verify(categoryRepository, never()).saveAndFlush(org.mockito.ArgumentMatchers.any(Category.class));
+}
+
+@Test
+void createRejectsANameThatMatchesAnExistingBuiltInCategory() {
+    User user = TestDataFactory.createUser();
+    when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+    when(categoryRepository.existsByUserIdAndNormalizedName(user.getId(), "housing")).thenReturn(true);
+
+    assertThrows(DuplicateCategoryException.class,
+            () -> categoryService.createCategory(TEST_EMAIL, new CreateCategoryRequest("  HOUSING ", true)));
+}
+
+@Test
+void updateChangesACustomIconAndKeepsIdOwnerAndCustomStatus() {
+    User user = TestDataFactory.createUser();
+    Category category = owned(Category.custom(user, "Pets", true), 7L);
+    givenUserOwns(user, category);
+    when(categoryRepository.saveAndFlush(category)).thenReturn(category);
+
+    CategoryResponse response = categoryService.updateCategory(TEST_EMAIL, 7L,
+            new UpdateCategoryRequest("Pet Care", true, "heart-pulse"));
+
+    assertEquals(7L, response.id());
+    assertEquals("Pet Care", response.name());
+    assertEquals("heart-pulse", response.iconKey());
+    assertFalse(response.builtIn());
+    assertSame(user, category.getUser());
+}
+
+@Test
+void updateWithBlankIconKeepsTheCurrentIcon() {
+    User user = TestDataFactory.createUser();
+    Category category = owned(Category.custom(user, CategoryNameNormalizer.normalize("Pets"), true,
+            CategoryIcon.HEART_PULSE), 7L);
+    givenUserOwns(user, category);
+    when(categoryRepository.saveAndFlush(category)).thenReturn(category);
+
+    assertEquals("heart-pulse", categoryService.updateCategory(TEST_EMAIL, 7L,
+            new UpdateCategoryRequest("Pets", true, " ")).iconKey());
+}
+
+@Test
+void updateRejectsAnInvalidIconWithoutSaving() {
+    User user = TestDataFactory.createUser();
+    Category category = owned(Category.custom(user, "Pets", true), 7L);
+    givenUserOwns(user, category);
+
+    assertThrows(CategoryValidationException.class, () -> categoryService.updateCategory(TEST_EMAIL, 7L,
+            new UpdateCategoryRequest("Pets", true, "https://example.com/icon.svg")));
+    verify(categoryRepository, never()).saveAndFlush(org.mockito.ArgumentMatchers.any(Category.class));
+}
+
+@Test
+void anyUpdateOfABuiltInCategoryIsForbiddenEvenANoOp() {
+    User user = TestDataFactory.createUser();
+    Category housing = owned(Category.builtIn(user, BuiltInCategory.HOUSING), 1L);
+    givenUserOwns(user, housing);
+
+    for (UpdateCategoryRequest request : List.of(
+            new UpdateCategoryRequest("Housing", true),
+            new UpdateCategoryRequest("Housing", true, "house"),
+            new UpdateCategoryRequest("Home", true),
+            new UpdateCategoryRequest("Housing", false),
+            new UpdateCategoryRequest("Housing", true, "tag"),
+            new UpdateCategoryRequest("Bad\u0000", true))) {
+        assertThrows(CategoryBuiltInException.class, () -> categoryService.updateCategory(TEST_EMAIL, 1L, request));
+    }
+
+    assertEquals("Housing", housing.getName());
+    assertTrue(housing.isBudgetEnabled());
+    assertEquals(CategoryIcon.HOUSE, housing.getIcon());
+    verify(categoryRepository, never()).saveAndFlush(org.mockito.ArgumentMatchers.any(Category.class));
+}
+
+@Test
+void deletingABuiltInCategoryIsForbiddenBeforeAnyReferenceCheck() {
+    User user = TestDataFactory.createUser();
+    Category other = owned(Category.builtIn(user, BuiltInCategory.OTHER), 13L);
+    givenUserOwns(user, other);
+
+    assertThrows(CategoryBuiltInException.class, () -> categoryService.deleteCategory(TEST_EMAIL, 13L));
+
+    org.mockito.Mockito.verifyNoInteractions(transactionRepository, budgetRepository);
+    verify(categoryRepository, never()).delete(org.mockito.ArgumentMatchers.any(Category.class));
+}
+
+@Test
+void deletingAnUnusedCustomCategoryDeletesAndFlushes() {
+    User user = TestDataFactory.createUser();
+    Category pets = owned(Category.custom(user, "Pets", true), 7L);
+    givenUserOwns(user, pets);
+
+    categoryService.deleteCategory(TEST_EMAIL, 7L);
+
+    org.mockito.InOrder order = org.mockito.Mockito.inOrder(categoryRepository);
+    order.verify(categoryRepository).delete(pets);
+    order.verify(categoryRepository).flush();
+    verify(transactionRepository).existsByCategoryIdAndUserId(7L, user.getId());
+    verify(budgetRepository).existsByCategoryIdAndUserId(7L, user.getId());
+}
+
+@Test
+void deletingACategoryReferencedByTransactionsOrBudgetsIsBlocked() {
+    User user = TestDataFactory.createUser();
+    Category pets = owned(Category.custom(user, "Pets", true), 7L);
+    givenUserOwns(user, pets);
+
+    // transactions only / budgets only (including past months) / both
+    boolean[][] references = {{true, false}, {false, true}, {true, true}};
+    for (boolean[] reference : references) {
+        org.mockito.Mockito.lenient().when(transactionRepository.existsByCategoryIdAndUserId(7L, user.getId()))
+                .thenReturn(reference[0]);
+        org.mockito.Mockito.lenient().when(budgetRepository.existsByCategoryIdAndUserId(7L, user.getId()))
+                .thenReturn(reference[1]);
+
+        CategoryInUseException exception = assertThrows(CategoryInUseException.class,
+                () -> categoryService.deleteCategory(TEST_EMAIL, 7L));
+        assertEquals("This category is used by transactions or budgets and cannot be deleted.",
+                exception.getMessage());
+    }
+    verify(categoryRepository, never()).delete(org.mockito.ArgumentMatchers.any(Category.class));
+}
+
+@Test
+void aReferenceCommittedAfterTheCheckMapsToInUse() {
+    User user = TestDataFactory.createUser();
+    Category pets = owned(Category.custom(user, "Pets", true), 7L);
+    givenUserOwns(user, pets);
+    org.mockito.Mockito.doThrow(new DataIntegrityViolationException("fk"))
+            .when(categoryRepository).flush();
+
+    assertThrows(CategoryInUseException.class, () -> categoryService.deleteCategory(TEST_EMAIL, 7L));
+}
+
+@Test
+void foreignAndMissingCategoriesAreIndistinguishableAndCheckedFirst() {
+    User user = TestDataFactory.createUser();
+    when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+    when(categoryRepository.findByIdAndUserId(org.mockito.ArgumentMatchers.anyLong(),
+            org.mockito.ArgumentMatchers.any())).thenReturn(Optional.empty());
+
+    for (org.junit.jupiter.api.function.Executable call : List.<org.junit.jupiter.api.function.Executable>of(
+            () -> categoryService.getCategoryById(TEST_EMAIL, 99L),
+            () -> categoryService.updateCategory(TEST_EMAIL, 99L, new UpdateCategoryRequest("Bad\u0000", true, "x")),
+            () -> categoryService.deleteCategory(TEST_EMAIL, 99L))) {
+        CategoryNotFoundException exception = assertThrows(CategoryNotFoundException.class, call);
+        assertEquals("Category not found", exception.getMessage());
+    }
+    org.mockito.Mockito.verifyNoInteractions(transactionRepository, budgetRepository);
+    verify(categoryRepository, never()).existsByUserIdAndNormalizedNameAndIdNot(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+}
+
+@Test
+void responsesFallBackToTagForUnknownStoredIconsAndNeverCarryInternalFields() {
+    User user = TestDataFactory.createUser();
+    Category legacy = owned(Category.custom(user, "Legacy", true), 8L);
+    org.springframework.test.util.ReflectionTestUtils.setField(legacy, "iconKey", "retired-icon");
+    givenUserOwns(user, legacy);
+
+    CategoryResponse response = categoryService.getCategoryById(TEST_EMAIL, 8L);
+
+    assertEquals("tag", response.iconKey());
+    assertEquals("retired-icon", legacy.getIconKey());
+    assertEquals(List.of("id", "name", "budgetEnabled", "builtIn", "iconKey", "createdAt", "updatedAt"),
+            java.util.Arrays.stream(CategoryResponse.class.getRecordComponents())
+                    .map(java.lang.reflect.RecordComponent::getName).toList());
 }
 }

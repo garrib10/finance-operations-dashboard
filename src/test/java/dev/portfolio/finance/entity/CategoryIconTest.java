@@ -1,7 +1,6 @@
 package dev.portfolio.finance.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -31,10 +30,21 @@ class CategoryIconTest {
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"Tag", "TAG", " tag", "tag ", "house-", "<svg></svg>", "https://example.com/tag.svg",
-            "icons/tag.svg", "../tag", "fa fa-tag", "Tag()", "lucide-tag", "unknown"})
+            "icons/tag.svg", "../tag", "fa fa-tag", "Tag()", "lucide-tag", "unknown", "dog", "Paw-Print", "gamepad2"})
     void rejectsKeysOutsideTheCatalog(String key) {
         assertThat(CategoryIcon.fromKey(key)).isEmpty();
         assertThat(CategoryIcon.isApproved(key)).isFalse();
+    }
+
+    @Test
+    void catalogHoldsTheBuiltInIconsPlusTheApprovedCustomChoices() {
+        assertThat(Arrays.stream(CategoryIcon.values()).map(CategoryIcon::key)).containsExactlyInAnyOrder(
+                "house", "shopping-cart", "utensils", "car", "lightbulb", "shield", "heart-pulse",
+                "clapperboard", "shopping-bag", "plane", "circle-dollar-sign", "piggy-bank", "tag",
+                "paw-print", "gift", "dumbbell", "graduation-cap", "baby", "wrench", "smartphone", "tv",
+                "music", "coffee", "wine", "fuel", "bus", "shirt", "sparkles", "pill", "briefcase",
+                "credit-card", "receipt", "hand-heart", "sofa", "sprout", "gamepad-2", "ticket",
+                "package", "wallet");
     }
 
     @Test
@@ -65,18 +75,5 @@ class CategoryIconTest {
     void builtInBudgetFlagsMatchTheExistingDefaults() {
         assertThat(Arrays.stream(BuiltInCategory.values()).filter(category -> !category.budgetEnabled()))
                 .containsExactly(BuiltInCategory.INCOME, BuiltInCategory.SAVINGS);
-    }
-
-    @Test
-    void converterStoresOnlyTheKeyAndRejectsUnknownStoredKeys() {
-        CategoryIconConverter converter = new CategoryIconConverter();
-
-        assertThat(converter.convertToDatabaseColumn(CategoryIcon.HEART_PULSE)).isEqualTo("heart-pulse");
-        assertThat(converter.convertToDatabaseColumn(null)).isNull();
-        assertThat(converter.convertToEntityAttribute("piggy-bank")).isEqualTo(CategoryIcon.PIGGY_BANK);
-        assertThat(converter.convertToEntityAttribute(null)).isNull();
-        assertThatThrownBy(() -> converter.convertToEntityAttribute("<svg>"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Unsupported category icon key");
     }
 }

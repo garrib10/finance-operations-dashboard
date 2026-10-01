@@ -113,16 +113,26 @@ const diningAnalytics: BudgetAnalyticsResponse = {
   year: currentYear,
 };
 
-const categories = [
+const categories: CategoryResponse[] = [
   {
     id: 1,
     name: "Groceries",
+    budgetEnabled: true,
+    builtIn: true,
+    iconKey: "shopping-cart",
+    createdAt: "2026-09-01T10:00:00",
+    updatedAt: "2026-09-01T10:00:00",
   },
   {
     id: 2,
     name: "Dining",
+    budgetEnabled: true,
+    builtIn: true,
+    iconKey: "utensils",
+    createdAt: "2026-09-01T10:00:00",
+    updatedAt: "2026-09-01T10:00:00",
   },
-] as unknown as CategoryResponse[];
+];
 
 function mockAnalyticsForLoadedBudgets(): void {
   mockGetBudgetAnalytics.mockImplementation(async (id: number) => {

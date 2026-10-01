@@ -21,6 +21,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import dev.portfolio.finance.dto.category.CreateCategoryRequest;
 import dev.portfolio.finance.exception.GlobalExceptionHandler;
+import dev.portfolio.finance.exception.category.CategoryBuiltInException;
+import dev.portfolio.finance.exception.category.CategoryExceptionHandler;
+import dev.portfolio.finance.exception.category.CategoryInUseException;
 import dev.portfolio.finance.exception.category.CategoryNotFoundException;
 import dev.portfolio.finance.exception.category.DuplicateCategoryException;
 import dev.portfolio.finance.exception.category.InvalidCategoryNameException;
@@ -41,6 +44,9 @@ class CategoryControllerTest {
 
     private TestingAuthenticationToken authentication;
 
+    private final GlobalExceptionHandler globalExceptionHandler =
+            new GlobalExceptionHandler();
+
     @BeforeEach
     void setUp() {
         CategoryController controller =
@@ -52,7 +58,8 @@ class CategoryControllerTest {
                 MockMvcBuilders
                         .standaloneSetup(controller)
                         .setControllerAdvice(
-                                new GlobalExceptionHandler()
+                                new CategoryExceptionHandler(globalExceptionHandler),
+                                globalExceptionHandler
                         )
                         .build();
 
@@ -185,26 +192,38 @@ class CategoryControllerTest {
                         status().isBadRequest()
                 )
                 .andExpect(
-                        jsonPath("$.message").value("Category name contains unsupported characters")
+                        jsonPath("$.error").value("Validation Failed")
+                )
+                .andExpect(
+                        jsonPath("$.fields.name").value("Category name contains unsupported characters")
                 );
     }
 
     @Test
-    void shouldNotExposeInternalCategoryMetadataInResponses()
+    void shouldReturnCanonicalResponseWithoutInternalMetadata()
             throws Exception {
 
         when(categoryService.getCategoryById(TEST_EMAIL, 1L))
-                .thenReturn(new CategoryResponse(1L, "Groceries", true,
-                        LocalDateTime.now(), LocalDateTime.now()));
+                .thenReturn(new CategoryResponse(1L, "Groceries", true, true, "shopping-cart",
+                        LocalDateTime.of(2026, 9, 8, 10, 0), LocalDateTime.of(2026, 9, 8, 10, 5)));
 
         mockMvc.perform(
                         get("/api/categories/1")
                                 .principal(authentication)
                 )
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.name").value("Groceries"))
+                .andExpect(jsonPath("$.budgetEnabled").value(true))
+                .andExpect(jsonPath("$.builtIn").value(true))
+                .andExpect(jsonPath("$.iconKey").value("shopping-cart"))
+                .andExpect(jsonPath("$.createdAt").exists())
+                .andExpect(jsonPath("$.updatedAt").exists())
                 .andExpect(jsonPath("$.normalizedName").doesNotExist())
-                .andExpect(jsonPath("$.builtIn").doesNotExist())
-                .andExpect(jsonPath("$.iconKey").doesNotExist());
+                .andExpect(jsonPath("$.user").doesNotExist())
+                .andExpect(jsonPath("$.userId").doesNotExist())
+                .andExpect(jsonPath("$.email").doesNotExist())
+                .andExpect(jsonPath("$.*", org.hamcrest.Matchers.hasSize(7)));
     }
 
     @Test
@@ -284,6 +303,8 @@ void shouldReturnAllCategories()
                         1L,
                         "Dining",
                         true,
+                        false,
+                        "tag",
                         LocalDateTime.of(2026, 9, 8, 10, 0),
                         LocalDateTime.of(2026, 9, 8, 10, 0)
                 ),
@@ -291,6 +312,8 @@ void shouldReturnAllCategories()
                         2L,
                         "Groceries",
                         true,
+                        false,
+                        "tag",
                         LocalDateTime.of(2026, 9, 8, 10, 5),
                         LocalDateTime.of(2026, 9, 8, 10, 5)
                 )
@@ -331,6 +354,8 @@ void shouldUpdateCategoryWhenRequestIsValid()
                 1L,
                 "Restaurants",
                 false,
+                false,
+                "tag",
                 LocalDateTime.of(2026, 9, 8, 10, 0),
                 LocalDateTime.of(2026, 9, 8, 10, 30)
         )
@@ -353,4 +378,194 @@ void shouldUpdateCategoryWhenRequestIsValid()
                     any(UpdateCategoryRequest.class)
             );
 }
+
+    // ---------------------------------------------------------------- Phase 2 contract
+
+    private static final CategoryResponse CUSTOM = new CategoryResponse(7L, "Pet Care", true, false,
+            "piggy-bank", LocalDateTime.of(2026, 9, 30, 9, 0), LocalDateTime.of(2026, 9, 30, 9, 0));
+
+    @Test
+    void createReturns201WithCanonicalBodyAndPassesIconKey() throws Exception {
+        org.mockito.ArgumentCaptor<CreateCategoryRequest> request =
+                org.mockito.ArgumentCaptor.forClass(CreateCategoryRequest.class);
+        when(categoryService.createCategory(org.mockito.ArgumentMatchers.eq(TEST_EMAIL), request.capture()))
+                .thenReturn(CUSTOM);
+
+        mockMvc.perform(post("/api/categories").principal(authentication).contentType("application/json")
+                        .content("""
+                                {"name": "Pet Care", "budgetEnabled": true, "iconKey": "piggy-bank",
+                                 "builtIn": true, "userId": 99, "normalizedName": "x", "id": 5}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(7))
+                .andExpect(jsonPath("$.builtIn").value(false))
+                .andExpect(jsonPath("$.iconKey").value("piggy-bank"))
+                .andExpect(jsonPath("$.normalizedName").doesNotExist());
+
+        // Ownership, built-in status, IDs, and the normalized value are not part of the request.
+        org.assertj.core.api.Assertions.assertThat(request.getValue())
+                .isEqualTo(new CreateCategoryRequest("Pet Care", true, "piggy-bank"));
+    }
+
+    @Test
+    void invalidIconKeyReturnsFieldValidationWithoutCallingService() throws Exception {
+        for (String icon : java.util.List.of("paw", "Tag", "<svg onload=x>", "https://example.com/i.svg",
+                "../tag", "fa fa-tag")) {
+            mockMvc.perform(post("/api/categories").principal(authentication).contentType("application/json")
+                            .content(jsonBody("Pets", icon)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("Validation Failed"))
+                    .andExpect(jsonPath("$.fields.iconKey").value("Icon must be one of the approved category icons"));
+            mockMvc.perform(put("/api/categories/7").principal(authentication).contentType("application/json")
+                            .content(jsonBody("Pets", icon)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.fields.iconKey").exists());
+        }
+        verify(categoryService, never()).createCategory(any(String.class), any(CreateCategoryRequest.class));
+        verify(categoryService, never()).updateCategory(any(String.class), any(Long.class),
+                any(UpdateCategoryRequest.class));
+    }
+
+    @Test
+    void blankAndOversizedNamesReturnFieldValidation() throws Exception {
+        mockMvc.perform(post("/api/categories").principal(authentication).contentType("application/json")
+                        .content(jsonBody("   ", null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields.name").value("Category name is required"));
+        mockMvc.perform(put("/api/categories/7").principal(authentication).contentType("application/json")
+                        .content(jsonBody("x".repeat(101), null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields.name").value("Category name must be 100 characters or fewer"));
+    }
+
+    @Test
+    void duplicateReturns409WithStableCode() throws Exception {
+        when(categoryService.updateCategory(any(String.class), any(Long.class), any(UpdateCategoryRequest.class)))
+                .thenThrow(new DuplicateCategoryException("Category already exists"));
+
+        mockMvc.perform(put("/api/categories/7").principal(authentication).contentType("application/json")
+                        .content(jsonBody("Dining", null)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CATEGORY_DUPLICATE"))
+                .andExpect(jsonPath("$.message").value("Category already exists"));
+    }
+
+    @Test
+    void missingOrForeignCategoryReturns404WithStableCodeForEveryOperation() throws Exception {
+        CategoryNotFoundException notFound = new CategoryNotFoundException("Category not found");
+        when(categoryService.getCategoryById(TEST_EMAIL, 404L)).thenThrow(notFound);
+        when(categoryService.updateCategory(org.mockito.ArgumentMatchers.eq(TEST_EMAIL),
+                org.mockito.ArgumentMatchers.eq(404L), any(UpdateCategoryRequest.class))).thenThrow(notFound);
+        org.mockito.Mockito.doThrow(notFound).when(categoryService).deleteCategory(TEST_EMAIL, 404L);
+
+        for (var request : java.util.List.of(
+                get("/api/categories/404"),
+                put("/api/categories/404").contentType("application/json").content(jsonBody("Pets", null)),
+                delete("/api/categories/404"))) {
+            mockMvc.perform(request.principal(authentication))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("CATEGORY_NOT_FOUND"))
+                    .andExpect(jsonPath("$.message").value("Category not found"));
+        }
+    }
+
+    @Test
+    void builtInMutationReturns403WithStableCode() throws Exception {
+        when(categoryService.updateCategory(any(String.class), any(Long.class), any(UpdateCategoryRequest.class)))
+                .thenThrow(new CategoryBuiltInException());
+        org.mockito.Mockito.doThrow(new CategoryBuiltInException()).when(categoryService).deleteCategory(TEST_EMAIL, 1L);
+
+        mockMvc.perform(put("/api/categories/1").principal(authentication).contentType("application/json")
+                        .content(jsonBody("Housing", null)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("CATEGORY_BUILT_IN"))
+                .andExpect(jsonPath("$.error").value("Forbidden"))
+                .andExpect(jsonPath("$.message").value("Built-in categories cannot be changed or deleted."));
+        mockMvc.perform(delete("/api/categories/1").principal(authentication))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("CATEGORY_BUILT_IN"));
+    }
+
+    @Test
+    void inUseDeleteReturns409WithStableCode() throws Exception {
+        org.mockito.Mockito.doThrow(new CategoryInUseException()).when(categoryService).deleteCategory(TEST_EMAIL, 7L);
+
+        mockMvc.perform(delete("/api/categories/7").principal(authentication))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CATEGORY_IN_USE"))
+                .andExpect(jsonPath("$.message").value(
+                        "This category is used by transactions or budgets and cannot be deleted."));
+    }
+
+    @Test
+    void successfulDeleteReturns204WithEmptyBody() throws Exception {
+        mockMvc.perform(delete("/api/categories/7").principal(authentication))
+                .andExpect(status().isNoContent())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(""));
+    }
+
+    @Test
+    void zeroNegativeAndNonNumericIdsReturnFieldValidation() throws Exception {
+        for (String id : java.util.List.of("0", "-1", "abc", "1.5", "99999999999999999999")) {
+            for (var request : java.util.List.of(
+                    get("/api/categories/" + id),
+                    put("/api/categories/" + id).contentType("application/json").content(jsonBody("Pets", null)),
+                    delete("/api/categories/" + id))) {
+                mockMvc.perform(request.principal(authentication))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.fields.id").value("Category ID must be a positive whole number"));
+            }
+        }
+        org.mockito.Mockito.verifyNoInteractions(categoryService);
+    }
+
+    @Test
+    void malformedAndMistypedBodiesReturnSafe400() throws Exception {
+        mockMvc.perform(post("/api/categories").principal(authentication).contentType("application/json")
+                        .content("{\"name\": \"Pets\", "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Request body is missing or malformed; check field names and types"));
+        mockMvc.perform(post("/api/categories").principal(authentication).contentType("application/json")
+                        .content("{\"name\": \"Pets\", \"budgetEnabled\": \"sometimes\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields.budgetEnabled").value("Budget enabled must be true or false"));
+        mockMvc.perform(put("/api/categories/7").principal(authentication).contentType("application/json")
+                        .content("{\"name\": \"Pets\", \"budgetEnabled\": true, \"iconKey\": [\"tag\"]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields.iconKey").value("Icon must be text"));
+        mockMvc.perform(post("/api/categories").principal(authentication).contentType("application/json")
+                        .content("{\"name\": {\"x\": 1}, \"budgetEnabled\": true}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields.name").value("Category name must be text"));
+        mockMvc.perform(post("/api/categories").principal(authentication).contentType("application/json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").doesNotExist());
+        mockMvc.perform(post("/api/categories").principal(authentication).contentType("text/plain").content("Pets"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.message").value("The request could not be processed"));
+        org.mockito.Mockito.verifyNoInteractions(categoryService);
+    }
+
+    @Test
+    void unexpectedDatabaseErrorsNeverLeakSqlOrConstraintNames() throws Exception {
+        when(categoryService.createCategory(any(String.class), any(CreateCategoryRequest.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                        "could not execute statement [insert into categories ...]; "
+                                + "constraint [fk_categories_user]; SQL [insert into categories values (?)]"));
+
+        String body = mockMvc.perform(post("/api/categories").principal(authentication)
+                        .contentType("application/json").content(jsonBody("Pets", null)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message").value("Unable to complete the category request. Please try again."))
+                .andReturn().getResponse().getContentAsString();
+
+        org.assertj.core.api.Assertions.assertThat(body.toLowerCase(java.util.Locale.ROOT))
+                .doesNotContain("insert", "constraint", "fk_", "sql", "categories values");
+    }
+
+    private static String jsonBody(String name, String iconKey) {
+        return "{\"name\": \"" + name + "\", \"budgetEnabled\": true"
+                + (iconKey == null ? "" : ", \"iconKey\": \"" + iconKey.replace("\"", "\\\"") + "\"") + "}";
+    }
 }

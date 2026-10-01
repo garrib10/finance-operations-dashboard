@@ -23,4 +23,10 @@ public interface BudgetRepository
             int month,
             int year
     );
+
+    /** Whether any of this user's budgets, in any month or year, references the category. */
+    boolean existsByCategoryIdAndUserId(
+            Long categoryId,
+            Long userId
+    );
 }

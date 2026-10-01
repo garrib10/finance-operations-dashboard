@@ -13,7 +13,9 @@ import org.springframework.test.context.ActiveProfiles;
 import dev.portfolio.finance.entity.BuiltInCategory;
 import dev.portfolio.finance.entity.Category;
 import dev.portfolio.finance.entity.CategoryIcon;
+import dev.portfolio.finance.entity.TransactionType;
 import dev.portfolio.finance.entity.User;
+import dev.portfolio.finance.support.TestDataFactory;
 
 @DataJpaTest
 @ActiveProfiles("test")
@@ -340,5 +342,34 @@ class CategoryRepositoryTest {
         assertThat(categoryRepository.findAllByUserIdOrderByNameAscIdAsc(user.getId()))
                 .extracting(Category::getId)
                 .containsExactly(first.getId(), second.getId());
+    }
+
+    @Autowired
+    private TransactionRepository transactionRepository;
+
+    @Autowired
+    private BudgetRepository budgetRepository;
+
+    @Test
+    void referenceChecksFindTransactionsAndBudgetsFromAnyPeriodForTheOwnerOnly() {
+        User owner = userRepository.save(new User("Ref", "Owner", "ref-owner@example.com", "hashed-password"));
+        User other = userRepository.save(new User("Ref", "Other", "ref-other@example.com", "hashed-password"));
+        Category unused = categoryRepository.saveAndFlush(Category.custom(owner, "Unused", true));
+        Category spent = categoryRepository.saveAndFlush(Category.custom(owner, "Spent", true));
+        Category budgeted = categoryRepository.saveAndFlush(Category.custom(owner, "Budgeted", true));
+
+        transactionRepository.saveAndFlush(TestDataFactory.createTransaction(owner, spent, TransactionType.EXPENSE,
+                new java.math.BigDecimal("5.00"), "Old purchase", java.time.LocalDate.of(2019, 1, 15)));
+        budgetRepository.saveAndFlush(TestDataFactory.createBudget(owner, budgeted,
+                new java.math.BigDecimal("50.00"), 1, 2019));
+
+        assertThat(transactionRepository.existsByCategoryIdAndUserId(spent.getId(), owner.getId())).isTrue();
+        assertThat(budgetRepository.existsByCategoryIdAndUserId(budgeted.getId(), owner.getId())).isTrue();
+        assertThat(transactionRepository.existsByCategoryIdAndUserId(budgeted.getId(), owner.getId())).isFalse();
+        assertThat(budgetRepository.existsByCategoryIdAndUserId(spent.getId(), owner.getId())).isFalse();
+        assertThat(transactionRepository.existsByCategoryIdAndUserId(unused.getId(), owner.getId())).isFalse();
+        assertThat(budgetRepository.existsByCategoryIdAndUserId(unused.getId(), owner.getId())).isFalse();
+        assertThat(transactionRepository.existsByCategoryIdAndUserId(spent.getId(), other.getId())).isFalse();
+        assertThat(budgetRepository.existsByCategoryIdAndUserId(budgeted.getId(), other.getId())).isFalse();
     }
 }

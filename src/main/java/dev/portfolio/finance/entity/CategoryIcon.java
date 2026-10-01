@@ -25,6 +25,35 @@ public enum CategoryIcon {
     PLANE("plane"),
     CIRCLE_DOLLAR_SIGN("circle-dollar-sign"),
     PIGGY_BANK("piggy-bank"),
+
+    // Additional choices for custom categories.
+    PAW_PRINT("paw-print"),
+    GIFT("gift"),
+    DUMBBELL("dumbbell"),
+    GRADUATION_CAP("graduation-cap"),
+    BABY("baby"),
+    WRENCH("wrench"),
+    SMARTPHONE("smartphone"),
+    TV("tv"),
+    MUSIC("music"),
+    COFFEE("coffee"),
+    WINE("wine"),
+    FUEL("fuel"),
+    BUS("bus"),
+    SHIRT("shirt"),
+    SPARKLES("sparkles"),
+    PILL("pill"),
+    BRIEFCASE("briefcase"),
+    CREDIT_CARD("credit-card"),
+    RECEIPT("receipt"),
+    HAND_HEART("hand-heart"),
+    SOFA("sofa"),
+    SPROUT("sprout"),
+    GAMEPAD_2("gamepad-2"),
+    TICKET("ticket"),
+    PACKAGE("package"),
+    WALLET("wallet"),
+
     /** Generic icon for custom categories and the built-in "Other" category. */
     TAG("tag");
 

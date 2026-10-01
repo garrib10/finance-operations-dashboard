@@ -1,8 +1,9 @@
 # Categories
 
 Every category belongs to exactly one user. Transactions and budgets reference a
-category by ID, never by name. This page records the category policy established in
-issue #19 phase 1 (migration V6). Details of the migration itself are in
+category by ID, never by name. This page records the category policy from issue #19:
+phase 1 (migration V6) and phase 2 (the hardened [category API](categories-api.md)).
+Details of the migration itself are in
 [database migrations](database-migrations.md#v6-category-normalization-built-in-metadata-icons-and-ownership).
 
 ## Built-in and custom categories
@@ -27,9 +28,14 @@ defined in `BuiltInCategory`:
 | Other | `tag` | yes |
 
 A category created through `POST /api/categories` is **custom** (`built_in = false`)
-and gets the generic `tag` icon, even if its name matches a default. Clients cannot
-set ownership, built-in status, or the icon: the owner comes from the authenticated
-user, and `built_in` is not updatable after insert.
+with the approved icon the client chose, or `tag` by default. Clients cannot set
+ownership or built-in status: the owner comes from the authenticated user, and
+`built_in` is not updatable after insert.
+
+Built-in categories cannot be renamed, re-iconed, have their budget flag changed, or be
+deleted (`403 CATEGORY_BUILT_IN`); the entity itself also refuses those changes. Custom
+categories can be renamed (even while in use) and re-iconed, and can be deleted only
+when no transaction or budget references them (`409 CATEGORY_IN_USE` otherwise).
 
 There are no shared or ownerless categories, no hierarchy, no archiving, and no
 name snapshots on financial records.
@@ -57,8 +63,9 @@ Consequences of this policy:
   **different**.
 - The result never depends on the server's default locale.
 
-Invalid names return `400 Bad Request` with a fixed message that never echoes the
-input: `Category name is required`, `Category name contains unsupported characters`, or
+Invalid names return the standard `400` validation response with a fixed `name`
+message that never echoes the input: `Category name is required`,
+`Category name contains unsupported characters`, or
 `Category name must be 100 characters or fewer`.
 
 V6 has a frozen copy of this algorithm for the legacy backfill. Changing
@@ -71,10 +78,10 @@ migration that re-normalizes stored rows.
 an exact binary collation on MySQL (`utf8mb4_0900_bin`). Different users may use the
 same name, but one user cannot have two categories with the same comparison name.
 
-The service checks first for a friendly `409 Conflict` ("Category already exists"). Two
-concurrent requests can both pass that check, so a violation of the unique constraint
-on save is also mapped to the same `409`. Renaming only the case or spacing of a
-category's own name is allowed.
+The service checks first for a friendly `409 CATEGORY_DUPLICATE` ("Category already
+exists"). Two concurrent requests can both pass that check, so a violation of the unique
+constraint on save is also mapped to the same `409`. Renaming only the case or spacing
+of a category's own name is allowed.
 
 ## Icons
 
@@ -82,9 +89,31 @@ category's own name is allowed.
 joined by hyphens, at most 64 characters. The database stores only the key, never SVG,
 HTML, CSS classes, component names, URLs, file paths, or uploaded images. The frontend
 decides how each key is drawn. `ck_categories_icon_key_format` rejects anything that
-isn't a slug, and loading an unknown key fails loudly in `CategoryIconConverter`.
-Adding an icon means adding a `CategoryIcon` constant (no migration needed for a new
-slug).
+isn't a slug, and requests are validated against the exact catalog. The entity stores
+the raw key; a stored key outside the current catalog (for example one retired later)
+is returned as `tag` without rewriting the row. Adding an icon means adding a
+`CategoryIcon` constant (no migration needed for a new slug). Keys follow
+[Lucide](https://lucide.dev/icons) icon names so the frontend can map them directly,
+but no icon library is a backend dependency.
+
+The catalog (39 keys) is the 13 built-in icons plus 26 extra choices for custom
+categories:
+
+| Area | Key | Area | Key |
+| --- | --- | --- | --- |
+| Pets | `paw-print` | Clothing | `shirt` |
+| Gifts | `gift` | Personal care | `sparkles` |
+| Fitness | `dumbbell` | Medicine | `pill` |
+| Education | `graduation-cap` | Work | `briefcase` |
+| Kids | `baby` | Debt | `credit-card` |
+| Home repairs | `wrench` | Taxes and fees | `receipt` |
+| Phone and internet | `smartphone` | Charity | `hand-heart` |
+| Subscriptions | `tv` | Furniture | `sofa` |
+| Music and hobbies | `music` | Garden and outdoors | `sprout` |
+| Coffee | `coffee` | Games | `gamepad-2` |
+| Drinks | `wine` | Events | `ticket` |
+| Gas | `fuel` | Deliveries | `package` |
+| Transit | `bus` | Side income | `wallet` |
 
 ## Ownership safeguards
 
@@ -101,16 +130,10 @@ whose name normalizes to a canonical default name is treated as built-in (with t
 default's icon), and every other row is custom with `tag`. A renamed default is
 therefore custom. V6 does not add missing defaults or rename anything.
 
-## Not implemented yet (phase 2 and later)
+## Not implemented yet (phase 3 and later)
 
-These are intentionally unchanged in phase 1:
-
-- Renaming or deleting built-in categories is still allowed (no built-in
-  restrictions yet). Renaming keeps `built_in` and the icon.
-- Deleting a category that is in use still fails at the database with the existing
-  error behavior; there is no controlled in-use error contract yet.
-- API responses do not include `builtIn` or `iconKey`, and requests cannot choose an
-  icon.
 - Transactions and budgets cannot create a category inline, and there is no category
   filter.
-- No frontend category management, selectors, or icon rendering.
+- Transaction, budget, and dashboard responses do not include category icons.
+- No frontend category management, selectors, or icon rendering (the frontend types
+  include `builtIn` and `iconKey` only).

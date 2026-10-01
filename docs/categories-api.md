@@ -1,0 +1,165 @@
+# Categories API
+
+Categories belong to exactly one user. Every endpoint below requires a bearer access
+token (`Authorization: Bearer <token>`); the refresh cookie alone does not authorize
+category requests. Missing, invalid, or expired tokens get the standard
+`401 Unauthorized` response. The owner always comes from the token, never from the
+request body. For the underlying policy (normalization, built-in defaults, icons, and
+database safeguards) see [categories](categories.md).
+
+## Response
+
+Every endpoint returns categories in the same shape:
+
+```json
+{
+  "id": 42,
+  "name": "Pet Care",
+  "budgetEnabled": true,
+  "builtIn": false,
+  "iconKey": "paw-print",
+  "createdAt": "2026-09-30T09:00:00",
+  "updatedAt": "2026-09-30T09:00:00"
+}
+```
+
+| Field | Notes |
+| --- | --- |
+| `id` | Stable; never changes on rename |
+| `name` | Display name, normalized (NFC, whitespace collapsed and trimmed) |
+| `budgetEnabled` | Whether the category can have budgets |
+| `builtIn` | `true` for the 13 seeded defaults; set by the server only |
+| `iconKey` | Approved semantic icon key (catalog listed in [categories](categories.md#icons)). A stored key outside the current catalog is returned as `tag` (the row is not changed) |
+| `createdAt`, `updatedAt` | Local date-times, as elsewhere in the API |
+
+Responses never include the internal comparison name, the owner, or any other
+internal field.
+
+## Endpoints
+
+### `GET /api/categories`
+
+Lists the authenticated user's built-in and custom categories, ordered by name, then ID.
+
+### `GET /api/categories/{id}`
+
+Returns one of the user's categories. `404 CATEGORY_NOT_FOUND` if it does not exist or
+belongs to someone else.
+
+### `POST /api/categories`
+
+```json
+{ "name": "Pet Care", "budgetEnabled": true, "iconKey": "paw-print" }
+```
+
+- Creates a **custom** category (`builtIn: false`) owned by the caller. Returns
+  `201 Created` with the category (no `Location` header, like the other create
+  endpoints).
+- `iconKey` is optional; omitted or blank means `tag`. A supplied key must be an exact
+  key from the approved catalog.
+- Extra properties such as `builtIn`, `userId`, `id`, or `normalizedName` are ignored.
+- `409 CATEGORY_DUPLICATE` if the name matches one of the user's existing categories,
+  built-in or custom, after normalization (for example `pet care` or `HOUSING`).
+
+### `PUT /api/categories/{id}`
+
+```json
+{ "name": "Pet Supplies", "budgetEnabled": false, "iconKey": "piggy-bank" }
+```
+
+Full update of a **custom** category:
+
+- Renaming is allowed while the category is in use. The ID and every transaction and
+  budget reference stay the same, so those records show the new name the next time they
+  load. Nothing is copied, merged, or rewritten.
+- Changing only case or spacing (`Pet Care` → `pet care`) is allowed; a category never
+  conflicts with itself.
+- `iconKey` is optional; omitted or blank **keeps the current icon**, so older clients
+  never reset it. A supplied key must be approved.
+- `409 CATEGORY_DUPLICATE` if the new name matches another of the user's categories.
+
+Any `PUT` to a **built-in** category returns `403 CATEGORY_BUILT_IN`, even when every
+submitted value matches the current ones. Built-in names, icons, and budget flags are
+fixed.
+
+### `DELETE /api/categories/{id}`
+
+| Category | Result |
+| --- | --- |
+| Custom, not referenced by any transaction or budget | Permanently deleted: `204 No Content`, empty body |
+| Custom, referenced by any transaction or any budget (any month or year) | `409 CATEGORY_IN_USE`; nothing is deleted, reassigned, or renamed |
+| Built-in | `403 CATEGORY_BUILT_IN` |
+| Missing or another user's | `404 CATEGORY_NOT_FOUND` |
+
+To delete a category that is in use, first move or delete its transactions and budgets.
+
+## Order of checks and enumeration safety
+
+1. Request shape: body fields and a positive numeric ID (`400`).
+2. Ownership: the category is looked up by ID **and** the caller's user ID. Another
+   user's category gives exactly the same `404` as a missing one (same status, message,
+   and code), before any built-in, name, or in-use check runs.
+3. Built-in protection (`403`).
+4. Name and icon rules, duplicates (`400` / `409`), or references for deletes (`409`).
+
+## Errors
+
+Business errors use the standard error body with a stable `code`:
+
+```json
+{
+  "timestamp": "2026-09-30T09:00:00",
+  "status": 409,
+  "error": "Conflict",
+  "message": "This category is used by transactions or budgets and cannot be deleted.",
+  "code": "CATEGORY_IN_USE"
+}
+```
+
+| Condition | Status | `code` | `message` |
+| --- | --- | --- | --- |
+| Name matches another of the user's categories | 409 | `CATEGORY_DUPLICATE` | `Category already exists` |
+| Missing or another user's category | 404 | `CATEGORY_NOT_FOUND` | `Category not found` |
+| Change or delete a built-in category | 403 | `CATEGORY_BUILT_IN` | `Built-in categories cannot be changed or deleted.` |
+| Delete a referenced category | 409 | `CATEGORY_IN_USE` | `This category is used by transactions or budgets and cannot be deleted.` |
+
+Input errors use the standard validation body (`400`, `"error": "Validation Failed"`)
+with per-field messages:
+
+```json
+{ "timestamp": "…", "status": 400, "error": "Validation Failed",
+  "fields": { "iconKey": "Icon must be one of the approved category icons" } }
+```
+
+| Field | Messages |
+| --- | --- |
+| `name` | `Category name is required`, `Category name must be 100 characters or fewer`, `Category name contains unsupported characters`, `Category name must be text` |
+| `iconKey` | `Icon must be one of the approved category icons`, `Icon must be text` |
+| `budgetEnabled` | `Budget enabled must be true or false` |
+| `id` (path) | `Category ID must be a positive whole number` (zero, negative, non-numeric, or out of range) |
+
+A body that is missing or not valid JSON returns `400` with
+`Request body is missing or malformed; check field names and types`. A non-JSON content
+type keeps Spring's `415`. Any other failure returns a generic `500` (`Unable to complete
+the category request. Please try again.`). No error ever contains SQL, constraint names,
+submitted values, tokens, or another user's data.
+
+## Concurrency
+
+The duplicate and in-use checks give clear answers in normal use; the database decides
+under concurrency:
+
+- Two requests creating or renaming to the same normalized name: one succeeds, the other
+  gets `409 CATEGORY_DUPLICATE` from the `(user_id, normalized_name)` unique key, and its
+  transaction rolls back.
+- A delete racing with a new transaction or budget for that category: either the
+  reference commits first and the delete gets `409 CATEGORY_IN_USE` from the restrictive
+  foreign key, or the delete commits first and the new reference is rejected. No
+  record is ever left pointing at a deleted category.
+
+Database errors are translated only in context: a unique-key violation on save becomes
+`CATEGORY_DUPLICATE` only when it is the normalized-name key (matched case-insensitively,
+since MySQL and H2 report the name differently), and a foreign-key violation while
+deleting becomes `CATEGORY_IN_USE`. Anything else is the generic `500`. These paths are
+verified on MySQL 8.4 with real row locks (`CategoryMutationRaceMySqlIT`,
+`CategoryV6MySqlIT`).
