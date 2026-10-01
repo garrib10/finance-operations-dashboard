@@ -15,7 +15,7 @@ import org.mockito.stubbing.Answer;
  * Deterministic lock ordering for concurrency tests. Installed as the answer for
  * {@code UserRepository.findByIdForUpdate}: the first call made on the gated thread
  * acquires the real MySQL row lock, then parks until released. The test then waits
- * until InnoDB reports the competing transaction in LOCK WAIT, proving it is blocked
+ * until InnoDB reports the competing transaction waiting on a row lock, proving it is blocked
  * on that row lock, before releasing. No sleeps decide the ordering.
  */
 final class LockGate implements Answer<Object> {
@@ -52,14 +52,19 @@ final class LockGate implements Answer<Object> {
         }
     }
 
-    /** Polls information_schema.innodb_trx until a transaction is waiting on a lock. */
+    /**
+     * Polls performance_schema.data_lock_waits until a transaction is waiting on a row lock.
+     * Not information_schema.innodb_trx: that table is served from a cache that is not
+     * refreshed while it is read more often than every 0.1 s, so a 25 ms poll can keep
+     * seeing a snapshot from before the wait began.
+     */
     void awaitCompetitorBlocked() throws Exception {
         Instant deadline = Instant.now().plus(TIMEOUT);
         try (Connection root = MySqlIntegrationTestBase.rootConnection("fintrack");
              Statement statement = root.createStatement()) {
             while (Instant.now().isBefore(deadline)) {
                 try (ResultSet rows = statement.executeQuery(
-                        "SELECT COUNT(*) FROM information_schema.innodb_trx WHERE trx_state = 'LOCK WAIT'")) {
+                        "SELECT COUNT(*) FROM performance_schema.data_lock_waits")) {
                     rows.next();
                     if (rows.getInt(1) > 0) {
                         return;
