@@ -281,4 +281,34 @@ describe("DashboardPage", () => {
  mockedGetDashboard.mockResolvedValue(dashboardResponse);
  render(<DashboardPage />);
  expect(await screen.findByText("2026-09-09")).toBeInTheDocument();
- });
+});
+
+
+it("shows category icons beside visible names without changing amounts or statuses", async () => {
+    mockedGetDashboard.mockResolvedValue({
+      ...dashboardResponse,
+      recentTransactions: [{ ...dashboardResponse.recentTransactions[0], categoryName: "Pet Care",
+        categoryIconKey: "paw-print" }],
+      categorySpending: [{ categoryId: 40, categoryName: "Pet Care", categoryIconKey: "paw-print", amountSpent: 60 },
+        { categoryId: 41, categoryName: "Legacy", categoryIconKey: "retired-icon", amountSpent: 5 }],
+      budgetSummaries: [{ ...budgetSummaries[0], categoryName: "Pet Care", categoryIconKey: "paw-print" }],
+    });
+
+    render(<DashboardPage />);
+
+    const spending = (await screen.findByText("Legacy")).closest(".category-spending-item")!;
+    expect(spending.querySelector("svg")).toHaveClass("lucide-tag");
+    expect(spending).toHaveTextContent("$5.00");
+    const petLabels = screen.getAllByText("Pet Care");
+    expect(petLabels).toHaveLength(3);
+    for (const label of petLabels) {
+      const icon = label.closest(".category-label")!.querySelector("svg");
+      expect(icon).toHaveClass("lucide-paw-print");
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+    }
+    expect(screen.getByRole("heading", { name: "Pet Care" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Pet Care budget utilization" })).toBeInTheDocument();
+    expect(screen.getByTestId("summary-total-income")).toHaveTextContent("$5,000.00");
+    // The fixture's first summary is ON_TRACK; the status label is unaffected by the icon.
+    expect(screen.getByText("On Track")).toBeInTheDocument();
+  });

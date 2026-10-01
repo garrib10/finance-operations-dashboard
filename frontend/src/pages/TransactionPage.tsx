@@ -2,13 +2,18 @@ import { useAuth } from "../context/AuthContext";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { SubmitEvent as ReactSubmitEvent } from "react";
 import { ApiError } from "../services/api";
-import { getCategories } from "../services/categoryService";
+import { CATEGORY_DUPLICATE, CATEGORY_NOT_FOUND } from "../services/categoryService";
 import {
   createTransaction,
   deleteTransaction,
   getTransactions,
   updateTransaction,
 } from "../services/transactionService";
+import { useCategories } from "../context/CategoryContext";
+import { CategoryIcon, CategoryLabel } from "../components/CategoryIcon";
+import { CategoryManager, type CategoryChange } from "../components/CategoryManager";
+import { CategoryRefreshNotice } from "../components/CategoryRefreshNotice";
+import { CategorySelect } from "../components/CategorySelect";
 import type { CategoryResponse } from "../types/category";
 import type {
   CreateTransactionRequest,
@@ -19,9 +24,23 @@ import type {
   TransactionType,
   SortDirection,
 } from "../types/transaction";
+import {
+  CATEGORY_SELECTION_FIELDS,
+  CREATE_CATEGORY_VALUE,
+  DUPLICATE_CATEGORY_MESSAGE,
+  EMPTY_CATEGORY_DRAFT,
+  buildCategorySelection,
+  findEquivalentCategory,
+  focusFirstInvalid,
+  splitFieldErrors,
+  validateCategoryName,
+  withoutFieldError,
+  type CategoryDraft,
+} from "../utils/categoryForm";
 import { formatCurrency, formatDate } from "../utils/formatters";
 
 interface TransactionFormState {
+  /** A category ID, CREATE_CATEGORY_VALUE, or "" when nothing is chosen. */
   categoryId: string;
   type: TransactionType;
   amount: string;
@@ -32,6 +51,7 @@ interface TransactionFormState {
 interface TransactionFilterState {
   search: string;
   type: "" | TransactionType;
+  categoryId: string;
   startDate: string;
   endDate: string;
   minAmount: string;
@@ -39,6 +59,17 @@ interface TransactionFilterState {
   sortBy: TransactionSortField;
   sortDirection: SortDirection;
 }
+
+/** Server fields shown beside a control; anything else goes to the form summary. */
+const TRANSACTION_FIELDS = [
+  ...CATEGORY_SELECTION_FIELDS,
+  "type",
+  "amount",
+  "description",
+  "transactionDate",
+] as const;
+
+const NEW_CATEGORY_ERRORS = ["newCategory", "newCategory.name", "newCategory.iconKey"];
 
 const initialFormState: TransactionFormState = {
   categoryId: "",
@@ -51,6 +82,7 @@ const initialFormState: TransactionFormState = {
 const initialFilterState: TransactionFilterState = {
   search: "",
   type: "",
+  categoryId: "",
   startDate: "",
   endDate: "",
   minAmount: "",
@@ -61,14 +93,17 @@ const initialFilterState: TransactionFilterState = {
 
 function TransactionPage() {
   const { user } = useAuth();
+  const { categories, status: categoryStatus, reload: reloadCategories } = useCategories();
   const pageSize = user?.preferences?.transactionPageSize ?? 10;
   const requestSequence = useRef(0);
   const [transactionData, setTransactionData] =
     useState<PagedTransactionResponse | null>(null);
 
-  const [categories, setCategories] = useState<CategoryResponse[]>([]);
-
   const [form, setForm] = useState<TransactionFormState>(initialFormState);
+
+  const [categoryDraft, setCategoryDraft] = useState<CategoryDraft>(EMPTY_CATEGORY_DRAFT);
+
+  const [existingMatch, setExistingMatch] = useState<CategoryResponse | undefined>();
 
   const [filters, setFilters] =
     useState<TransactionFilterState>(initialFilterState);
@@ -91,46 +126,23 @@ function TransactionPage() {
     Record<string, string>
   >({});
 
-  const categoryInputRef = useRef<HTMLSelectElement>(null);
-  const typeInputRef = useRef<HTMLSelectElement>(null);
-  const amountInputRef = useRef<HTMLInputElement>(null);
-  const descriptionInputRef = useRef<HTMLInputElement>(null);
-  const dateInputRef = useRef<HTMLInputElement>(null);
+  const [failureAttempt, setFailureAttempt] = useState(0);
+
+  const submittingRef = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const formErrorRef = useRef<HTMLParagraphElement>(null);
   const formHeadingRef = useRef<HTMLHeadingElement>(null);
   const editTriggerIdRef = useRef<number | null>(null);
   const pendingFocusTriggerIdRef = useRef<number | null>(null);
 
+  // After a failed submit, focus the first invalid control in form order, else the summary.
   useEffect(() => {
-    if (validationErrors.categoryId) {
-      categoryInputRef.current?.focus();
-      return;
-    }
+    if (!failureAttempt) return;
 
-    if (validationErrors.type) {
-      typeInputRef.current?.focus();
-      return;
-    }
-
-    if (validationErrors.amount) {
-      amountInputRef.current?.focus();
-      return;
-    }
-
-    if (validationErrors.description) {
-      descriptionInputRef.current?.focus();
-      return;
-    }
-
-    if (validationErrors.transactionDate) {
-      dateInputRef.current?.focus();
-      return;
-    }
-
-    if (formErrorMessage) {
+    if (!focusFirstInvalid(formRef.current)) {
       formErrorRef.current?.focus();
     }
-  }, [formErrorMessage, validationErrors]);
+  }, [failureAttempt]);
 
   useEffect(() => {
     if (editingTransactionId === null) {
@@ -166,29 +178,32 @@ function TransactionPage() {
     pendingFocusTriggerIdRef.current = null;
   }, [editingTransactionId]);
 
-  function buildFilters(page = 0): TransactionFilterRequest {
+  function buildFilters(page = 0, source: TransactionFilterState = filters): TransactionFilterRequest {
     return {
       page,
       size: pageSize,
-      sortBy: filters.sortBy,
-      sortDirection: filters.sortDirection,
-      ...(filters.search.trim() && {
-        search: filters.search.trim(),
+      sortBy: source.sortBy,
+      sortDirection: source.sortDirection,
+      ...(source.search.trim() && {
+        search: source.search.trim(),
       }),
-      ...(filters.type && {
-        type: filters.type,
+      ...(source.type && {
+        type: source.type,
       }),
-      ...(filters.startDate && {
-        startDate: filters.startDate,
+      ...(availableCategoryId(source.categoryId) && {
+        categoryId: Number(source.categoryId),
       }),
-      ...(filters.endDate && {
-        endDate: filters.endDate,
+      ...(source.startDate && {
+        startDate: source.startDate,
       }),
-      ...(filters.minAmount && {
-        minAmount: Number(filters.minAmount),
+      ...(source.endDate && {
+        endDate: source.endDate,
       }),
-      ...(filters.maxAmount && {
-        maxAmount: Number(filters.maxAmount),
+      ...(source.minAmount && {
+        minAmount: Number(source.minAmount),
+      }),
+      ...(source.maxAmount && {
+        maxAmount: Number(source.maxAmount),
       }),
     };
   }
@@ -217,14 +232,13 @@ function TransactionPage() {
         setIsLoading(true);
         setErrorMessage("");
 
-        const [transactionsResponse, categoriesResponse] = await Promise.all([
-          getTransactions({ ...filtersForSizeChange(), size: pageSize }),
-          getCategories(),
-        ]);
+        const transactionsResponse = await getTransactions({
+          ...filtersForSizeChange(),
+          size: pageSize,
+        });
 
         if (!active || sequence !== requestSequence.current) return;
         setTransactionData(transactionsResponse);
-        setCategories(categoriesResponse);
       } catch (error) {
         if (!active || sequence !== requestSequence.current) return;
         if (error instanceof ApiError) {
@@ -241,8 +255,21 @@ function TransactionPage() {
     return () => { active = false; };
   }, [pageSize]);
 
+  /**
+   * A category deleted elsewhere can no longer be chosen or filtered on. Until the list
+   * has loaded, a stored ID (an edit, say) is kept as is.
+   */
+  function availableCategoryId(id: string): string {
+    if (!id || id === CREATE_CATEGORY_VALUE || categoryStatus !== "ready") return id;
+    return categories.some((category) => String(category.id) === id) ? id : "";
+  }
+
+  const formCategoryId = availableCategoryId(form.categoryId);
+
   function resetForm(): void {
     setForm(initialFormState);
+    setCategoryDraft(EMPTY_CATEGORY_DRAFT);
+    setExistingMatch(undefined);
     setEditingTransactionId(null);
     setFormErrorMessage("");
     setValidationErrors({});
@@ -268,8 +295,29 @@ function TransactionPage() {
       transactionDate: transaction.transactionDate,
     });
 
+    setCategoryDraft(EMPTY_CATEGORY_DRAFT);
+    setExistingMatch(undefined);
     setFormErrorMessage("");
     setValidationErrors({});
+  }
+
+  function updateField<K extends keyof TransactionFormState>(field: K, value: TransactionFormState[K]): void {
+    setForm((current) => ({ ...current, [field]: value }));
+    setValidationErrors((current) => withoutFieldError(current, field));
+  }
+
+  function handleCategoryChange(value: string): void {
+    setForm((current) => ({ ...current, categoryId: value }));
+    setExistingMatch(undefined);
+    setValidationErrors((current) => value === CREATE_CATEGORY_VALUE
+      ? withoutFieldError(current, "categoryId")
+      : withoutFieldError(current, "categoryId", ...NEW_CATEGORY_ERRORS));
+  }
+
+  function failValidation(fieldErrors: Record<string, string>, summary: string): void {
+    setValidationErrors(fieldErrors);
+    setFormErrorMessage(summary);
+    setFailureAttempt((attempt) => attempt + 1);
   }
 
   async function handleSubmit(
@@ -277,20 +325,41 @@ function TransactionPage() {
   ): Promise<void> {
     event.preventDefault();
 
-    const isEditing = editingTransactionId !== null;
+    // Synchronous guard: a second submit before React re-renders is ignored.
+    if (submittingRef.current) return;
 
-    setIsSubmitting(true);
+    const isEditing = editingTransactionId !== null;
+    const creatingCategory = formCategoryId === CREATE_CATEGORY_VALUE;
+
     setFormErrorMessage("");
     setRefreshWarning("");
     setValidationErrors({});
+    setExistingMatch(undefined);
+
+    if (!formCategoryId) {
+      failValidation({ categoryId: "Choose an existing category or create a new one" },
+        "Please check the highlighted fields.");
+      return;
+    }
+
+    if (creatingCategory) {
+      const nameError = validateCategoryName(categoryDraft.name);
+      if (nameError) {
+        failValidation({ "newCategory.name": nameError }, "Please check the highlighted fields.");
+        return;
+      }
+    }
 
     const request: CreateTransactionRequest = {
-      categoryId: Number(form.categoryId),
+      ...buildCategorySelection(formCategoryId, categoryDraft),
       type: form.type,
       amount: Number(form.amount),
       description: form.description.trim(),
       transactionDate: form.transactionDate,
     };
+
+    submittingRef.current = true;
+    setIsSubmitting(true);
 
     try {
       if (editingTransactionId !== null) {
@@ -299,20 +368,29 @@ function TransactionPage() {
         await createTransaction(request);
       }
     } catch (error) {
-      if (error instanceof ApiError) {
-        setFormErrorMessage(error.message);
-
-        if (error.validationErrors) {
-          setValidationErrors(error.validationErrors);
-        }
+      if (error instanceof ApiError && error.code === CATEGORY_DUPLICATE && creatingCategory) {
+        failValidation({ "newCategory.name": DUPLICATE_CATEGORY_MESSAGE },
+          "That category already exists. Nothing was saved.");
+        const latest = await reloadCategories();
+        setExistingMatch(latest ? findEquivalentCategory(latest, categoryDraft.name) : undefined);
+      } else if (error instanceof ApiError && error.code === CATEGORY_NOT_FOUND) {
+        failValidation({ categoryId: "This category is no longer available. Choose another category." },
+          "Please check the highlighted fields.");
+        void reloadCategories();
+      } else if (error instanceof ApiError && error.validationErrors) {
+        const { fieldErrors, otherMessages } = splitFieldErrors(error.validationErrors, TRANSACTION_FIELDS);
+        failValidation(fieldErrors, otherMessages.join(" ") || "Please check the highlighted fields.");
+      } else if (error instanceof ApiError) {
+        failValidation({}, error.message);
       } else {
-        setFormErrorMessage(
+        failValidation({},
           isEditing
             ? "Unable to update the transaction. Please try again."
             : "Unable to create the transaction. Please try again.",
         );
       }
 
+      submittingRef.current = false;
       setIsSubmitting(false);
       return;
     }
@@ -320,12 +398,15 @@ function TransactionPage() {
     resetForm();
 
     try {
+      // A new category is now reusable everywhere; a failed refresh only warns.
+      if (creatingCategory) await reloadCategories();
       await loadTransactions(buildFilters(0));
     } catch {
       setRefreshWarning(
         "Transaction saved, but the transaction list could not be refreshed. Reload the page to see the latest data.",
       );
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   }
@@ -422,6 +503,32 @@ function TransactionPage() {
     }
   }
 
+  /** Renames show up in the list; a deleted category leaves the form and filter. */
+  async function handleCategoryManaged(change: CategoryChange): Promise<void> {
+    let nextFilters = filters;
+
+    if (change.type === "deleted") {
+      const id = String(change.categoryId);
+      if (form.categoryId === id) setForm((current) => ({ ...current, categoryId: "" }));
+      if (filters.categoryId === id) {
+        nextFilters = { ...filters, categoryId: "" };
+        setFilters(nextFilters);
+      }
+    }
+
+    try {
+      await loadTransactions(buildFilters(transactionData?.page ?? 0, nextFilters));
+    } catch {
+      setRefreshWarning(
+        "The category was updated, but the transaction list could not be refreshed. Reload the page to see the latest data.",
+      );
+    }
+  }
+
+  const selectedFilterCategory = categories.find(
+    (category) => String(category.id) === filters.categoryId,
+  );
+
   if (isLoading && transactionData === null) {
     return (
       <section>
@@ -446,6 +553,8 @@ function TransactionPage() {
         </p>
       )}
 
+      <CategoryRefreshNotice />
+
       <section>
         <div>
           <h2 ref={formHeadingRef} tabIndex={-1}>
@@ -461,61 +570,49 @@ function TransactionPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="transaction-form">
-          <div className="form-field">
-            <label htmlFor="transaction-category">Category</label>
-
-            <select
-              ref={categoryInputRef}
-              id="transaction-category"
-              value={form.categoryId}
-              aria-invalid={Boolean(validationErrors.categoryId)}
-              aria-describedby={
-                validationErrors.categoryId
-                  ? "transaction-category-error"
-                  : undefined
-              }
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  categoryId: event.target.value,
-                })
-              }
-              required
-            >
-              <option value="">Select a category</option>
-
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-
-            {validationErrors.categoryId && (
-              <p id="transaction-category-error" className="field-error">
-                {validationErrors.categoryId}
-              </p>
-            )}
-          </div>
+        <form ref={formRef} onSubmit={handleSubmit} className="transaction-form">
+          <CategorySelect
+            id="transaction-category"
+            value={formCategoryId}
+            onChange={handleCategoryChange}
+            draft={categoryDraft}
+            onNameChange={(name) => {
+              setCategoryDraft((current) => ({ ...current, name }));
+              setExistingMatch(undefined);
+              setValidationErrors((current) => withoutFieldError(current, "newCategory.name", "newCategory"));
+            }}
+            onNameBlur={() => {
+              const nameError = validateCategoryName(categoryDraft.name);
+              if (nameError) setValidationErrors((current) => ({ ...current, "newCategory.name": nameError }));
+            }}
+            onIconChange={(iconKey) => {
+              setCategoryDraft((current) => ({ ...current, iconKey }));
+              setValidationErrors((current) => withoutFieldError(current, "newCategory.iconKey"));
+            }}
+            errors={{
+              selection: validationErrors.categoryId ?? validationErrors.newCategory,
+              name: validationErrors["newCategory.name"],
+              iconKey: validationErrors["newCategory.iconKey"],
+            }}
+            disabled={isSubmitting}
+            existingMatch={existingMatch}
+            onUseExisting={(category) => {
+              handleCategoryChange(String(category.id));
+              setFormErrorMessage("");
+            }}
+          />
 
           <div className="form-field">
             <label htmlFor="transaction-type">Type</label>
 
             <select
-              ref={typeInputRef}
               id="transaction-type"
               value={form.type}
               aria-invalid={Boolean(validationErrors.type)}
               aria-describedby={
                 validationErrors.type ? "transaction-type-error" : undefined
               }
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  type: event.target.value as TransactionType,
-                })
-              }
+              onChange={(event) => updateField("type", event.target.value as TransactionType)}
             >
               <option value="EXPENSE">Expense</option>
 
@@ -533,7 +630,6 @@ function TransactionPage() {
             <label htmlFor="transaction-amount">Amount</label>
 
             <input
-              ref={amountInputRef}
               id="transaction-amount"
               type="number"
               min="0.01"
@@ -543,12 +639,7 @@ function TransactionPage() {
               aria-describedby={
                 validationErrors.amount ? "transaction-amount-error" : undefined
               }
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  amount: event.target.value,
-                })
-              }
+              onChange={(event) => updateField("amount", event.target.value)}
               required
             />
 
@@ -563,7 +654,6 @@ function TransactionPage() {
             <label htmlFor="transaction-description">Description</label>
 
             <input
-              ref={descriptionInputRef}
               id="transaction-description"
               type="text"
               maxLength={255}
@@ -574,12 +664,7 @@ function TransactionPage() {
                   ? "transaction-description-error"
                   : undefined
               }
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  description: event.target.value,
-                })
-              }
+              onChange={(event) => updateField("description", event.target.value)}
               required
             />
 
@@ -594,7 +679,6 @@ function TransactionPage() {
             <label htmlFor="transaction-date">Date</label>
 
             <input
-              ref={dateInputRef}
               id="transaction-date"
               type="date"
               value={form.transactionDate}
@@ -604,12 +688,7 @@ function TransactionPage() {
                   ? "transaction-date-error"
                   : undefined
               }
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  transactionDate: event.target.value,
-                })
-              }
+              onChange={(event) => updateField("transactionDate", event.target.value)}
               required
             />
 
@@ -658,6 +737,8 @@ function TransactionPage() {
         </form>
       </section>
 
+      <CategoryManager onChange={(change) => void handleCategoryManaged(change)} />
+
       <section>
         <div>
           <h2>Filter Transactions</h2>
@@ -699,6 +780,33 @@ function TransactionPage() {
               <option value="INCOME">Income</option>
               <option value="EXPENSE">Expense</option>
             </select>
+          </div>
+
+          <div className="form-field">
+            <label htmlFor="filter-category">Filter by category</label>
+
+            <div className="category-select__control">
+              {selectedFilterCategory && <CategoryIcon iconKey={selectedFilterCategory.iconKey} />}
+
+              <select
+                id="filter-category"
+                value={selectedFilterCategory ? filters.categoryId : ""}
+                onChange={(event) =>
+                  setFilters({
+                    ...filters,
+                    categoryId: event.target.value,
+                  })
+                }
+              >
+                <option value="">All categories</option>
+
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="form-field">
@@ -864,7 +972,9 @@ function TransactionPage() {
 
                     <td>{transaction.description}</td>
 
-                    <td>{transaction.categoryName}</td>
+                    <td>
+                      <CategoryLabel name={transaction.categoryName} iconKey={transaction.categoryIconKey} />
+                    </td>
 
                     <td>
                       {transaction.type === "INCOME" ? "Income" : "Expense"}

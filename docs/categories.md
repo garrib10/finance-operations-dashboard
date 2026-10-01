@@ -140,9 +140,36 @@ category API (one normalization, one duplicate rule), by the shared
 both workflows. Financial and dashboard responses carry `categoryIconKey`. See the
 [category API](categories-api.md#categories-in-transactions-and-budgets).
 
-## Not implemented yet (phase 4 and later)
+## Frontend (phase 4)
 
-- No frontend category creation, selector option, icon picker, or icon rendering.
-- No category management screen (rename, change icon, delete).
-- No transaction or budget category-filter controls (the transaction API filter exists;
-  budget filtering will be client-side).
+- **Icons:** `lucide-react` draws the approved keys through one explicit registry
+  (`components/categoryIconRegistry.ts`). Server strings are only used as keys into it;
+  anything unknown renders `tag`. Icons are decorative (`aria-hidden`) and always sit next
+  to the visible category name.
+- **Shared state:** `CategoryProvider` (around the routes in `App.tsx`) loads the signed-in
+  user's categories on first use, keeps them in memory only, ignores responses for an
+  earlier user or an older request, and renders nothing from a previous user while the
+  next one loads. A failed refresh after a successful change keeps the last list and
+  shows a warning with a retry; the change itself is never resubmitted.
+- **Choosing a category:** transaction and budget forms use `CategorySelect`, a native
+  select of the user's categories (a saved "Other" is an ordinary option) plus a separate
+  **Create a custom category…** option with a non-numeric internal value. That option
+  reveals a name field and an icon picker (native radios, default `tag`), and the form
+  sends exactly one of `categoryId` or `newCategory`. The new category is saved together
+  with the record and appears in every selector and filter right after.
+- **Errors:** server field errors are shown beside their controls from an explicit
+  allowlist per form (`amount`, `monthlyLimit`, `month`, `year`, `type`, `description`,
+  `transactionDate`, `categoryId`, `newCategory`, `newCategory.name`,
+  `newCategory.iconKey`), with `aria-invalid` and `aria-describedby`; the first invalid
+  control receives focus, and anything unrecognized is shown as text in the form summary.
+  A duplicate new-category name keeps the whole form and offers the existing category.
+- **Management:** "Manage categories" on the transaction and budget pages renames,
+  re-icons, and deletes (with confirmation) custom categories; built-in ones show no
+  controls. In-use, duplicate, missing, and built-in responses are shown, never hidden.
+- **Filters:** transactions filter by `categoryId` on the server (first page on apply,
+  cleared by Reset). Budgets filter the loaded month by category in the browser, with a
+  separate message when the month has budgets but none in that category.
+
+## Not implemented yet
+
+- Responsive collapsible sidebar (tracked by a separate v1.3.0 issue).

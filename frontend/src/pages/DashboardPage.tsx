@@ -4,6 +4,7 @@ import { ApiError } from "../services/api";
 import { getDashboard } from "../services/dashboardService";
 import type { DashboardResponse } from "../types/dashboard";
 import { formatCurrency, formatDate } from "../utils/formatters";
+import { CategoryLabel } from "../components/CategoryIcon";
 
 function formatBudgetStatus(status: string): string {
   switch (status) {
@@ -185,7 +186,9 @@ function DashboardPage() {
                     <tr key={transaction.id}>
                       <td>{transaction.description}</td>
 
-                      <td>{transaction.categoryName}</td>
+                      <td>
+                        <CategoryLabel name={transaction.categoryName} iconKey={transaction.categoryIconKey} />
+                      </td>
 
                       <td>{transaction.type}</td>
 
@@ -218,7 +221,7 @@ function DashboardPage() {
                   className="category-spending-item"
                   key={category.categoryId}
                 >
-                  <span>{category.categoryName}</span>
+                  <CategoryLabel name={category.categoryName} iconKey={category.categoryIconKey} />
 
                   <strong>{formatCurrency(category.amountSpent)}</strong>
                 </div>
@@ -246,7 +249,9 @@ function DashboardPage() {
             {dashboard.budgetSummaries.map((budget) => (
               <article className="budget-summary-card" key={budget.budgetId}>
                 <div className="budget-summary-card__header">
-                  <h3>{budget.categoryName}</h3>
+                  <h3>
+                    <CategoryLabel name={budget.categoryName} iconKey={budget.categoryIconKey} />
+                  </h3>
 
                   <span
                     className={`budget-status budget-status--${budget.status.toLowerCase()}`}

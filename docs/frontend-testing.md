@@ -190,3 +190,21 @@ the new real-filter-chain integration test passes with broad web DEBUG enabled.
 No API contract, migration SQL, dependency version, or authentication policy changed
 in Phase 5. Deployment, target MySQL rehearsal, hosted logging review, and real
 browser accessibility remain separate checks, not implied by these measurements.
+
+## Issue #19 (v1.3.0) custom categories
+
+Automated coverage (`npm run test:coverage`):
+
+| Area | Tests |
+| --- | --- |
+| Icon registry matches the backend catalog; unknown, prototype, and markup keys fall back to `tag` | `categoryIconRegistry.test.ts` |
+| Shared state: lazy load, retry, refresh after changes, refresh-failure warning, stale responses after an account change, previous user never rendered, sign-out clearing | `CategoryProvider.test.tsx` |
+| Selector: built-in, custom, and saved "Other" options; separate create option; name and icon fields; keyboard icon choice; loading, failure, retry; error associations | `CategorySelect.test.tsx` |
+| Management: no controls on built-ins; rename and icon change; duplicate, missing, built-in, and in-use responses; delete confirmation by keyboard; focus restoration; announcements | `CategoryManager.test.tsx` |
+| Transactions and budgets: exact-one payloads, new category on create and edit, immediate reuse, server `amount` / `monthlyLimit` / `newCategory.name` / `newCategory.iconKey` messages beside their controls with focus and clearing, duplicate handling, refresh-failure warning, double-submit guard, filters, icons and fallbacks, long names | `TransactionPage.categories.test.tsx`, `BudgetPage.categories.test.tsx` |
+| Dashboard icons beside names without changing amounts or statuses | `DashboardPage.test.tsx` |
+
+Manual check (desktop, 375 px, and 200% zoom): create a transaction with a new category and
+icon, confirm it appears in the budget form and both filters, rename and re-icon it from
+"Manage categories", try deleting it while in use (refused), then delete an unused one.
+Icon grids should wrap, long names should wrap, and nothing should scroll horizontally.
