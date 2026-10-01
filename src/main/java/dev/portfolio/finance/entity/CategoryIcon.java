@@ -78,4 +78,12 @@ public enum CategoryIcon {
     public static boolean isApproved(String key) {
         return fromKey(key).isPresent();
     }
+
+    /**
+     * The icon to show for a stored key: the approved icon, or {@link #TAG} when the key is
+     * missing or outside today's catalog. The single response fallback for every API.
+     */
+    public static CategoryIcon fromStoredKey(String storedKey) {
+        return fromKey(storedKey).orElse(TAG);
+    }
 }

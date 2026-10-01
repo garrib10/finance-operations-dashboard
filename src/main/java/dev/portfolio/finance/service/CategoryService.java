@@ -59,11 +59,35 @@ public class CategoryService {
     ) {
         User user = findUser(authenticatedEmail);
 
-        Category category = Category.custom(
+        Category savedCategory = createCustomCategory(
                 user,
                 CategoryNameNormalizer.normalize(request.name()),
                 request.budgetEnabled(),
                 requestedIcon(request.iconKey()).orElse(CategoryIcon.TAG)
+        );
+
+        return mapToResponse(savedCategory);
+    }
+
+    /**
+     * The single creation path for custom categories, used by the category API and by
+     * transaction and budget writes. Joins the caller's transaction (never REQUIRES_NEW), so
+     * a category created for a financial record rolls back with it. The insert is flushed
+     * immediately: a duplicate surfaces here as {@link DuplicateCategoryException} and the
+     * whole transaction rolls back rather than continuing after a failed insert.
+     */
+    @Transactional
+    public Category createCustomCategory(
+            User user,
+            NormalizedCategoryName name,
+            boolean budgetEnabled,
+            CategoryIcon icon
+    ) {
+        Category category = Category.custom(
+                user,
+                name,
+                budgetEnabled,
+                icon
         );
 
         if (categoryRepository.existsByUserIdAndNormalizedName(
@@ -75,10 +99,7 @@ public class CategoryService {
             );
         }
 
-        Category savedCategory =
-                saveEnforcingUniqueName(category);
-
-        return mapToResponse(savedCategory);
+        return saveEnforcingUniqueName(category);
     }
 
     @Transactional(readOnly = true)

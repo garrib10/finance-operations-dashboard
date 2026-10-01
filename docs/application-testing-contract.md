@@ -121,7 +121,7 @@ Authenticated users can create, view, edit, delete, search, filter, sort, and pa
 
 | Field            | Rule                                               |
 | ---------------- | -------------------------------------------------- |
-| Category         | Required and must belong to the authenticated user |
+| Category         | Exactly one of `categoryId` (must belong to the authenticated user) or `newCategory` (creates a custom category in the same write; see [categories API](categories-api.md#categories-in-transactions-and-budgets)) |
 | Type             | Required                                           |
 | Amount           | Required and must be at least `0.01`               |
 | Description      | Required; maximum 255 characters                   |
@@ -139,6 +139,14 @@ Before retrying a failed create action, automation must confirm whether the reco
 
 Transactions with tied sort values use transaction ID as a secondary key in the same direction.
 
+The transaction list accepts an optional `categoryId` filter that combines with every other
+filter, sort, and page. A category that is missing or belongs to another user returns
+`404 CATEGORY_NOT_FOUND`.
+
+A failed transaction or budget write that requested a `newCategory` leaves no category
+behind. Automation that retries after a `409 CATEGORY_DUPLICATE` should pick the existing
+category by ID instead of resending `newCategory`.
+
 ## Budget behavior
 
 Authenticated users can create, view, edit, and delete their own monthly budgets.
@@ -147,7 +155,7 @@ Authenticated users can create, view, edit, and delete their own monthly budgets
 
 | Field         | Rule                                               |
 | ------------- | -------------------------------------------------- |
-| Category      | Required and must belong to the authenticated user |
+| Category      | Exactly one of `categoryId` (must belong to the authenticated user) or `newCategory` (creates a custom category in the same write) |
 | Monthly limit | Required and must be at least `0.01`               |
 | Month         | Must be between `1` and `12`                       |
 | Year          | Must be `2000` or later                            |
@@ -198,7 +206,7 @@ Dashboard data is scoped to the authenticated user.
 | Monthly Income       | Sum of `INCOME` transactions in the server's current calendar month                           |
 | Monthly Expenses     | Sum of `EXPENSE` transactions in the server's current calendar month                          |
 | Recent Transactions  | Up to five transactions ordered by transaction date descending, then creation time descending |
-| Spending by Category | Current-month `EXPENSE` totals grouped by category                                            |
+| Spending by Category | Current-month `EXPENSE` totals grouped by category ID (built-in and custom alike)              |
 | Monthly Budgets      | Budgets matching the server's current month and year                                          |
 
 ## Stable automation selectors

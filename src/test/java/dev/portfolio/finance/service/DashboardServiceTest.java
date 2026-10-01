@@ -110,6 +110,11 @@ class DashboardServiceTest {
                     }
 
                     @Override
+                    public String getCategoryIconKey() {
+                        return "shopping-cart";
+                    }
+
+                    @Override
                     public BigDecimal getAmountSpent() {
                         return new BigDecimal("425.00");
                     }
@@ -129,6 +134,7 @@ class DashboardServiceTest {
                         currentBudget.getId(),
                         groceries.getId(),
                         groceries.getName(),
+                        groceries.getIcon().key(),
                         new BigDecimal("700.00"),
                         new BigDecimal("425.00"),
                         new BigDecimal("275.00"),

@@ -76,7 +76,7 @@ public class CategoryExceptionHandler {
 
     @ExceptionHandler(CategoryValidationException.class)
     public ResponseEntity<ValidationErrorResponse> handleCategoryValidation(CategoryValidationException ex) {
-        return validation(ex.getFields());
+        return globalExceptionHandler.handleCategoryValidation(ex);
     }
 
     /**

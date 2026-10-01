@@ -50,6 +50,10 @@ function buildTransactionQuery(filters: TransactionFilterRequest = {}): string {
     searchParams.set("size", filters.size.toString());
   }
 
+  if (filters.categoryId !== undefined) {
+    searchParams.set("categoryId", filters.categoryId.toString());
+  }
+
   const queryString = searchParams.toString();
 
   return queryString ? `?${queryString}` : "";

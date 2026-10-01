@@ -130,10 +130,19 @@ whose name normalizes to a canonical default name is treated as built-in (with t
 default's icon), and every other row is custom with `tag`. A renamed default is
 therefore custom. V6 does not add missing defaults or rename anything.
 
-## Not implemented yet (phase 3 and later)
+## Categories in financial writes (phase 3)
 
-- Transactions and budgets cannot create a category inline, and there is no category
-  filter.
-- Transaction, budget, and dashboard responses do not include category icons.
-- No frontend category management, selectors, or icon rendering (the frontend types
-  include `builtIn` and `iconKey` only).
+Transaction and budget writes take exactly one of `categoryId` or `newCategory`; a new
+category is created through the same `CategoryService.createCustomCategory` path as the
+category API (one normalization, one duplicate rule), by the shared
+`CategorySelectionService`, inside the financial write's transaction (never
+`REQUIRES_NEW`). Categories created this way are custom, budget-enabled, and reusable by
+both workflows. Financial and dashboard responses carry `categoryIconKey`. See the
+[category API](categories-api.md#categories-in-transactions-and-budgets).
+
+## Not implemented yet (phase 4 and later)
+
+- No frontend category creation, selector option, icon picker, or icon rendering.
+- No category management screen (rename, change icon, delete).
+- No transaction or budget category-filter controls (the transaction API filter exists;
+  budget filtering will be client-side).

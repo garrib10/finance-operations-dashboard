@@ -93,6 +93,77 @@ fixed.
 
 To delete a category that is in use, first move or delete its transactions and budgets.
 
+## Categories in transactions and budgets
+
+`POST`/`PUT /api/transactions` and `POST`/`PUT /api/budgets` choose their category with
+**exactly one** of:
+
+```json
+{ "categoryId": 42, "type": "EXPENSE", "amount": 40.00, "description": "Vet", "transactionDate": "2026-09-30" }
+```
+
+```json
+{ "newCategory": { "name": "Pet Care", "iconKey": "paw-print" },
+  "type": "EXPENSE", "amount": 40.00, "description": "Vet", "transactionDate": "2026-09-30" }
+```
+
+(Budgets use the same `categoryId` / `newCategory` fields alongside `monthlyLimit`,
+`month`, and `year`.) Existing clients that send only `categoryId` work unchanged.
+
+| `categoryId` | `newCategory` | Result |
+| --- | --- | --- |
+| set | absent | Uses that category; it must be the caller's (`404 CATEGORY_NOT_FOUND` otherwise, identical for missing and foreign IDs) |
+| absent | set | Creates a custom category for the caller, then the record |
+| set | set | `400`, `fields.newCategory`: `Choose an existing category or a new category, not both` |
+| absent | absent | `400`, `fields.categoryId`: `Choose an existing category or create a new one` |
+
+`newCategory` accepts only `name` (required, same normalization and limits as the category
+API) and `iconKey` (optional; omitted or blank means `tag`; must be an approved key).
+Anything else (`builtIn`, `budgetEnabled`, `userId`, IDs) is ignored. A category created this
+way is custom (`builtIn: false`), owned by the caller, and always `budgetEnabled: true`, so
+it can be used by both transactions and budgets afterwards. Its errors use the nested field
+names: `fields["newCategory.name"]`, `fields["newCategory.iconKey"]`.
+
+**Atomic.** The category and the transaction or budget are written in one database
+transaction. If the financial record fails for any reason (validation, a duplicate budget
+period, a database error), the new category is not kept. On updates, the transaction or
+budget is found and authorized first, so a `404` never creates a category.
+
+**Duplicates.** If the name matches one of the caller's categories (built-in or custom,
+after normalization), the request returns `409 CATEGORY_DUPLICATE` and nothing is
+created. The existing category is never reused silently; a client can reload categories
+and offer the existing one. Under concurrency, two equivalent new-category requests produce
+exactly one success and one `409`, with no record created for the loser. Requests are
+never retried automatically.
+
+### Transaction category filter
+
+`GET /api/transactions?categoryId=42` limits results to one of the caller's categories by
+ID, and combines with `type`, `search`, `startDate`/`endDate`, `minAmount`/`maxAmount`,
+sorting (ties still broken by ID), and paging. Omitted means all categories. A zero or
+negative value returns `400`; a missing or another user's category returns the same
+`404 CATEGORY_NOT_FOUND` as above (not an empty page).
+
+Budgets have no server-side category filter: `GET /api/budgets` already returns all of the
+caller's budgets with `categoryId`, so the frontend filters by category on the client
+(Phase 4), as it does for month and year.
+
+### Icons in financial and dashboard responses
+
+These responses add `categoryIconKey` next to the existing `categoryId` and
+`categoryName` (nothing is removed or renamed):
+
+- Transactions (`TransactionResponse`, including search pages)
+- Budgets (`BudgetResponse`) and budget analytics (`BudgetAnalyticsResponse`)
+- Dashboard recent transactions, budget summaries, and spending by category
+
+```json
+{ "id": 7, "categoryId": 42, "categoryName": "Pet Care", "categoryIconKey": "paw-print", "type": "EXPENSE", "…": "…" }
+```
+
+A stored key outside the catalog is returned as `tag`. Spending by category is grouped by
+category ID, so renaming a category or changing its icon never changes totals.
+
 ## Order of checks and enumeration safety
 
 1. Request shape: body fields and a positive numeric ID (`400`).
@@ -163,3 +234,26 @@ since MySQL and H2 report the name differently), and a foreign-key violation whi
 deleting becomes `CATEGORY_IN_USE`. Anything else is the generic `500`. These paths are
 verified on MySQL 8.4 with real row locks (`CategoryMutationRaceMySqlIT`,
 `CategoryV6MySqlIT`).
+
+## Test coverage
+
+Run with `./mvnw clean verify` (MySQL tests need Docker). Category API tests: `CategoryControllerTest`, `CategoryServiceTest`, `CategoryApiIntegrationTest`, `CategoryMutationRaceMySqlIT`. Financial-write tests:
+
+- **Atomic rollback:** `FinancialCategoryIntegrationTest` creates transactions and budgets
+  with `newCategory`, then forces failures (invalid fields, an amount too large for the
+  column, a duplicate category, a duplicate budget period, a missing record on update) and
+  checks the final database state: no category, transaction, or budget is left behind.
+- **Ownership:** another user's built-in or custom category ID returns the same `404` as a
+  missing one for transaction writes, budget writes, and the transaction category filter
+  (`FinancialCategoryIntegrationTest`, `CategorySelectionServiceTest`).
+- **Filter combinations:** `categoryId` with type, search, date range, amount range,
+  sorting, ties, and paging, isolated per user (`FinancialCategoryIntegrationTest`).
+- **Dashboard:** custom expense and income categories, Unicode and 100-character names,
+  rename and icon changes leaving totals unchanged, unknown stored icons shown as `tag`,
+  and per-user isolation (`FinancialCategoryIntegrationTest`).
+- **Query count:** listing transactions and budgets loads categories in the same select
+  (`CategoryFetchQueryCountTest`).
+- **MySQL concurrency** (`FinancialCategoryRaceMySqlIT`, real InnoDB row locks): equivalent
+  new categories from competing transaction and budget writes, a new category racing a
+  rename, a transaction racing a category delete, and two budgets for the same period.
+  Each loser gets a controlled error and leaves nothing behind.

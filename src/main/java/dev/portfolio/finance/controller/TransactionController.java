@@ -86,7 +86,10 @@ public class TransactionController {
             Integer page,
 
             @RequestParam(required = false)
-            Integer size
+            Integer size,
+
+            @RequestParam(required = false)
+            Long categoryId
     ) {
         TransactionFilterRequest filters =
                 new TransactionFilterRequest(
@@ -99,7 +102,8 @@ public class TransactionController {
                         sortBy,
                         sortDirection,
                         page,
-                        size
+                        size,
+                        categoryId
                 );
 
         PagedTransactionResponse response =

@@ -35,6 +35,7 @@ const transaction: TransactionResponse = {
   id: 1,
   categoryId: 1,
   categoryName: "Groceries",
+  categoryIconKey: "shopping-cart",
   type: "EXPENSE",
   amount: 75.5,
   description: "Food Lion",

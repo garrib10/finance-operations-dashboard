@@ -10,6 +10,7 @@ import dev.portfolio.finance.dto.dashboard.BudgetSummaryResponse;
 import dev.portfolio.finance.dto.dashboard.CategorySpendingResponse;
 import dev.portfolio.finance.dto.dashboard.DashboardResponse;
 import dev.portfolio.finance.dto.dashboard.RecentTransactionResponse;
+import dev.portfolio.finance.entity.CategoryIcon;
 import dev.portfolio.finance.entity.Transaction;
 import dev.portfolio.finance.entity.TransactionType;
 import dev.portfolio.finance.entity.User;
@@ -106,6 +107,9 @@ public class DashboardService {
                                 new CategorySpendingResponse(
                                         projection.getCategoryId(),
                                         projection.getCategoryName(),
+                                        CategoryIcon.fromStoredKey(
+                                                projection.getCategoryIconKey()
+                                        ).key(),
                                         projection.getAmountSpent()
                                 )
                         )
@@ -132,6 +136,7 @@ public class DashboardService {
                                     analytics.budgetId(),
                                     analytics.categoryId(),
                                     analytics.categoryName(),
+                                    analytics.categoryIconKey(),
                                     analytics.monthlyLimit(),
                                     analytics.amountSpent(),
                                     analytics.amountRemaining(),
@@ -160,6 +165,7 @@ public class DashboardService {
                 transaction.getId(),
                 transaction.getCategory().getId(),
                 transaction.getCategory().getName(),
+                transaction.getCategory().getIcon().key(),
                 transaction.getType(),
                 transaction.getAmount(),
                 transaction.getDescription(),

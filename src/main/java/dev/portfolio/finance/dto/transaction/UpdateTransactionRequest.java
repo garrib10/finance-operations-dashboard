@@ -1,6 +1,10 @@
 package dev.portfolio.finance.dto.transaction;
 
 import java.math.BigDecimal;
+import dev.portfolio.finance.dto.category.CategorySelection;
+import dev.portfolio.finance.dto.category.NewCategoryRequest;
+import dev.portfolio.finance.validation.ExactlyOneCategorySelection;
+import jakarta.validation.Valid;
 import java.time.LocalDate;
 import dev.portfolio.finance.entity.TransactionType;
 import jakarta.validation.constraints.DecimalMin;
@@ -8,9 +12,10 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+@ExactlyOneCategorySelection
 public record UpdateTransactionRequest(
 
-        @NotNull(message = "Category ID is required")
+        /** An existing category owned by the user; exclusive with {@code newCategory}. */
         Long categoryId,
 
         @NotNull(message = "Transaction type is required")
@@ -31,7 +36,16 @@ public record UpdateTransactionRequest(
         String description,
 
         @NotNull(message = "Transaction date is required")
-        LocalDate transactionDate
+        LocalDate transactionDate,
 
-) {
+        /** A custom category to create in the same transaction; exclusive with {@code categoryId}. */
+        @Valid
+        NewCategoryRequest newCategory
+) implements CategorySelection {
+
+    /** Existing-category request, as sent by clients before {@code newCategory} existed. */
+    public UpdateTransactionRequest(Long categoryId, TransactionType type, BigDecimal amount, String description,
+            LocalDate transactionDate) {
+        this(categoryId, type, amount, description, transactionDate, null);
+    }
 }

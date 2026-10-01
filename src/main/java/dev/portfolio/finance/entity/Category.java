@@ -127,7 +127,7 @@ public class Category extends BaseEntity {
 
     /** The approved icon, or {@link CategoryIcon#TAG} when the stored key is not in the catalog. */
     public CategoryIcon getIcon() {
-        return CategoryIcon.fromKey(iconKey).orElse(CategoryIcon.TAG);
+        return CategoryIcon.fromStoredKey(iconKey);
     }
 
     /** The stored key exactly as persisted (internal; responses use {@link #getIcon()}). */

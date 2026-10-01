@@ -53,8 +53,21 @@ class TransactionServiceTest {
     @Mock
     private CategoryRepository categoryRepository;
 
-    @InjectMocks
+    @Mock
+    private CategoryService categoryService;
+
+    /** Real resolver around the mocked repositories: the services' category rules are exercised. */
     private TransactionService transactionService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void createService() {
+        transactionService = new TransactionService(
+                transactionRepository,
+                userRepository,
+                categoryRepository,
+                new CategorySelectionService(categoryRepository, categoryService)
+        );
+    }
 
     // ---------------------------------------------------------
     // GET TRANSACTION
@@ -189,7 +202,7 @@ class TransactionServiceTest {
                 user.getId()
         )).thenReturn(Optional.of(category));
 
-        when(transactionRepository.save(
+        when(transactionRepository.saveAndFlush(
                 any(Transaction.class)
         )).thenAnswer(invocation ->
                 invocation.getArgument(0)
@@ -235,7 +248,7 @@ class TransactionServiceTest {
                 );
 
         verify(transactionRepository)
-                .save(any(Transaction.class));
+                .saveAndFlush(any(Transaction.class));
     }
 
     @Test
@@ -270,7 +283,7 @@ class TransactionServiceTest {
         );
 
         verify(transactionRepository, never())
-                .save(any(Transaction.class));
+                .saveAndFlush(any(Transaction.class));
     }
 
     // ---------------------------------------------------------
@@ -322,7 +335,7 @@ class TransactionServiceTest {
                 user.getId()
         )).thenReturn(Optional.of(updatedCategory));
 
-        when(transactionRepository.save(transaction))
+        when(transactionRepository.saveAndFlush(transaction))
                 .thenReturn(transaction);
 
         // Act
@@ -355,7 +368,7 @@ class TransactionServiceTest {
         );
 
         verify(transactionRepository)
-                .save(transaction);
+                .saveAndFlush(transaction);
     }
 
     @Test
@@ -408,7 +421,7 @@ class TransactionServiceTest {
         );
 
         verify(transactionRepository, never())
-                .save(transaction);
+                .saveAndFlush(transaction);
     }
 
     // ---------------------------------------------------------
@@ -775,7 +788,7 @@ class TransactionServiceTest {
                 );
 
         verify(transactionRepository, never())
-                .save(any(Transaction.class));
+                .saveAndFlush(any(Transaction.class));
     }
 
     @Test
@@ -1270,5 +1283,47 @@ class TransactionServiceTest {
                 "amount: DESC,id: DESC",
                 pageable.getSort().toString()
         );
+    }
+
+    // ---------------------------------------------------------------- Phase 3
+
+    @Test
+    void updatingAMissingTransactionNeverCreatesTheRequestedCategory() {
+        User user = TestDataFactory.createUser();
+        when(userRepository.findByEmail("test@example.com")).thenReturn(java.util.Optional.of(user));
+        when(transactionRepository.findByIdAndUserId(99L, user.getId())).thenReturn(java.util.Optional.empty());
+
+        assertThrows(dev.portfolio.finance.exception.transaction.TransactionNotFoundException.class,
+                () -> transactionService.updateTransaction("test@example.com", 99L, new UpdateTransactionRequest(
+                        null, dev.portfolio.finance.entity.TransactionType.EXPENSE, new java.math.BigDecimal("4.50"),
+                        "Coffee", java.time.LocalDate.of(2026, 9, 30),
+                        new dev.portfolio.finance.dto.category.NewCategoryRequest("Pets", null))));
+
+        org.mockito.Mockito.verifyNoInteractions(categoryService);
+    }
+
+    @Test
+    void categoryFilterMustBePositiveAndOwnedBeforeSearching() {
+        User user = TestDataFactory.createUser();
+        when(userRepository.findByEmail("test@example.com")).thenReturn(java.util.Optional.of(user));
+
+        for (long invalid : new long[] {0L, -3L}) {
+            assertEquals("Category ID must be a positive whole number", assertThrows(
+                    dev.portfolio.finance.exception.transaction.InvalidTransactionFilterException.class,
+                    () -> transactionService.searchTransactions("test@example.com", categoryFilter(invalid)))
+                    .getMessage());
+        }
+
+        when(categoryRepository.existsByIdAndUserId(77L, user.getId())).thenReturn(false);
+        assertEquals("Category not found", assertThrows(CategoryNotFoundException.class,
+                () -> transactionService.searchTransactions("test@example.com", categoryFilter(77L))).getMessage());
+
+        verify(transactionRepository, never()).findAll(
+                org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<Transaction>>any(),
+                any(org.springframework.data.domain.Pageable.class));
+    }
+
+    private static TransactionFilterRequest categoryFilter(long categoryId) {
+        return new TransactionFilterRequest(null, null, null, null, null, null, null, null, null, null, categoryId);
     }
 }

@@ -15,6 +15,11 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
             Long userId
     );
 
+    boolean existsByIdAndUserId(
+            Long id,
+            Long userId
+    );
+
     /** Friendly early check; {@code uk_categories_user_normalized_name} is authoritative. */
     boolean existsByUserIdAndNormalizedName(
             Long userId,
