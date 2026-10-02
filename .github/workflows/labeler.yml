@@ -1,0 +1,21 @@
+name: Pull Request Labeler
+
+# pull_request_target runs this workflow from the base branch, so Dependabot PRs can be
+# labelled too. It is safe because the action never checks out or runs PR code: it only
+# reads the list of changed files and the branch name.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: Label pull request
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Apply labels from .github/labeler.yml
+        uses: actions/labeler@v7
