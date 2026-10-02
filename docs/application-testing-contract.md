@@ -273,9 +273,13 @@ keep working.
 | Logout | button "Logout" in the open account menu |
 | Public pages | `nav` "Authentication navigation" with "Login" and "Register"; hidden while a session is being restored |
 | Landmarks | exactly one `header` and one `main#main-content`; "Skip to main content" targets it |
+| Sidebar toggle (above 1100px) | button "Collapse sidebar" / "Expand sidebar" with `aria-expanded`, controlling `#app-sidebar` |
 
-Above 1100px the primary navigation is a sidebar column; at 1100px and below it is
-currently a horizontal bar above the page. Prefer role and name locators over layout
+Above 1100px the primary navigation is a sidebar column that can be collapsed to
+icons. Collapsed links keep their names ("Dashboard", "Transactions", "Budgets"), so
+name-based locators work in both states; the choice is saved per browser in
+`localStorage` under `fintrack:sidebar-collapsed` ("true" or "false"). At 1100px and
+below the navigation is currently a horizontal bar above the page. Prefer role and name locators over layout
 position, since the narrow-screen navigation will become a menu-button drawer.
 
 ### Category controls (v1.3.0)

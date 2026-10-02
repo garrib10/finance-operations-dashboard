@@ -16,7 +16,8 @@ describe("PrimaryNav", () => {
   it("lists only the approved destinations, in order", () => {
     const nav = renderAt("/");
 
-    expect(within(nav).getAllByRole("link").map((link) => [link.textContent, link.getAttribute("href")]))
+    const label = (link: HTMLElement) => link.querySelector(".primary-nav__label")?.textContent;
+    expect(within(nav).getAllByRole("link").map((link) => [label(link), link.getAttribute("href")]))
       .toEqual([["Dashboard", "/"], ["Transactions", "/transactions"], ["Budgets", "/budgets"]]);
     expect(within(nav).queryByRole("link", { name: /profile|settings/i })).not.toBeInTheDocument();
   });
@@ -38,12 +39,17 @@ describe("PrimaryNav", () => {
     expect(currentLinks(renderAt(path))).toHaveLength(0);
   });
 
-  it("names links by their visible labels and hides the icons", () => {
+  it("names links by their labels and hides the icons and tooltips", () => {
     const nav = renderAt("/");
 
     for (const link of within(nav).getAllByRole("link")) {
-      expect(link).toHaveAccessibleName(link.textContent ?? "");
+      const label = link.querySelector(".primary-nav__label")?.textContent ?? "";
+      expect(label).not.toBe("");
+      expect(link).toHaveAccessibleName(label);
       expect(link.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+      // The collapsed-mode tooltip repeats the label but stays out of the accessible name.
+      expect(link.querySelector(".sidebar-tooltip")).toHaveAttribute("aria-hidden", "true");
+      expect(link.querySelector(".sidebar-tooltip")).toHaveTextContent(label);
     }
   });
 });

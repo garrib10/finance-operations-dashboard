@@ -41,9 +41,11 @@
 
   /* Application shell (issue #95). The sidebar is shown above the 1100px breakpoint. */
   --sidebar-width: 15rem;
+  --sidebar-collapsed-width: 4.5rem;
   --topbar-height: 4rem;
 
   /* Stacking layers, lowest to highest. Add new layers here rather than raising values. */
+  --z-sidebar: 50; /* desktop sidebar and its collapsed-mode tooltips */
   --z-dropdown: 100;
   --z-banner: 1000;
   --z-skip-link: 1000;
