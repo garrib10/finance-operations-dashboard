@@ -190,3 +190,70 @@ the new real-filter-chain integration test passes with broad web DEBUG enabled.
 No API contract, migration SQL, dependency version, or authentication policy changed
 in Phase 5. Deployment, target MySQL rehearsal, hosted logging review, and real
 browser accessibility remain separate checks, not implied by these measurements.
+
+## Issue #19 (v1.3.0) custom categories
+
+Automated coverage (`npm run test:coverage`):
+
+| Area | Tests |
+| --- | --- |
+| Icon registry matches the backend catalog; unknown, prototype, and markup keys fall back to `tag` | `categoryIconRegistry.test.ts` |
+| Shared state: lazy load, retry, refresh after changes, refresh-failure warning, stale responses after an account change, previous user never rendered, sign-out clearing | `CategoryProvider.test.tsx` |
+| Selector: built-in, custom, and saved "Other" options; separate create option; name and icon fields; keyboard icon choice; loading, failure, retry; error associations | `CategorySelect.test.tsx` |
+| Management: no controls on built-ins; rename and icon change; duplicate, missing, built-in, and in-use responses; delete confirmation by keyboard; focus restoration; announcements | `CategoryManager.test.tsx` |
+| Transactions and budgets: exact-one payloads, new category on create and edit, immediate reuse, server `amount` / `monthlyLimit` / `newCategory.name` / `newCategory.iconKey` messages beside their controls with focus and clearing, duplicate handling, refresh-failure warning, double-submit guard, filters, icons and fallbacks, long names | `TransactionPage.categories.test.tsx`, `BudgetPage.categories.test.tsx` |
+| Dashboard icons beside names without changing amounts or statuses | `DashboardPage.test.tsx` |
+
+Manual check (desktop, 375 px, and 200% zoom): create a transaction with a new category and
+icon, confirm it appears in the budget form and both filters, rename and re-icon it from
+"Manage categories", try deleting it while in use (refused), then delete an unused one.
+Icon grids should wrap, long names should wrap, and nothing should scroll horizontally.
+
+### Issue #19 local manual verification (October 2, 2026)
+
+Performed by the maintainer in a desktop browser against the local backend and local
+MySQL (V6 applied), not staging:
+
+- Created a custom category from the transaction and budget forms, renamed it and changed
+  its icon in "Manage categories", and deleted an unused custom category.
+- Deleting a category used by a transaction was refused with the in-use message, which
+  closed after about 3 seconds while the category stayed listed.
+- Duplicate names were refused, including a different-case match, with the "Use existing
+  category" option shown. Two categories may share an icon.
+- Created, edited, and deleted transactions and monthly budgets; each showed its
+  confirmation banner.
+- Confirmation banners closed after about 3 seconds, stayed while hovered, and the
+  dismiss button was reachable with Tab.
+- The dashboard showed current-month expense activity by category, and the monthly budget
+  cards updated their amounts and progress bars.
+- Built-in categories showed no edit or delete controls, and category icons line up with
+  the text in tables, cards, and the management list.
+- Regression: changing the date format and transactions-per-page preferences, the display
+  name, and the first and last name still worked.
+
+This is not a staging smoke test; the staging checklist in
+[deployment.md](deployment.md#v130-staging-smoke-checklist) is still pending.
+
+### Issue #19 manual accessibility and responsive checklist
+
+Items not ticked have not been performed yet. Record evidence as described above.
+
+- [ ] Keyboard only: create a transaction and a budget with a new category, including
+      choosing an icon with arrow keys, then save.
+- [ ] Icon picker: the group is announced as "Icon", each radio by its name, the checked
+      state is clear without color, and focus is visible.
+- [ ] Duplicate recovery: the name error is announced with the field, and "Use existing
+      category" selects it and keeps the other values.
+- [ ] Rename and re-icon from "Manage categories"; focus returns to the edit button.
+- [ ] In-use delete refusal is announced; focus returns to the delete button.
+- [ ] Cancel edit and keep-category return focus to the button that opened them; a
+      completed delete moves focus to the "Hide categories" toggle.
+- [ ] Both "Filter by category" selects work with the keyboard; empty states are clear.
+- [x] Confirmation banners stay while hovered or focused, close after about 3 seconds
+      otherwise, and the dismiss button is reachable with the keyboard. The in-use delete
+      refusal closes after 3 seconds; other errors and warnings stay. (October 2, 2026, local)
+- [ ] Screen reader pass (VoiceOver/Safari and NVDA or JAWS/Chrome if available):
+      icons are not announced, names are, and each confirmation banner is read once.
+- [ ] 200% zoom and 320/375 px widths: icon grid and long names wrap, no horizontal
+      scroll, management controls remain reachable.
+- [ ] Reduced motion setting: no unexpected animation.

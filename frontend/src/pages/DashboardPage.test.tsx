@@ -26,6 +26,7 @@ const dashboardResponse: DashboardResponse = {
       id: 1,
       categoryId: 1,
       categoryName: "Groceries",
+      categoryIconKey: "shopping-cart",
       type: "EXPENSE",
       amount: 75.5,
       description: "Grocery Store",
@@ -37,6 +38,7 @@ const dashboardResponse: DashboardResponse = {
     {
       categoryId: 1,
       categoryName: "Groceries",
+      categoryIconKey: "shopping-cart",
       amountSpent: 250,
     },
   ],
@@ -49,6 +51,7 @@ const budgetSummaries: DashboardResponse["budgetSummaries"] = [
     budgetId: 1,
     categoryId: 1,
     categoryName: "Groceries",
+    categoryIconKey: "shopping-cart",
     monthlyLimit: 500,
     amountSpent: 50,
     amountRemaining: 450,
@@ -59,6 +62,7 @@ const budgetSummaries: DashboardResponse["budgetSummaries"] = [
     budgetId: 2,
     categoryId: 2,
     categoryName: "Dining",
+    categoryIconKey: "utensils",
     monthlyLimit: 100,
     amountSpent: 60,
     amountRemaining: 40,
@@ -69,6 +73,7 @@ const budgetSummaries: DashboardResponse["budgetSummaries"] = [
     budgetId: 3,
     categoryId: 3,
     categoryName: "Entertainment",
+    categoryIconKey: "clapperboard",
     monthlyLimit: 100,
     amountSpent: 90,
     amountRemaining: 10,
@@ -79,6 +84,7 @@ const budgetSummaries: DashboardResponse["budgetSummaries"] = [
     budgetId: 4,
     categoryId: 4,
     categoryName: "Shopping",
+    categoryIconKey: "shopping-bag",
     monthlyLimit: 100,
     amountSpent: 125,
     amountRemaining: -25,
@@ -275,4 +281,34 @@ describe("DashboardPage", () => {
  mockedGetDashboard.mockResolvedValue(dashboardResponse);
  render(<DashboardPage />);
  expect(await screen.findByText("2026-09-09")).toBeInTheDocument();
- });
+});
+
+
+it("shows category icons beside visible names without changing amounts or statuses", async () => {
+    mockedGetDashboard.mockResolvedValue({
+      ...dashboardResponse,
+      recentTransactions: [{ ...dashboardResponse.recentTransactions[0], categoryName: "Pet Care",
+        categoryIconKey: "paw-print" }],
+      categorySpending: [{ categoryId: 40, categoryName: "Pet Care", categoryIconKey: "paw-print", amountSpent: 60 },
+        { categoryId: 41, categoryName: "Legacy", categoryIconKey: "retired-icon", amountSpent: 5 }],
+      budgetSummaries: [{ ...budgetSummaries[0], categoryName: "Pet Care", categoryIconKey: "paw-print" }],
+    });
+
+    render(<DashboardPage />);
+
+    const spending = (await screen.findByText("Legacy")).closest(".category-spending-item")!;
+    expect(spending.querySelector("svg")).toHaveClass("lucide-tag");
+    expect(spending).toHaveTextContent("$5.00");
+    const petLabels = screen.getAllByText("Pet Care");
+    expect(petLabels).toHaveLength(3);
+    for (const label of petLabels) {
+      const icon = label.closest(".category-label")!.querySelector("svg");
+      expect(icon).toHaveClass("lucide-paw-print");
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+    }
+    expect(screen.getByRole("heading", { name: "Pet Care" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Pet Care budget utilization" })).toBeInTheDocument();
+    expect(screen.getByTestId("summary-total-income")).toHaveTextContent("$5,000.00");
+    // The fixture's first summary is ON_TRACK; the status label is unaffected by the icon.
+    expect(screen.getByText("On Track")).toBeInTheDocument();
+  });

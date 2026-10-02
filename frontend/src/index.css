@@ -23,6 +23,9 @@
   --color-primary: #2563eb;
   --color-primary-dark: #1d4ed8;
   --color-success: #15803d;
+  --color-success-bg: #f0fdf4;
+  --color-success-border: #bbf7d0;
+  --color-success-soft: #dcfce7;
   --color-warning: #b45309;
   --color-danger: #b91c1c;
 

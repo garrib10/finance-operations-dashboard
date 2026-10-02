@@ -6,6 +6,7 @@ import ProfilePage from "./pages/ProfilePage";
 import AccountSettingsPage from "./pages/AccountSettingsPage";
 
 import AppHeader from "./components/AppHeader";
+import { CategoryProvider } from "./context/CategoryProvider";
 import ProtectedRoute from "./components/ProtectedRoute";
 import BudgetPage from "./pages/BudgetPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -23,6 +24,7 @@ function App() {
       <AppHeader />
 
       <main id="main-content" className="app-main" tabIndex={-1}>
+        <CategoryProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -37,6 +39,7 @@ function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </CategoryProvider>
       </main>
     </div>
   );

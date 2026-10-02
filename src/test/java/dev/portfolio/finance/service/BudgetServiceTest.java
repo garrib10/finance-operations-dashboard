@@ -58,8 +58,21 @@ class BudgetServiceTest {
     @Mock
     private TransactionRepository transactionRepository;
 
-    @InjectMocks
+    @Mock
+    private CategoryService categoryService;
+
+    /** Real resolver around the mocked repositories: the services' category rules are exercised. */
     private BudgetService budgetService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void createService() {
+        budgetService = new BudgetService(
+                budgetRepository,
+                new CategorySelectionService(categoryRepository, categoryService),
+                userRepository,
+                transactionRepository
+        );
+    }
 
     // ---------------------------------------------------------
     // CREATE BUDGET
@@ -102,7 +115,7 @@ class BudgetServiceTest {
                 ))
                 .thenReturn(false);
 
-        when(budgetRepository.save(
+        when(budgetRepository.saveAndFlush(
                 any(Budget.class)
         )).thenAnswer(invocation ->
                 invocation.getArgument(0)
@@ -137,7 +150,7 @@ class BudgetServiceTest {
         );
 
         verify(budgetRepository)
-                .save(any(Budget.class));
+                .saveAndFlush(any(Budget.class));
     }
 
     @Test
@@ -193,7 +206,7 @@ class BudgetServiceTest {
         );
 
         verify(budgetRepository, never())
-                .save(any(Budget.class));
+                .saveAndFlush(any(Budget.class));
     }
 
     // ---------------------------------------------------------
@@ -369,7 +382,7 @@ class BudgetServiceTest {
         );
 
         verify(budgetRepository, never())
-                .save(any(Budget.class));
+                .saveAndFlush(any(Budget.class));
     }
 
     // ---------------------------------------------------------
@@ -727,7 +740,7 @@ class BudgetServiceTest {
         verify(
                 budgetRepository,
                 never()
-        ).save(any(Budget.class));
+        ).saveAndFlush(any(Budget.class));
     }
 
     // ---------------------------------------------------------
@@ -779,7 +792,7 @@ void shouldUpdateBudgetWhenIdentityIsUnchanged() {
     when(budget.getYear())
             .thenReturn(2026);
 
-    when(budgetRepository.save(budget))
+    when(budgetRepository.saveAndFlush(budget))
             .thenReturn(budget);
 
     when(budget.getMonthlyLimit())
@@ -793,6 +806,11 @@ void shouldUpdateBudgetWhenIdentityIsUnchanged() {
 
     when(category.getName())
             .thenReturn("Groceries");
+
+
+    when(category.getIcon())
+
+            .thenReturn(dev.portfolio.finance.entity.CategoryIcon.TAG);
 
     // Act
     BudgetResponse response =
@@ -842,7 +860,7 @@ void shouldUpdateBudgetWhenIdentityIsUnchanged() {
             );
 
     verify(budgetRepository)
-            .save(budget);
+            .saveAndFlush(budget);
 }
     @Test
 void shouldUpdateBudgetWhenIdentityChangesAndNoDuplicateExists() {
@@ -901,7 +919,7 @@ void shouldUpdateBudgetWhenIdentityChangesAndNoDuplicateExists() {
         ))
         .thenReturn(false);
 
-      when(budgetRepository.save(budget))
+      when(budgetRepository.saveAndFlush(budget))
         .thenReturn(budget);
 
       when(budget.getMonthlyLimit())
@@ -915,6 +933,11 @@ void shouldUpdateBudgetWhenIdentityChangesAndNoDuplicateExists() {
 
        when(updatedCategory.getName())
         .thenReturn("Dining");
+
+
+       when(updatedCategory.getIcon())
+
+               .thenReturn(dev.portfolio.finance.entity.CategoryIcon.TAG);
 
     // Act
     BudgetResponse response =
@@ -962,7 +985,7 @@ void shouldUpdateBudgetWhenIdentityChangesAndNoDuplicateExists() {
             );
 
     verify(budgetRepository)
-            .save(budget);
+            .saveAndFlush(budget);
 }
     @Test
     void shouldThrowBudgetNotFoundWhenUpdatingMissingBudget() {
@@ -1013,7 +1036,7 @@ void shouldUpdateBudgetWhenIdentityChangesAndNoDuplicateExists() {
         verify(
                 budgetRepository,
                 never()
-        ).save(any(Budget.class));
+        ).saveAndFlush(any(Budget.class));
     }
 
     @Test
@@ -1077,7 +1100,7 @@ void shouldUpdateBudgetWhenIdentityChangesAndNoDuplicateExists() {
         verify(
                 budgetRepository,
                 never()
-        ).save(any(Budget.class));
+        ).saveAndFlush(any(Budget.class));
     }
 
     // ---------------------------------------------------------
@@ -1162,5 +1185,54 @@ void shouldUpdateBudgetWhenIdentityChangesAndNoDuplicateExists() {
                 any(),
                 any()
         );
+    }
+
+    // ---------------------------------------------------------------- Phase 3
+
+    @Test
+    void concurrentBudgetForTheSameCategoryAndMonthMapsToDuplicateBudget() {
+        User user = TestDataFactory.createUser();
+        Category groceries = TestDataFactory.createCategory(user, "Groceries", true);
+        when(userRepository.findByEmail("test@example.com")).thenReturn(java.util.Optional.of(user));
+        when(categoryRepository.findByIdAndUserId(1L, user.getId())).thenReturn(java.util.Optional.of(groceries));
+        when(budgetRepository.saveAndFlush(any(Budget.class))).thenThrow(
+                new org.springframework.dao.DataIntegrityViolationException("could not execute statement",
+                        new RuntimeException("Duplicate entry for key 'budgets.UK_BUDGET_USER_CATEGORY_MONTH_YEAR'")));
+
+        DuplicateBudgetException exception = assertThrows(DuplicateBudgetException.class,
+                () -> budgetService.createBudget("test@example.com",
+                        new CreateBudgetRequest(1L, new java.math.BigDecimal("50.00"), 9, 2026)));
+
+        assertEquals("Budget already exists for this category and month", exception.getMessage());
+    }
+
+    @Test
+    void otherIntegrityViolationsOnBudgetSaveAreRethrown() {
+        User user = TestDataFactory.createUser();
+        Category groceries = TestDataFactory.createCategory(user, "Groceries", true);
+        org.springframework.dao.DataIntegrityViolationException other =
+                new org.springframework.dao.DataIntegrityViolationException("violates fk_budgets_category_owner");
+        when(userRepository.findByEmail("test@example.com")).thenReturn(java.util.Optional.of(user));
+        when(categoryRepository.findByIdAndUserId(1L, user.getId())).thenReturn(java.util.Optional.of(groceries));
+        when(budgetRepository.saveAndFlush(any(Budget.class))).thenThrow(other);
+
+        org.junit.jupiter.api.Assertions.assertSame(other, assertThrows(
+                org.springframework.dao.DataIntegrityViolationException.class,
+                () -> budgetService.createBudget("test@example.com",
+                        new CreateBudgetRequest(1L, new java.math.BigDecimal("50.00"), 9, 2026))));
+    }
+
+    @Test
+    void updatingAMissingBudgetNeverCreatesTheRequestedCategory() {
+        User user = TestDataFactory.createUser();
+        when(userRepository.findByEmail("test@example.com")).thenReturn(java.util.Optional.of(user));
+        when(budgetRepository.findByIdAndUserId(99L, user.getId())).thenReturn(java.util.Optional.empty());
+
+        assertThrows(dev.portfolio.finance.exception.budget.BudgetNotFoundException.class,
+                () -> budgetService.updateBudget("test@example.com", 99L, new UpdateBudgetRequest(null,
+                        new java.math.BigDecimal("50.00"), 9, 2026,
+                        new dev.portfolio.finance.dto.category.NewCategoryRequest("Pets", null))));
+
+        org.mockito.Mockito.verifyNoInteractions(categoryService);
     }
 }

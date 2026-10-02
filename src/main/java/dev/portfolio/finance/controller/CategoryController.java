@@ -15,6 +15,7 @@ import dev.portfolio.finance.dto.category.CategoryResponse;
 import dev.portfolio.finance.dto.category.CreateCategoryRequest;
 import dev.portfolio.finance.service.CategoryService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import org.springframework.web.bind.annotation.PathVariable;
 import dev.portfolio.finance.dto.category.UpdateCategoryRequest;
 
@@ -61,7 +62,7 @@ public class CategoryController {
     @GetMapping("/{id}")
     public ResponseEntity<CategoryResponse> getCategoryById(
             Authentication authentication,
-            @PathVariable Long id
+            @PathVariable @Positive Long id
     ) {
         CategoryResponse response =
                 categoryService.getCategoryById(
@@ -75,7 +76,7 @@ public class CategoryController {
     @PutMapping("/{id}")
     public ResponseEntity<CategoryResponse> updateCategory(
             Authentication authentication,
-            @PathVariable Long id,
+            @PathVariable @Positive Long id,
             @Valid @RequestBody UpdateCategoryRequest request
     ) {
         CategoryResponse response =
@@ -91,7 +92,7 @@ public class CategoryController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCategory(
             Authentication authentication,
-            @PathVariable Long id
+            @PathVariable @Positive Long id
     ) {
         categoryService.deleteCategory(
                 authentication.getName(),

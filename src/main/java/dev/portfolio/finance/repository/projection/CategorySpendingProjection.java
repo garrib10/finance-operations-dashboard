@@ -8,5 +8,8 @@ public interface CategorySpendingProjection {
 
     String getCategoryName();
 
+    /** Raw stored key; map with CategoryIcon.fromStoredKey before returning it. */
+    String getCategoryIconKey();
+
     BigDecimal getAmountSpent();
 }

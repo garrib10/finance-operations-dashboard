@@ -15,6 +15,7 @@ import dev.portfolio.finance.exception.auth.InvalidCredentialsException;
 import dev.portfolio.finance.exception.transaction.TransactionNotFoundException;
 import dev.portfolio.finance.exception.category.DuplicateCategoryException;
 import dev.portfolio.finance.exception.category.CategoryNotFoundException;
+import dev.portfolio.finance.exception.category.CategoryValidationException;
 import dev.portfolio.finance.exception.transaction.InvalidTransactionFilterException;
 import dev.portfolio.finance.exception.budget.BudgetNotFoundException;
 import dev.portfolio.finance.exception.budget.DuplicateBudgetException;
@@ -105,11 +106,33 @@ public class GlobalExceptionHandler {
                     LocalDateTime.now(),
                     HttpStatus.CONFLICT.value(),
                     "Conflict",
-                    ex.getMessage()
+                    ex.getMessage(),
+                    "CATEGORY_DUPLICATE"
             );
 
             return ResponseEntity
                     .status(HttpStatus.CONFLICT)
+                    .body(response);
+        }
+
+        /**
+         * Category input errors raised by any controller, for example a {@code newCategory}
+         * inside a transaction or budget request. Same field-validation shape as bean
+         * validation.
+         */
+        @ExceptionHandler(CategoryValidationException.class)
+        public ResponseEntity<ValidationErrorResponse> handleCategoryValidation(
+                CategoryValidationException ex
+        ) {
+            ValidationErrorResponse response = new ValidationErrorResponse(
+                    LocalDateTime.now(),
+                    HttpStatus.BAD_REQUEST.value(),
+                    "Validation Failed",
+                    ex.getFields()
+            );
+
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
                     .body(response);
         }
 
@@ -121,7 +144,8 @@ public class GlobalExceptionHandler {
                     LocalDateTime.now(),
                     HttpStatus.NOT_FOUND.value(),
                     "Not Found",
-                    ex.getMessage()
+                    ex.getMessage(),
+                    "CATEGORY_NOT_FOUND"
             );
 
             return ResponseEntity

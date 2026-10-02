@@ -42,7 +42,7 @@ class BudgetRepositoryTest {
 
         Category groceries =
                 categoryRepository.save(
-                        new Category(
+                        Category.custom(
                                 user,
                                 "Groceries",
                                 true
@@ -51,7 +51,7 @@ class BudgetRepositoryTest {
 
         Category dining =
                 categoryRepository.save(
-                        new Category(
+                        Category.custom(
                                 user,
                                 "Dining",
                                 true
@@ -60,7 +60,7 @@ class BudgetRepositoryTest {
 
         Category travel =
                 categoryRepository.save(
-                        new Category(
+                        Category.custom(
                                 user,
                                 "Travel",
                                 true
@@ -143,7 +143,7 @@ class BudgetRepositoryTest {
 
         Category firstCategory =
                 categoryRepository.save(
-                        new Category(
+                        Category.custom(
                                 firstUser,
                                 "Groceries",
                                 true
@@ -152,7 +152,7 @@ class BudgetRepositoryTest {
 
         Category secondCategory =
                 categoryRepository.save(
-                        new Category(
+                        Category.custom(
                                 secondUser,
                                 "Travel",
                                 true
@@ -210,7 +210,7 @@ class BudgetRepositoryTest {
 
         Category category =
                 categoryRepository.save(
-                        new Category(
+                        Category.custom(
                                 user,
                                 "Groceries",
                                 true
@@ -270,7 +270,7 @@ class BudgetRepositoryTest {
 
         Category category =
                 categoryRepository.save(
-                        new Category(
+                        Category.custom(
                                 owner,
                                 "Groceries",
                                 true
@@ -312,7 +312,7 @@ class BudgetRepositoryTest {
 
         Category category =
                 categoryRepository.save(
-                        new Category(
+                        Category.custom(
                                 user,
                                 "Groceries",
                                 true
@@ -356,7 +356,7 @@ class BudgetRepositoryTest {
 
         Category category =
                 categoryRepository.save(
-                        new Category(
+                        Category.custom(
                                 user,
                                 "Groceries",
                                 true

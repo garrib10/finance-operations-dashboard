@@ -78,4 +78,28 @@ describe("budgetService", () => {
       method: "DELETE",
     });
   });
+
+  it("sends a new category instead of a category ID", async () => {
+    await createBudget({
+      newCategory: { name: "Gym", iconKey: "dumbbell" },
+      monthlyLimit: 40,
+      month: 9,
+      year: 2026,
+    });
+    await updateBudget(12, {
+      newCategory: { name: "Date Night" },
+      monthlyLimit: 60,
+      month: 10,
+      year: 2026,
+    });
+
+    expect(mockApiRequest).toHaveBeenNthCalledWith(1, "/api/budgets", {
+      method: "POST",
+      body: '{"newCategory":{"name":"Gym","iconKey":"dumbbell"},"monthlyLimit":40,"month":9,"year":2026}',
+    });
+    expect(mockApiRequest).toHaveBeenNthCalledWith(2, "/api/budgets/12", {
+      method: "PUT",
+      body: '{"newCategory":{"name":"Date Night"},"monthlyLimit":60,"month":10,"year":2026}',
+    });
+  });
 });

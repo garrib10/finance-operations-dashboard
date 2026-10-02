@@ -16,16 +16,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
-/** Flyway V1–V5 and V5 constraints on the pinned MySQL server (not H2). */
+/** Flyway V1–V6 startup and V5 constraints on the pinned MySQL server (not H2). V6: CategoryV6MySqlIT. */
 class MySqlFlywayIT extends MySqlIntegrationTestBase {
 
     @Autowired private Flyway flyway;
     @Value("${spring.jpa.hibernate.ddl-auto}") private String ddlAuto;
 
     @Test
-    void applicationStartsOnMysqlAtV5WithHibernateValidation() {
+    void applicationStartsOnMysqlAtLatestVersionWithHibernateValidation() {
         assertThat(jdbc.queryForObject("SELECT VERSION()", String.class)).startsWith("8.4.6");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("5");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("6");
         assertThat(flyway.info().pending()).isEmpty();
         // The context only starts if Hibernate's MySQL schema validation accepted every entity.
         assertThat(ddlAuto).isEqualTo("validate");
@@ -59,7 +59,7 @@ class MySqlFlywayIT extends MySqlIntegrationTestBase {
         Map<String, List<String>> before = snapshot(schema);
 
         Flyway upgrade = Flyway.configure().dataSource(url, "root", MYSQL.getPassword())
-                .locations("classpath:db/migration").load();
+                .locations("classpath:db/migration").target("5").load();
         assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
         assertThat(upgrade.info().current().getVersion().getVersion()).isEqualTo("5");
         assertThat(snapshot(schema)).isEqualTo(before);

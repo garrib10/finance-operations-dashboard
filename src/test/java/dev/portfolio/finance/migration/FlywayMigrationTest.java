@@ -25,7 +25,7 @@ class FlywayMigrationTest {
 
         flyway.migrate();
 
-        assertThat(currentVersion(flyway)).isEqualTo("5");
+        assertThat(currentVersion(flyway)).isEqualTo("6");
         assertThat(rowCount(databaseUrl, "users")).isZero();
         assertThat(rowCount(databaseUrl, "categories")).isZero();
         assertThat(rowCount(databaseUrl, "transactions")).isZero();
@@ -37,6 +37,7 @@ class FlywayMigrationTest {
         assertThat(historyCount(databaseUrl, "3", "SQL")).isEqualTo(1);
         assertThat(historyCount(databaseUrl, "4", "SQL")).isEqualTo(1);
         assertThat(historyCount(databaseUrl, "5", "SQL")).isEqualTo(1);
+        assertThat(historyCount(databaseUrl, "6", "JDBC")).isEqualTo(1);
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         assertThat(transactionLookupIndexCount(databaseUrl)).isEqualTo(1);
     }
@@ -51,7 +52,7 @@ class FlywayMigrationTest {
         Flyway flyway = configureFlyway(databaseUrl, true);
         flyway.migrate();
 
-        assertThat(currentVersion(flyway)).isEqualTo("5");
+        assertThat(currentVersion(flyway)).isEqualTo("6");
         assertThat(rowCount(databaseUrl, "users")).isEqualTo(1);
         assertThat(rowCount(databaseUrl, "refresh_sessions")).isZero();
         assertThat(historyCount(databaseUrl, "1", "BASELINE")).isEqualTo(1);
@@ -59,6 +60,7 @@ class FlywayMigrationTest {
         assertThat(historyCount(databaseUrl, "3", "SQL")).isEqualTo(1);
         assertThat(historyCount(databaseUrl, "4", "SQL")).isEqualTo(1);
         assertThat(historyCount(databaseUrl, "5", "SQL")).isEqualTo(1);
+        assertThat(historyCount(databaseUrl, "6", "JDBC")).isEqualTo(1);
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         assertThat(transactionLookupIndexCount(databaseUrl)).isEqualTo(1);
     }
@@ -97,7 +99,7 @@ class FlywayMigrationTest {
             }
             Flyway flyway = configureFlyway(url, false);
             flyway.migrate();
-            assertThat(currentVersion(flyway)).isEqualTo("5");
+            assertThat(currentVersion(flyway)).isEqualTo("6");
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             assertThat(historyCount(url, "3", "SQL")).isEqualTo(1);
             try (ResultSet rows = statement.executeQuery("SELECT *, CONCAT(id, email, first_name, last_name, password_hash, created_at, updated_at) AS original FROM users ORDER BY id")) {
@@ -142,7 +144,7 @@ class FlywayMigrationTest {
             statement.executeUpdate("INSERT INTO budgets VALUES (1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 9, 100.00, 2026, 1, 1)");
         }
         var before = snapshot(url);
-        Flyway flyway = configureFlyway(url, false);
+        Flyway flyway = configureFlyway(url, false, "5");
         assertThat(flyway.migrate().migrationsExecuted).isEqualTo(2);
         assertThat(currentVersion(flyway)).isEqualTo("5");
         assertThat(historyCount(url, "4", "SQL")).isEqualTo(1);
@@ -177,7 +179,7 @@ class FlywayMigrationTest {
         }
         var before = snapshot(url, java.util.Set.of());
 
-        Flyway flyway = configureFlyway(url, false);
+        Flyway flyway = configureFlyway(url, false, "5");
         assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
         assertThat(currentVersion(flyway)).isEqualTo("5");
         assertThat(flyway.info().pending()).isEmpty();
@@ -423,11 +425,20 @@ class FlywayMigrationTest {
             String databaseUrl,
             boolean baselineOnMigrate
     ) {
+        return configureFlyway(databaseUrl, baselineOnMigrate, "latest");
+    }
+
+    private Flyway configureFlyway(
+            String databaseUrl,
+            boolean baselineOnMigrate,
+            String target
+    ) {
         return Flyway.configure()
                 .dataSource(databaseUrl, "sa", "")
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(baselineOnMigrate)
                 .baselineVersion(MigrationVersion.fromVersion("1"))
+                .target(target)
                 .load();
     }
 

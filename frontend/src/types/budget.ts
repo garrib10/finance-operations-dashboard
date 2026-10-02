@@ -1,23 +1,22 @@
+import type { CategoryIconKey, CategorySelection } from "./category";
+
 export type BudgetStatus = "ON_TRACK" | "CAUTION" | "WARNING" | "OVER_BUDGET";
 
-export interface CreateBudgetRequest {
-  categoryId: number;
+interface BudgetFields {
   monthlyLimit: number;
   month: number;
   year: number;
 }
 
-export interface UpdateBudgetRequest {
-  categoryId: number;
-  monthlyLimit: number;
-  month: number;
-  year: number;
-}
+export type CreateBudgetRequest = BudgetFields & CategorySelection;
+
+export type UpdateBudgetRequest = BudgetFields & CategorySelection;
 
 export interface BudgetResponse {
   id: number;
   categoryId: number;
   categoryName: string;
+  categoryIconKey: CategoryIconKey;
   monthlyLimit: number;
   month: number;
   year: number;
@@ -29,6 +28,7 @@ export interface BudgetAnalyticsResponse {
   budgetId: number;
   categoryId: number;
   categoryName: string;
+  categoryIconKey: CategoryIconKey;
   monthlyLimit: number;
   amountSpent: number;
   amountRemaining: number;
