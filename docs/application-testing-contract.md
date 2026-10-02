@@ -194,6 +194,36 @@ Budget progress bars expose:
 
 Usage above 100% remains visible and available through `aria-valuetext`, while the visual width and `aria-valuenow` are capped at 100.
 
+## Custom category workflows (v1.3.0)
+
+- **Create while saving:** choosing "Create a custom category…" reveals "Category name"
+  and an "Icon" radiogroup (default "Tag"). The category is created in the same request
+  as the transaction or budget; if either fails, neither is saved and the form keeps its
+  values. After a successful save the form resets (the new category is not left
+  selected) and a confirmation banner shows "Transaction added." / "Budget created.".
+  The new category then appears in every category select and filter without a reload.
+- **Confirmation banner:** success messages for saves and deletes appear in a banner at
+  the top of the window and close after 3 seconds (paused while hovered or focused;
+  "Dismiss message" closes it). Assert on the text promptly after the action, or hover
+  it first; do not assert that it is still visible later. Errors and refresh warnings
+  stay on the page.
+- **Duplicates:** a name matching an existing category after normalization (case,
+  spacing, Unicode form) shows "You already have a category with this name" beside the
+  name field and offers "Use existing category “{name}”". Nothing is saved.
+- **Server field errors:** `amount`, `monthlyLimit`, `newCategory.name`, and
+  `newCategory.iconKey` messages appear beside their controls with `aria-invalid`; the
+  first invalid control receives focus. Amounts above 9,999,999,999.99 or with more than
+  two decimals are rejected (`400`).
+- **Management:** custom categories can be renamed, re-iconed, or deleted from "Manage
+  categories". Deleting a category used by any transaction or budget is refused with
+  "This category is used by transactions or budgets and cannot be deleted." and the
+  category stays listed. That message (`role="alert"`) closes after 3 seconds. Built-in categories cannot be changed.
+- **Filters:** the transaction filter is applied on the server and returns to page 1;
+  Reset clears it. The budget filter narrows the loaded month in the browser and shows a
+  distinct empty message when the month has budgets but none in that category.
+- **Icon fallback:** an unknown stored icon key is returned and rendered as `tag`.
+- **Isolation:** another user's category ID behaves exactly like a missing one (`404`).
+
 ## Dashboard calculations
 
 Dashboard data is scoped to the authenticated user.
@@ -225,6 +255,30 @@ Accessible roles, labels, input IDs, link names, and button names should be pref
 | Monthly Expenses       | `summary-monthly-expenses` |
 
 These values are exposed through `data-testid`.
+
+### Category controls (v1.3.0)
+
+Category features add no new `data-testid` values; automation should use these stable
+IDs, labels, and accessible names.
+
+| Element | Selector |
+| --- | --- |
+| Transaction category select | `#transaction-category` (label "Category") |
+| Budget category select | `#budget-category` (label "Category") |
+| Create option | option text `Create a custom category…` (its value is internal; select by text) |
+| New category name | `#transaction-category-new-name` / `#budget-category-new-name` (label "Category name") |
+| Icon choices | radios named `transaction-category-icon` / `budget-category-icon`; accessible names such as "Tag", "Paw print" |
+| Transaction category filter | `#filter-category` (label "Filter by category", first option "All categories") |
+| Budget category filter | `#budget-filter-category` (label "Filter by category") |
+| Budget fields | `#budget-monthly-limit`, `#budget-month`, `#budget-year` (labels unchanged) |
+| Field errors | `#transaction-category-error` / `#budget-category-error` (selection), `#…-category-new-name-error`, `#…-category-icon-error`, `#transaction-amount-error`, `#budget-monthly-limit-error` |
+| Duplicate recovery | button "Use existing category “{name}”" under the name error |
+| Category management | button "Manage categories"; per-row "Edit {name}" / "Delete {name}"; confirm "Delete category" / "Keep category"; edit form named "Edit {name}" with "Save category" |
+| Confirmation banner | `#status-banner-stack [role="status"]`: "Transaction added./updated./deleted.", "Budget created./updated./deleted.", "Saved “{name}”.", "Deleted “{name}”."; close button "Dismiss message" |
+
+Existing category options use the numeric category ID as their value. Built-in categories
+show a "Built-in" badge and no edit or delete buttons. Category icons are decorative
+(`aria-hidden`) and never the only identifier; assert on visible names.
 
 Tests should not depend on generated CSS class names, DOM position, or visual layout when a role, label, ID, button name, or documented selector is available.
 
@@ -274,6 +328,9 @@ The initial automation suite should:
 - Exclude passwords, JWTs, cookies, and other secrets from artifacts
 - Confirm authentication before executing protected workflows
 - Clean up UI-created transaction and budget data when possible
+- Give UI-created categories a unique run-specific name, and delete them only after
+  the transactions and budgets that use them (otherwise the delete is refused as in use)
+- Never rename or delete built-in categories or categories the run did not create
 
 Browser expansion and parallel workers should be added only after serial execution and cleanup are reliable.
 

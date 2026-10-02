@@ -1,12 +1,17 @@
-# Deployment Guide (v1.2.0)
+# Deployment Guide
+
+This guide covers the topology and variables (unchanged since v1.2.0), the v1.2.0
+refresh-session rollout, and the [v1.3.0 custom-categories release](#v130-custom-categories-issue-19).
+
+## v1.2.0: refresh sessions
 
 FinTrack v1.2.0 adds refresh-token sessions (issue #18). The browser must reach the
 backend **through the frontend's own origin** so the `HttpOnly` refresh cookie stays
 first-party. This guide covers the topology, the variables per environment, the
 staging rollout, rollback, and the smoke checklist.
 
-Nothing here has been deployed yet. The staging smoke checklist must pass before
-production.
+v1.2.0 is deployed to staging and production. The v1.2.0 sections below record that
+rollout; the topology, proxy, and variables still apply.
 
 ## Topology
 
@@ -225,3 +230,94 @@ each item.
 - [ ] A POST to `/api/auth/login` without `X-FinTrack-CSRF`, or from another origin,
       returns `403`.
 - [ ] With only the refresh cookie (no `Authorization`), `/api/transactions` returns `401`.
+
+## v1.3.0: custom categories (issue #19)
+
+### What changes
+
+- **Database:** Flyway V6 (a Java migration) adds `normalized_name`, `built_in`, and
+  `icon_key` to `categories`, backfills every existing row, replaces the `(user_id, name)`
+  unique key with `(user_id, normalized_name)`, and adds composite ownership foreign keys
+  from transactions and budgets. See
+  [database migrations](database-migrations.md#v6-category-normalization-built-in-metadata-icons-and-ownership).
+- **API:** category responses gain `builtIn` and `iconKey`; transaction and budget writes
+  accept `categoryId` or `newCategory`; `GET /api/transactions` accepts `categoryId`;
+  financial and dashboard responses gain `categoryIconKey`. Existing `categoryId` clients
+  keep working. See [categories API](categories-api.md).
+- **Frontend:** custom-category creation, icon picker, category management, category
+  filters, and icons (`lucide-react`).
+- **Variables:** none. No new Railway or Vercel variables or secrets are needed for
+  categories. `FLYWAY_BASELINE_ON_MIGRATE` stays unset or `false` (both databases already
+  have Flyway history).
+
+### Rollout steps (manual)
+
+1. Merge the feature into `develop`, then promote to `staging` with the usual branch flow.
+2. **Back up the staging database.** Optionally rehearse V6 on a restored copy first: if
+   any user has duplicate or invalid legacy names, the preflight lists their IDs and stops
+   before changing anything.
+3. Deploy **Railway first**. Confirm in the logs: `Successfully applied 1 migration … now at
+   version v6` (or "up to date"), no Hibernate validation errors, and the app started.
+4. Check `/api/health` on the Railway origin, then deploy **Vercel** and check
+   `/api/health` through the Vercel host.
+5. Run the [v1.3.0 staging smoke checklist](#v130-staging-smoke-checklist).
+6. For production: take a **fresh** backup, rehearse V6 on a restored copy, then repeat
+   steps 3–5 at a quiet time. While V6 runs, the old backend instance may still serve; once
+   the new columns are required it cannot insert categories (registration included) until
+   the new instance is live.
+
+### Failure and rollback
+
+- If the V6 preflight fails, nothing was changed. On MySQL, Flyway still records a failed
+  V6 row: fix the reported rows by hand, run `flyway repair`, and restart.
+- **Never run `flyway clean`** against staging or production. Policy is roll-forward.
+- Builds before v1.3.0 cannot run on a V6 schema. Rolling back therefore means restoring
+  the pre-V6 backup together with the previous backend and frontend.
+- If only the frontend misbehaves, redeploy the previous Vercel build; v1.2.0 frontends
+  still work with the v1.3.0 API (they send `categoryId` and ignore the new fields), but
+  they cannot create or manage custom categories.
+
+### v1.3.0 staging smoke checklist
+
+**Not yet performed.** Run after the feature reaches `staging`; record pass/fail, browser,
+and evidence for each item. Nothing here was run locally as part of the feature work.
+
+- [ ] 1. Register a fresh user; the 13 built-in categories appear with their icons.
+- [ ] 2. Sign in as an existing (migrated) user; their categories, transactions, and
+      budgets are unchanged.
+- [ ] 3. Create a transaction with an existing category.
+- [ ] 4. Create a transaction with **Create a custom category…**, a name, and an icon.
+- [ ] 5. Reuse that category in another transaction without reloading the page.
+- [ ] 6. Create a budget with the same custom category.
+- [ ] 7. Create another custom category from the budget form.
+- [ ] 8. Use the budget-created category in a transaction.
+- [ ] 9. Edit a transaction to use a custom category (existing and new).
+- [ ] 10. Edit a budget to use a custom category (existing and new).
+- [ ] 11. Rename a custom category; transactions, budgets, filters, and the dashboard show
+      the new name, and amounts are unchanged.
+- [ ] 12. Change a custom category's icon; the new icon shows everywhere.
+- [ ] 13. Delete an unused custom category (after the confirmation step).
+- [ ] 14. Try to delete a category used by a transaction or a past budget: refused with the
+      "used by transactions or budgets" message, nothing removed.
+- [ ] 15. Built-in categories show no edit or delete controls.
+- [ ] 16. Filter transactions by a custom category, combined with type and dates; paging
+      restarts at page 1; Reset clears it.
+- [ ] 17. Filter budgets by a custom category within a month; the empty message differs
+      between "no budgets this month" and "none in this category".
+- [ ] 18. Dashboard: totals, recent transactions (with icons), spending by category, and
+      budget statuses are correct.
+- [ ] 19. Server field errors appear beside their inputs: an amount over 10 whole digits
+      (`amount`), a budget limit over 10 whole digits (`monthlyLimit`), a duplicate name
+      (`newCategory.name`). `newCategory.iconKey` cannot be produced from the UI; check it
+      with an API client sending an unknown icon (`400`, `fields["newCategory.iconKey"]`).
+- [ ] 20. Keyboard only: create a transaction and a budget with a new category, choose an
+      icon with arrow keys, rename and delete from **Manage categories**; focus returns
+      sensibly after cancel, save, and delete.
+- [ ] 21. Phone width (about 375 px), tablet, and 200% browser zoom: no horizontal page
+      scrolling, icon grid wraps, long names wrap, management controls reachable.
+- [ ] 22. Sign out and sign in as another user.
+- [ ] 23. The second user sees none of the first user's custom categories; a first-user
+      category ID in `/api/categories/{id}` or `?categoryId=` returns `404`.
+- [ ] 24. Backend startup logs show Flyway at V6 with no pending migration.
+- [ ] 25. The v1.2.0 smoke items (login, refresh, logout, password change, profile photos,
+      transactions, budgets) still pass.

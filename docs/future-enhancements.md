@@ -10,12 +10,10 @@
 ## Budgets
 
 - 50%, 75%, 100% threshold alerts
-- Budget progress bars
 
 ## Categories
 
 - displayOrder field
-- Icons
 - Colors
 
 ## Recurring Expenses
@@ -31,4 +29,3 @@
 ## Misc
 
 - CSV export
-- Pagination

@@ -169,6 +169,17 @@ both workflows. Financial and dashboard responses carry `categoryIconKey`. See t
 - **Filters:** transactions filter by `categoryId` on the server (first page on apply,
   cleared by Reset). Budgets filter the loaded month by category in the browser, with a
   separate message when the month has budgets but none in that category.
+- **After saving:** the form resets, so a newly created category is not left selected;
+  it is immediately available in every selector and filter.
+- **Confirmations:** successful saves and deletes ("Transaction added.", "Transaction
+  updated.", "Transaction deleted.", "Budget created.", "Budget updated.", "Budget
+  deleted.", and "Saved/Deleted “name”." in Manage categories) appear in a banner at the
+  top of the window (`StatusBanner`). It is announced through an always-present
+  `role="status"` region, closes itself after 3 seconds, pauses while hovered or focused,
+  and has a "Dismiss message" button. Starting another edit or delete clears it. Errors
+  and warnings never use the banner and stay until the user acts, except the in-use delete
+  refusal, which closes after 3 seconds because the category stays visibly listed; if the list cannot be
+  refreshed after a save, a persistent warning replaces the banner.
 
 ## Not implemented yet
 

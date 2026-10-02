@@ -56,7 +56,11 @@ reviewed on September 20, 2026.
 - Foreign keys to `users.id` and `categories.id`
 
 All application tables use the InnoDB engine, the `utf8mb4` character set,
-and the `utf8mb4_unicode_ci` collation.
+and the `utf8mb4_unicode_ci` collation as written in V1. Databases that were created by
+Hibernate before Flyway and then baselined (production) use the server default,
+`utf8mb4_0900_ai_ci`, and Hibernate-generated foreign-key and index names (`FK…`); later
+migrations must not depend on V1's constraint names other than the ones Hibernate also
+used (`uk_category_user_name`, `uk_budget_user_category_month_year`, `uk_users_email`).
 
 ## Migration Naming
 
@@ -152,10 +156,11 @@ Never mark a failed migration successful without verifying its complete schema.
 
 ### Staging migration checks
 
-The automated migration suite uses H2 in MySQL mode, not a MySQL server. There is
-no configured disposable MySQL/Testcontainers workflow in this repository.
-A previous user-run local MySQL 9.7 recovery validated V3, but does not replace
-clean-install and populated-V2 rehearsal on the staging MySQL version.
+When V3 was written, the automated suite used only H2 in MySQL mode. Since v1.2.0,
+`./mvnw clean verify` also runs `*IT` tests against a disposable MySQL 8.4 container
+(Testcontainers): they apply V1 through the latest migration on startup and exercise
+the newest migrations on populated schemas. A rehearsal against a restored copy of the
+target database is still recommended before a migration that rewrites existing rows.
 
 Before deployment, use an isolated disposable database or restored copy, never a
 shared production schema, to:
@@ -195,9 +200,8 @@ future schema corrections require a new versioned migration.
 Automated tests use H2 in MySQL mode and compare all preexisting user and financial
 columns before/after a populated V3 upgrade, including microsecond timestamps.
 They also check the nullable 255-character column and repeat migration behavior.
-The SQL uses a simple nullable VARCHAR addition shared by MySQL and H2. Rehearse
-clean and populated V3 upgrades against the target MySQL version before deployment;
-this phase does not run migrations on local/shared or hosted MySQL databases.
+The SQL uses a simple nullable VARCHAR addition shared by MySQL and H2. The MySQL
+`*IT` suite now applies V4 on every run as part of V1 through the latest migration.
 
 ## V5: refresh sessions and token history
 
@@ -268,8 +272,8 @@ They also check column types and nullability, primary keys, foreign keys and del
 rules, the named indexes, the unique hash constraint, all CHECK constraints, cascade
 deletion, and idempotent repeat migration. A separate test applies Hibernate's
 MySQL schema-validation type matching to the V5 column types, so production
-`ddl-auto=validate` accepts the new entities. As with V3 and V4, rehearse clean and
-populated-V4 upgrades against the target MySQL version before deployment.
+`ddl-auto=validate` accepts the new entities. The MySQL `*IT` suite below covers the
+same upgrade on a real server.
 
 ### MySQL verification and session cleanup
 
@@ -393,5 +397,25 @@ tables, V1 baseline), column collations, exact binary uniqueness (`café`/`cafe`
 the preflight failure and `repair` recovery, registration seeding, and two concurrent
 equivalent creates leaving exactly one row. Hibernate `ddl-auto=validate` accepts the
 entity on MySQL. H2 results alone are never taken as MySQL evidence.
+
+### Deploying V6 (Railway)
+
+- V6 needs no new variables or secrets. Flyway runs it on application startup with the
+  normal `migrate`/`validate` behavior; nothing else is required.
+- Keep `FLYWAY_BASELINE_ON_MIGRATE` unset or `false`: staging and production already have
+  Flyway history, and baselining is only for the one-time adoption of a database.
+- **Never run `flyway clean`** (or `spring.flyway.clean-disabled=false`) against a shared,
+  staging, or production database. Recovery is roll-forward: fix the reported rows,
+  `flyway repair` if MySQL recorded a failed V6 row, and restart.
+- Take a fresh backup first, and rehearse V6 against a restored copy of the database: the
+  preflight then reports any duplicate or invalid legacy names before the real deploy.
+- Deploy the backend before the frontend, at a quiet time. While V6 runs, an older
+  instance may still be serving; once the new columns are required, the old code cannot
+  insert categories (for example during registration) until the new instance takes over.
+- After deploy, the logs should show `Successfully applied 1 migration … now at version
+  v6` (or "up to date" on restart) and no Hibernate validation errors.
+- Older builds cannot use a V6 schema (they do not set the new required columns), so a
+  rollback means restoring the pre-V6 backup together with the previous backend and
+  frontend, not dropping columns by hand.
 
 V1–V6 are immutable once released; any schema change needs V7 or later.

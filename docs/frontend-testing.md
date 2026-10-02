@@ -208,3 +208,52 @@ Manual check (desktop, 375 px, and 200% zoom): create a transaction with a new c
 icon, confirm it appears in the budget form and both filters, rename and re-icon it from
 "Manage categories", try deleting it while in use (refused), then delete an unused one.
 Icon grids should wrap, long names should wrap, and nothing should scroll horizontally.
+
+### Issue #19 local manual verification (October 2, 2026)
+
+Performed by the maintainer in a desktop browser against the local backend and local
+MySQL (V6 applied), not staging:
+
+- Created a custom category from the transaction and budget forms, renamed it and changed
+  its icon in "Manage categories", and deleted an unused custom category.
+- Deleting a category used by a transaction was refused with the in-use message, which
+  closed after about 3 seconds while the category stayed listed.
+- Duplicate names were refused, including a different-case match, with the "Use existing
+  category" option shown. Two categories may share an icon.
+- Created, edited, and deleted transactions and monthly budgets; each showed its
+  confirmation banner.
+- Confirmation banners closed after about 3 seconds, stayed while hovered, and the
+  dismiss button was reachable with Tab.
+- The dashboard showed current-month expense activity by category, and the monthly budget
+  cards updated their amounts and progress bars.
+- Built-in categories showed no edit or delete controls, and category icons line up with
+  the text in tables, cards, and the management list.
+- Regression: changing the date format and transactions-per-page preferences, the display
+  name, and the first and last name still worked.
+
+This is not a staging smoke test; the staging checklist in
+[deployment.md](deployment.md#v130-staging-smoke-checklist) is still pending.
+
+### Issue #19 manual accessibility and responsive checklist
+
+Items not ticked have not been performed yet. Record evidence as described above.
+
+- [ ] Keyboard only: create a transaction and a budget with a new category, including
+      choosing an icon with arrow keys, then save.
+- [ ] Icon picker: the group is announced as "Icon", each radio by its name, the checked
+      state is clear without color, and focus is visible.
+- [ ] Duplicate recovery: the name error is announced with the field, and "Use existing
+      category" selects it and keeps the other values.
+- [ ] Rename and re-icon from "Manage categories"; focus returns to the edit button.
+- [ ] In-use delete refusal is announced; focus returns to the delete button.
+- [ ] Cancel edit and keep-category return focus to the button that opened them; a
+      completed delete moves focus to the "Hide categories" toggle.
+- [ ] Both "Filter by category" selects work with the keyboard; empty states are clear.
+- [x] Confirmation banners stay while hovered or focused, close after about 3 seconds
+      otherwise, and the dismiss button is reachable with the keyboard. The in-use delete
+      refusal closes after 3 seconds; other errors and warnings stay. (October 2, 2026, local)
+- [ ] Screen reader pass (VoiceOver/Safari and NVDA or JAWS/Chrome if available):
+      icons are not announced, names are, and each confirmation banner is read once.
+- [ ] 200% zoom and 320/375 px widths: icon grid and long names wrap, no horizontal
+      scroll, management controls remain reachable.
+- [ ] Reduced motion setting: no unexpected animation.

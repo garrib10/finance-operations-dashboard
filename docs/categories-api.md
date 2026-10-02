@@ -173,6 +173,23 @@ category ID, so renaming a category or changing its icon never changes totals.
 3. Built-in protection (`403`).
 4. Name and icon rules, duplicates (`400` / `409`), or references for deletes (`409`).
 
+## Security and ownership summary
+
+- Every endpoint requires authentication; the user is taken from the access token,
+  never from the request body. There is no way to read or change another user's
+  categories, and their IDs are indistinguishable from missing ones.
+- Composite foreign keys (`user_id`, `category_id`) on transactions and budgets make a
+  cross-user reference impossible at the database level, independent of service checks.
+- The display name is stored in Unicode NFC with whitespace runs collapsed and trimmed;
+  uniqueness compares that name lowercased with `Locale.ROOT` (see
+  [Name normalization](categories.md#name-normalization)). Control and other unsupported
+  characters are rejected, never stripped or truncated. Icon keys must come from the
+  approved catalog in the API; the database also checks the key format
+  (`ck_categories_icon_key_format`).
+- Names are rendered as text by React (never as HTML); icons are drawn from a fixed
+  frontend registry, so a stored key can never load arbitrary content.
+- Error bodies never echo submitted values, SQL, constraint names, or other users' data.
+
 ## Errors
 
 Business errors use the standard error body with a stable `code`:
