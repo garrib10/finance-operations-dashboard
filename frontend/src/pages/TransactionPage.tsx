@@ -13,6 +13,7 @@ import { useCategories } from "../context/CategoryContext";
 import { CategoryIcon, CategoryLabel } from "../components/CategoryIcon";
 import { CategoryManager, type CategoryChange } from "../components/CategoryManager";
 import { CategoryRefreshNotice } from "../components/CategoryRefreshNotice";
+import { StatusBanner } from "../components/StatusBanner";
 import { CategorySelect } from "../components/CategorySelect";
 import type { CategoryResponse } from "../types/category";
 import type {
@@ -121,6 +122,8 @@ function TransactionPage() {
   const [formErrorMessage, setFormErrorMessage] = useState("");
 
   const [refreshWarning, setRefreshWarning] = useState("");
+
+  const [saveMessage, setSaveMessage] = useState("");
 
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
@@ -284,6 +287,7 @@ function TransactionPage() {
 
   function handleEdit(transaction: TransactionResponse): void {
     editTriggerIdRef.current = transaction.id;
+    setSaveMessage("");
 
     setEditingTransactionId(transaction.id);
 
@@ -333,6 +337,7 @@ function TransactionPage() {
 
     setFormErrorMessage("");
     setRefreshWarning("");
+    setSaveMessage("");
     setValidationErrors({});
     setExistingMatch(undefined);
 
@@ -396,6 +401,7 @@ function TransactionPage() {
     }
 
     resetForm();
+    setSaveMessage(isEditing ? "Transaction updated." : "Transaction added.");
 
     try {
       // A new category is now reusable everywhere; a failed refresh only warns.
@@ -420,12 +426,15 @@ function TransactionPage() {
 
     try {
       setErrorMessage("");
+      setSaveMessage("");
 
       await deleteTransaction(transaction.id);
 
       if (editingTransactionId === transaction.id) {
         resetForm();
       }
+
+      setSaveMessage("Transaction deleted.");
 
       await loadTransactions(buildFilters(0));
     } catch (error) {
@@ -547,11 +556,14 @@ function TransactionPage() {
 
       {errorMessage && <p className="form-error">{errorMessage}</p>}
 
+      {/* A refresh warning also confirms the save, so it replaces the banner and stays. */}
       {refreshWarning && (
         <p className="form-error" role="status">
           {refreshWarning}
         </p>
       )}
+
+      <StatusBanner message={refreshWarning ? "" : saveMessage} onDismiss={() => setSaveMessage("")} />
 
       <CategoryRefreshNotice />
 

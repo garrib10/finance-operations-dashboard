@@ -370,4 +370,24 @@ describe("TransactionPage categories", () => {
     expect(await screen.findByText(/The category was updated, but the transaction list could not be refreshed/))
       .toBeInTheDocument();
   });
+
+  it("announces a successful save in a status region", async () => {
+    const user = await renderPage();
+    await user.selectOptions(screen.getByLabelText("Category"), String(petCare.id));
+    await fillFinancialFields(user);
+    await submit(user);
+
+    expect(await screen.findByText("Transaction added.")).toHaveAttribute("role", "status");
+
+    await user.click(screen.getByRole("button", { name: "Dismiss message" }));
+    expect(screen.queryByText("Transaction added.")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await submit(user);
+    expect(await screen.findByText("Transaction updated.")).toHaveAttribute("role", "status");
+
+    // Starting another edit clears the earlier confirmation.
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.queryByText("Transaction updated.")).not.toBeInTheDocument();
+  });
 });

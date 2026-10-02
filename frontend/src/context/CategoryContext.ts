@@ -1,9 +1,5 @@
 import { createContext, useContext, useEffect } from "react";
-import type {
-  CategoryResponse,
-  CreateCategoryRequest,
-  UpdateCategoryRequest,
-} from "../types/category";
+import type { CategoryResponse, UpdateCategoryRequest } from "../types/category";
 
 /** idle: not requested yet; loading: first load in progress; error: first load failed. */
 export type CategoryLoadStatus = "idle" | "loading" | "ready" | "error";
@@ -20,7 +16,6 @@ export interface CategoryContextValue {
   ensureLoaded: () => void;
   /** Loads the latest list; resolves to it, or null if the request failed or became stale. */
   reload: () => Promise<CategoryResponse[] | null>;
-  createCategory: (request: CreateCategoryRequest) => Promise<CategoryResponse>;
   updateCategory: (id: number, request: UpdateCategoryRequest) => Promise<CategoryResponse>;
   deleteCategory: (id: number) => Promise<void>;
 }

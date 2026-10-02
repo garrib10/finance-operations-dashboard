@@ -189,6 +189,9 @@ describe("CategoryManager", () => {
     expect(screen.queryByText("Pet Care")).not.toBeInTheDocument();
     expect(onChange).toHaveBeenCalledWith({ type: "deleted", categoryId: petCare.id });
     await waitFor(() => expect(screen.getByRole("button", { name: "Hide categories" })).toHaveFocus());
+
+    await user.click(screen.getByRole("button", { name: "Dismiss message" }));
+    expect(screen.queryByText("Deleted “Pet Care”.")).not.toBeInTheDocument();
   });
 
   it("keeps the category when the delete is cancelled", async () => {
@@ -212,6 +215,10 @@ describe("CategoryManager", () => {
     expect(screen.getByText("Pet Care")).toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByRole("button", { name: "Delete Pet Care" })).toHaveFocus());
+
+    // The refusal closes on its own; the category is still listed.
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument(), { timeout: 5000 });
+    expect(screen.getByText("Pet Care")).toBeInTheDocument();
   });
 
   it.each([

@@ -277,4 +277,24 @@ describe("BudgetPage categories", () => {
     expect(await screen.findByText(/The category was updated, but the budget list could not be refreshed/))
       .toBeInTheDocument();
   });
+
+  it("announces a successful save in a status region", async () => {
+    const user = await renderPage();
+    await user.selectOptions(screen.getByLabelText("Category"), String(petCare.id));
+    await user.type(screen.getByLabelText("Monthly Limit"), "60");
+    await submit(user);
+
+    expect(await screen.findByText("Budget created.")).toHaveAttribute("role", "status");
+
+    await user.click(screen.getByRole("button", { name: "Dismiss message" }));
+    expect(screen.queryByText("Budget created.")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await submit(user);
+    expect(await screen.findByText("Budget updated.")).toHaveAttribute("role", "status");
+
+    // Starting another edit clears the earlier confirmation.
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.queryByText("Budget updated.")).not.toBeInTheDocument();
+  });
 });

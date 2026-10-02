@@ -20,6 +20,7 @@ import {
 import { CategoryLabel } from "./CategoryIcon";
 import { CategoryIconPicker } from "./CategoryIconPicker";
 import { resolveIconKey } from "./categoryIconRegistry";
+import { STATUS_BANNER_DURATION_MS, StatusBanner } from "./StatusBanner";
 
 export type CategoryChange =
   | { type: "updated"; category: CategoryResponse }
@@ -50,6 +51,8 @@ export function CategoryManager({ onChange }: CategoryManagerProps) {
   const [draft, setDraft] = useState<CategoryDraft>({ name: "", iconKey: "tag" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [alert, setAlert] = useState("");
+  // The in-use refusal leaves the category visibly listed, so it may close on a timer; other errors stay.
+  const [alertExpires, setAlertExpires] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [failureAttempt, setFailureAttempt] = useState(0);
   const busy = useRef(false);
@@ -86,8 +89,19 @@ export function CategoryManager({ onChange }: CategoryManagerProps) {
     setMode({ kind: "list" });
   }
 
+  useEffect(() => {
+    if (!alert || !alertExpires) return;
+
+    const timer = window.setTimeout(() => {
+      setAlert("");
+      setAlertExpires(false);
+    }, STATUS_BANNER_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [alert, alertExpires]);
+
   function startEdit(category: CategoryResponse): void {
     setAlert("");
+    setAlertExpires(false);
     setStatusMessage("");
     setErrors({});
     setDraft({ name: category.name, iconKey: resolveIconKey(category.iconKey) });
@@ -96,6 +110,7 @@ export function CategoryManager({ onChange }: CategoryManagerProps) {
 
   function startDelete(category: CategoryResponse): void {
     setAlert("");
+    setAlertExpires(false);
     setStatusMessage("");
     setMode({ kind: "confirmDelete", category });
   }
@@ -105,6 +120,8 @@ export function CategoryManager({ onChange }: CategoryManagerProps) {
     if (busy.current) return;
 
     setAlert("");
+
+    setAlertExpires(false);
     const nameError = validateCategoryName(draft.name);
     if (nameError) {
       setErrors({ name: nameError });
@@ -153,6 +170,7 @@ export function CategoryManager({ onChange }: CategoryManagerProps) {
     busy.current = true;
     setPending(true);
     setAlert("");
+    setAlertExpires(false);
     try {
       await deleteCategory(category.id);
       setStatusMessage(`Deleted “${category.name}”.`);
@@ -161,6 +179,7 @@ export function CategoryManager({ onChange }: CategoryManagerProps) {
     } catch (error) {
       if (error instanceof ApiError && error.code === CATEGORY_IN_USE) {
         setAlert(error.message);
+        setAlertExpires(true);
         backToList(`delete-${category.id}`);
       } else if (error instanceof ApiError && error.code === CATEGORY_NOT_FOUND) {
         setAlert("This category no longer exists. The list has been refreshed.");
@@ -194,6 +213,7 @@ export function CategoryManager({ onChange }: CategoryManagerProps) {
             setOpen((value) => !value);
             setMode({ kind: "list" });
             setAlert("");
+            setAlertExpires(false);
             setStatusMessage("");
           }}
         >
@@ -208,9 +228,7 @@ export function CategoryManager({ onChange }: CategoryManagerProps) {
             transaction and budget that uses it.
           </p>
 
-          <p role="status" className="form-status">
-            {statusMessage}
-          </p>
+          <StatusBanner message={statusMessage} onDismiss={() => setStatusMessage("")} />
 
           {alert && (
             <p role="alert" className="form-error">

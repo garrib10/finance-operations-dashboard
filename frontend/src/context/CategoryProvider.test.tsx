@@ -2,7 +2,6 @@ vi.mock("./AuthContext", () => ({ useAuth: vi.fn() }));
 vi.mock("../services/categoryService", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../services/categoryService")>()),
   getCategories: vi.fn(),
-  createCategory: vi.fn(),
   updateCategory: vi.fn(),
   deleteCategory: vi.fn(),
 }));
@@ -100,28 +99,21 @@ describe("CategoryProvider", () => {
     expect(screen.getByTestId("refresh-error")).toBeEmptyDOMElement();
   });
 
-  it("refreshes after create, rename, and icon change, returning the server result", async () => {
+  it("refreshes after a rename and icon change, returning the server result", async () => {
     render(<CategoryProvider><Probe /></CategoryProvider>);
     await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("ready"));
     const created = category({ id: 50, name: "Gym", iconKey: "dumbbell" });
     const renamed = { ...petCare, name: "Pets", iconKey: "heart-pulse" };
-    vi.mocked(categoryService.createCategory).mockResolvedValue(created);
     vi.mocked(categoryService.updateCategory).mockResolvedValue(renamed);
-    vi.mocked(categoryService.getCategories)
-      .mockResolvedValueOnce([groceries, created, petCare])
-      .mockResolvedValueOnce([created, groceries, renamed]);
-
-    await act(async () => {
-      expect(await latest.createCategory({ name: "Gym", budgetEnabled: true, iconKey: "dumbbell" })).toBe(created);
-    });
-    expect(screen.getByTestId("names")).toHaveTextContent("Groceries,Gym,Pet Care");
+    // A category created elsewhere (a transaction save) shows up on the same refresh.
+    vi.mocked(categoryService.getCategories).mockResolvedValueOnce([created, groceries, renamed]);
 
     await act(async () => {
       expect(await latest.updateCategory(petCare.id, { name: "Pets", budgetEnabled: true, iconKey: "heart-pulse" }))
         .toBe(renamed);
     });
     expect(screen.getByTestId("names")).toHaveTextContent("Gym,Groceries,Pets");
-    expect(categoryService.getCategories).toHaveBeenCalledTimes(3);
+    expect(categoryService.getCategories).toHaveBeenCalledTimes(2);
   });
 
   it("removes a deleted category even when the follow-up refresh fails", async () => {

@@ -511,9 +511,10 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       }),
     );
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Transaction saved, but the transaction list could not be refreshed.",
-    );
+    expect(await screen.findByText(/Transaction saved, but the transaction list could not be refreshed\./))
+      .toHaveAttribute("role", "status");
+    // The warning replaces the success banner rather than appearing beside it.
+    expect(screen.queryByText(/^Transaction (added|updated)\.$/)).not.toBeInTheDocument();
 
     expect(transactionService.createTransaction).toHaveBeenCalledOnce();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -548,9 +549,10 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       }),
     );
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Transaction saved, but the transaction list could not be refreshed.",
-    );
+    expect(await screen.findByText(/Transaction saved, but the transaction list could not be refreshed\./))
+      .toHaveAttribute("role", "status");
+    // The warning replaces the success banner rather than appearing beside it.
+    expect(screen.queryByText(/^Transaction (added|updated)\.$/)).not.toBeInTheDocument();
 
     expect(transactionService.updateTransaction).toHaveBeenCalledOnce();
     expect(
@@ -579,6 +581,8 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     await waitFor(() => {
       expect(transactionService.getTransactions).toHaveBeenCalledTimes(2);
     });
+
+    expect(await screen.findByText("Transaction deleted.")).toHaveAttribute("role", "status");
   });
 
   it("resets the form when deleting the transaction being edited", async () => {

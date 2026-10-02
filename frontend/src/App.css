@@ -998,10 +998,17 @@
   gap: 0.4rem;
   min-width: 0;
   max-width: 100%;
+  /* Align the name's first line with neighbouring text, not the icon's bottom edge. */
+  vertical-align: top;
 }
 
 .category-label__name {
   overflow-wrap: anywhere;
+}
+
+/* Offset the icon's top margin so it never makes the label taller than one text line. */
+.category-label .category-icon {
+  margin-bottom: -0.15em;
 }
 
 .category-icon {
@@ -1062,10 +1069,6 @@
 .form-warning {
   margin: 1rem 0;
   color: var(--color-warning);
-}
-
-.form-status:empty {
-  display: none;
 }
 
 .icon-picker-field {
@@ -1203,5 +1206,81 @@
   .category-manager__item {
     align-items: stretch;
     flex-direction: column;
+  }
+}
+
+/* Self-dismissing success banners, stacked at the top of the window. */
+.status-banner-stack {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  z-index: 1000;
+  width: min(48rem, calc(100% - 2rem));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.status-banner__message {
+  flex: 1;
+  margin: 0;
+}
+
+.status-banner--visible {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  padding: 0.65rem 0.75rem 0.65rem 1rem;
+  color: var(--color-success);
+  font-size: 0.95rem;
+  font-weight: 500;
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  pointer-events: auto;
+  animation: status-banner-in 160ms ease-out;
+}
+
+.status-banner__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--color-success);
+  background-color: var(--color-success-soft);
+  border-radius: 50%;
+}
+
+.status-banner__dismiss {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--color-success);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+
+.status-banner__dismiss:hover {
+  background-color: var(--color-success-soft);
+}
+
+@keyframes status-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-banner--visible {
+    animation: none;
   }
 }

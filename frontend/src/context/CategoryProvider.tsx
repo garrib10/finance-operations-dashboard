@@ -3,11 +3,7 @@ import type { ReactNode } from "react";
 import { useAuth } from "./AuthContext";
 import { CategoryContext, type CategoryContextValue, type CategoryLoadStatus } from "./CategoryContext";
 import * as categoryService from "../services/categoryService";
-import type {
-  CategoryResponse,
-  CreateCategoryRequest,
-  UpdateCategoryRequest,
-} from "../types/category";
+import type { CategoryResponse, UpdateCategoryRequest } from "../types/category";
 
 const LOAD_ERROR = "Categories could not be loaded.";
 const REFRESH_ERROR = "Category options could not be refreshed.";
@@ -86,12 +82,6 @@ export function CategoryProvider({ children }: { children: ReactNode }) {
     if (!loadingRef.current) void fetchLatest();
   }, [fetchLatest]);
 
-  const createCategory = useCallback(async (request: CreateCategoryRequest) => {
-    const created = await categoryService.createCategory(request);
-    await fetchLatest();
-    return created;
-  }, [fetchLatest]);
-
   const updateCategory = useCallback(async (id: number, request: UpdateCategoryRequest) => {
     const updated = await categoryService.updateCategory(id, request);
     await fetchLatest();
@@ -117,11 +107,10 @@ export function CategoryProvider({ children }: { children: ReactNode }) {
     refreshError: visible.refreshError,
     ensureLoaded,
     reload: fetchLatest,
-    createCategory,
     updateCategory,
     deleteCategory,
   }), [visible.categories, visible.status, visible.loadError, visible.refreshError,
-    ensureLoaded, fetchLatest, createCategory, updateCategory, deleteCategory]);
+    ensureLoaded, fetchLatest, updateCategory, deleteCategory]);
 
   return <CategoryContext.Provider value={value}>{children}</CategoryContext.Provider>;
 }

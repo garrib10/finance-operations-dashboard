@@ -24,6 +24,7 @@ import { useCategories } from "../context/CategoryContext";
 import { CategoryIcon, CategoryLabel } from "../components/CategoryIcon";
 import { CategoryManager, type CategoryChange } from "../components/CategoryManager";
 import { CategoryRefreshNotice } from "../components/CategoryRefreshNotice";
+import { StatusBanner } from "../components/StatusBanner";
 import { CategorySelect } from "../components/CategorySelect";
 import {
   CATEGORY_SELECTION_FIELDS,
@@ -138,6 +139,7 @@ function BudgetPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [formErrorMessage, setFormErrorMessage] = useState("");
   const [refreshWarning, setRefreshWarning] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
@@ -327,6 +329,7 @@ function BudgetPage() {
 
   function handleEditBudget(budget: BudgetResponse): void {
     editTriggerIdRef.current = budget.id;
+    setSaveMessage("");
 
     setEditingBudgetId(budget.id);
 
@@ -379,6 +382,8 @@ function BudgetPage() {
     setFormErrorMessage("");
 
     setRefreshWarning("");
+
+    setSaveMessage("");
 
     setValidationErrors({});
 
@@ -459,6 +464,8 @@ function BudgetPage() {
 
     resetForm();
 
+    setSaveMessage(isEditing ? "Budget updated." : "Budget created.");
+
     try {
       // A new category is now reusable everywhere; a failed refresh only warns.
       if (creatingCategory) await reloadCategories();
@@ -501,12 +508,15 @@ function BudgetPage() {
 
     try {
       setErrorMessage("");
+      setSaveMessage("");
 
       await deleteBudget(budget.id);
 
       if (editingBudgetId === budget.id) {
         resetForm();
       }
+
+      setSaveMessage("Budget deleted.");
 
       await loadBudgetData();
     } catch (error) {
@@ -538,11 +548,14 @@ function BudgetPage() {
 
       {errorMessage && <p role="alert">{errorMessage}</p>}
 
+      {/* A refresh warning also confirms the save, so it replaces the banner and stays. */}
       {refreshWarning && (
         <p className="form-error" role="status">
           {refreshWarning}
         </p>
       )}
+
+      <StatusBanner message={refreshWarning ? "" : saveMessage} onDismiss={() => setSaveMessage("")} />
 
       <CategoryRefreshNotice />
 

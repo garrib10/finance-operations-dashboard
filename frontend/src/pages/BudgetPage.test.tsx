@@ -531,9 +531,10 @@ describe("BudgetPage", () => {
     await user.type(screen.getByLabelText("Monthly Limit"), "200");
     await user.click(screen.getByRole("button", { name: "Create Budget" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Budget saved, but the budget list could not be refreshed.",
-    );
+    expect(await screen.findByText(/Budget saved, but the budget list could not be refreshed\./))
+      .toHaveAttribute("role", "status");
+    // The warning replaces the success banner rather than appearing beside it.
+    expect(screen.queryByText(/^Budget (created|updated)\.$/)).not.toBeInTheDocument();
 
     expect(mockCreateBudget).toHaveBeenCalledOnce();
     expect(
@@ -649,9 +650,10 @@ describe("BudgetPage", () => {
     await user.type(monthlyLimitInput, "600");
     await user.click(screen.getByRole("button", { name: "Update Budget" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Budget saved, but the budget list could not be refreshed.",
-    );
+    expect(await screen.findByText(/Budget saved, but the budget list could not be refreshed\./))
+      .toHaveAttribute("role", "status");
+    // The warning replaces the success banner rather than appearing beside it.
+    expect(screen.queryByText(/^Budget (created|updated)\.$/)).not.toBeInTheDocument();
 
     expect(mockUpdateBudget).toHaveBeenCalledOnce();
     expect(
@@ -727,6 +729,8 @@ describe("BudgetPage", () => {
     await waitFor(() => {
       expect(mockGetBudgets).toHaveBeenCalledTimes(2);
     });
+
+    expect(await screen.findByText("Budget deleted.")).toHaveAttribute("role", "status");
   });
 
   it("resets edit mode when the budget being edited is deleted", async () => {
