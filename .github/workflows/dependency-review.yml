@@ -1,0 +1,27 @@
+name: Dependency Review
+
+# Fails a pull request that adds or upgrades to a dependency (Maven or npm) with a
+# known vulnerability of moderate severity or higher. Results are in the job summary.
+on:
+  pull_request:
+    branches:
+      - develop
+      - staging
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: moderate
