@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as AuthContextModule from "../context/AuthContext";
-import AppHeader from "./AppHeader";
+import { AccountMenu } from "./AccountMenu";
 import { photoUrl, replacementPhotoUrl } from "../test/accountFixtures";
 
 vi.mock("../context/AuthContext", async () => {
@@ -48,23 +48,23 @@ function LocationProbe() {
   return <p data-testid="location">{useLocation().pathname}</p>;
 }
 
-function renderHeader(): void {
+function renderMenu(): void {
   render(
     <MemoryRouter>
-      <AppHeader />
+      <AccountMenu />
       <LocationProbe />
     </MemoryRouter>,
   );
 }
 
-describe("AppHeader", () => {
+describe("AccountMenu", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("shows authenticated navigation and a closed account menu", () => {
+  it("shows a closed account menu for the signed-in user", () => {
     mockAuthenticatedUser();
-    renderHeader();
+    renderMenu();
 
     const accountTrigger = screen.getByRole("button", {
       name: "Open account menu for Demo User",
@@ -78,9 +78,6 @@ describe("AppHeader", () => {
     expect(accountTrigger).toHaveTextContent("DU");
     expect(accountTrigger).toHaveTextContent("Demo User");
 
-    expect(screen.getByText("Dashboard")).toBeInTheDocument();
-    expect(screen.getByText("Transactions")).toBeInTheDocument();
-    expect(screen.getByText("Budgets")).toBeInTheDocument();
     expect(screen.queryByText("demo@fintrack.dev")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Logout" }),
@@ -90,7 +87,7 @@ describe("AppHeader", () => {
   it("opens the account menu and displays the user identity", async () => {
     const user = userEvent.setup();
     mockAuthenticatedUser();
-    renderHeader();
+    renderMenu();
 
     await user.click(
       screen.getByRole("button", {
@@ -110,7 +107,7 @@ describe("AppHeader", () => {
   it("closes the account menu when the trigger is selected again", async () => {
     const user = userEvent.setup();
     mockAuthenticatedUser();
-    renderHeader();
+    renderMenu();
 
     await user.click(
       screen.getByRole("button", {
@@ -135,7 +132,7 @@ describe("AppHeader", () => {
   it("closes the account menu with Escape and restores trigger focus", async () => {
     const user = userEvent.setup();
     mockAuthenticatedUser();
-    renderHeader();
+    renderMenu();
 
     const accountTrigger = screen.getByRole("button", {
       name: "Open account menu for Demo User",
@@ -157,7 +154,7 @@ describe("AppHeader", () => {
   it("keeps the account menu open for keys other than Escape", async () => {
     const user = userEvent.setup();
     mockAuthenticatedUser();
-    renderHeader();
+    renderMenu();
 
     await user.click(
       screen.getByRole("button", {
@@ -178,7 +175,7 @@ describe("AppHeader", () => {
   it("closes the account menu when a pointer event occurs outside it", async () => {
     const user = userEvent.setup();
     mockAuthenticatedUser();
-    renderHeader();
+    renderMenu();
 
     await user.click(
       screen.getByRole("button", {
@@ -200,7 +197,7 @@ describe("AppHeader", () => {
     const user = userEvent.setup();
     const logout = vi.fn();
     mockAuthenticatedUser(logout);
-    renderHeader();
+    renderMenu();
 
     await user.click(
       screen.getByRole("button", {
@@ -218,7 +215,7 @@ describe("AppHeader", () => {
     let confirm!: () => void;
     const logout = vi.fn(() => new Promise<void>((resolve) => { confirm = resolve; }));
     mockAuthenticatedUser(logout);
-    renderHeader();
+    renderMenu();
 
     await user.click(screen.getByRole("button", { name: "Open account menu for Demo User" }));
     await user.click(screen.getByRole("button", { name: "Logout" }));
@@ -240,7 +237,7 @@ describe("AppHeader", () => {
       .mockRejectedValueOnce(new Error("503 from /api/auth/logout with internal detail"))
       .mockResolvedValueOnce(undefined);
     mockAuthenticatedUser(logout);
-    renderHeader();
+    renderMenu();
 
     await user.click(screen.getByRole("button", { name: "Open account menu for Demo User" }));
     await user.click(screen.getByRole("button", { name: "Logout" }));
@@ -257,7 +254,7 @@ describe("AppHeader", () => {
     expect(screen.queryByText("demo@fintrack.dev")).not.toBeInTheDocument();
   });
 
-  it("shows authentication navigation when signed out", () => {
+  it("renders nothing when signed out", () => {
     mockedUseAuth.mockReturnValue({
       user: null,
       isAuthenticated: false,
@@ -272,19 +269,18 @@ describe("AppHeader", () => {
       retrySessionRestore: vi.fn(async () => undefined), sessionNotice: null, completePasswordChange: vi.fn(),
     });
 
-    renderHeader();
+    renderMenu();
 
-    expect(screen.getByRole("link", { name: "Login" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Register" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /account menu/i }),
     ).not.toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
   it("uses display name and its initials in the trigger and dropdown", async () => {
     mockAuthenticatedUser();
     const context = mockedUseAuth();
     mockedUseAuth.mockReturnValue({ ...context, user: { ...context.user!, displayName: "River Quiet Walker" } });
-    renderHeader();
+    renderMenu();
     const trigger = screen.getByRole("button", { name: "Open account menu for River Quiet Walker" });
     expect(trigger).toHaveTextContent("RW");
     expect(trigger).not.toHaveAccessibleName(/demo@/);
@@ -300,13 +296,13 @@ describe("AppHeader", () => {
     mockAuthenticatedUser();
     const context = mockedUseAuth();
     mockedUseAuth.mockReturnValue({ ...context, user: { ...context.user!, displayName, firstName, lastName } });
-    renderHeader();
+    renderMenu();
     expect(screen.getByRole("button", { name: `Open account menu for ${name}` })).toHaveTextContent(initials);
   });
 
   it.each([["Profile", "/profile"], ["Account Settings", "/settings"]])("navigates to %s and closes the dropdown", async (label, path) => {
     mockAuthenticatedUser();
-    renderHeader();
+    renderMenu();
     const user = userEvent.setup();
     const trigger = screen.getByRole("button", { name: /Open account menu/ });
     trigger.focus();
@@ -320,7 +316,6 @@ describe("AppHeader", () => {
     expect(screen.queryByRole("navigation", { name: "Account navigation" })).not.toBeInTheDocument();
   });
 
-
   describe("profile photo", () => {
     function mockPhoto(profilePhotoUrl: string | null) {
       mockAuthenticatedUser();
@@ -331,7 +326,7 @@ describe("AppHeader", () => {
 
     it("renders the photo as a decorative part of the trigger without changing its name", () => {
       mockPhoto(photoUrl);
-      renderHeader();
+      renderMenu();
       const image = trigger().querySelector("img");
       expect(image).toHaveAttribute("src", photoUrl);
       expect(image).toHaveAttribute("alt", "");
@@ -346,25 +341,25 @@ describe("AppHeader", () => {
 
     it("renders initials when there is no photo", () => {
       mockPhoto(null);
-      renderHeader();
+      renderMenu();
       expect(trigger().querySelector("img")).toBeNull();
       expect(trigger().querySelector(".account-menu__avatar")).toHaveTextContent("DU");
     });
 
     it("falls back to initials when the photo fails and retries a replacement", () => {
       mockPhoto(photoUrl);
-      const { rerender } = render(<MemoryRouter><AppHeader /></MemoryRouter>);
+      const { rerender } = render(<MemoryRouter><AccountMenu /></MemoryRouter>);
       fireEvent.error(trigger().querySelector("img")!);
       expect(trigger().querySelector("img")).toBeNull();
       expect(trigger()).toHaveTextContent("DU");
       mockPhoto(replacementPhotoUrl);
-      rerender(<MemoryRouter><AppHeader /></MemoryRouter>);
+      rerender(<MemoryRouter><AccountMenu /></MemoryRouter>);
       expect(trigger().querySelector("img")).toHaveAttribute("src", replacementPhotoUrl);
     });
 
     it("keeps the avatar, name, and chevron structure used by the responsive layout", async () => {
       mockPhoto(photoUrl);
-      renderHeader();
+      renderMenu();
       expect([...trigger().children].map(child => child.className)).toEqual([
         "avatar account-menu__avatar", "account-menu__name", "account-menu__chevron",
       ]);

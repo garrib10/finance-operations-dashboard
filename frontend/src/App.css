@@ -12,40 +12,164 @@
   margin-top: 1.5rem;
 }
 
-.app-header {
-  background-color: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.app-header__content {
-  width: min(100% - 2rem, var(--content-width));
-  min-height: 64px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 2rem;
-}
-
 .app-brand {
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--color-primary);
 }
 
-.app-nav {
+/* Public pages (Login, Register, session restoration) */
+
+.public-header {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.public-header__content {
+  width: min(100% - 2rem, var(--content-width));
+  min-height: var(--topbar-height);
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 2rem;
+}
+
+.public-nav {
   display: flex;
   align-items: center;
   gap: 1.5rem;
 }
 
-.app-nav a {
+.public-nav a {
   color: var(--color-text-muted);
   font-weight: 500;
 }
 
-.app-nav a:hover {
+.public-nav a:hover {
   color: var(--color-primary);
+}
+
+/*
+ * Signed-in application shell. At 1100px and below the sidebar is a horizontal bar
+ * above the content (replaced by the mobile drawer in a later phase). Above 1100px it
+ * becomes a sticky column in normal grid flow, so content never sits underneath it
+ * and the page breakpoints, which switch at 1100px, keep describing the content area.
+ */
+.app-layout {
+  min-height: 100vh;
+}
+
+.app-layout__body {
+  min-width: 0;
+}
+
+.app-sidebar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.5rem 1rem;
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app-sidebar__brand {
+  flex-shrink: 0;
+}
+
+.app-sidebar__nav {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.primary-nav__list {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.primary-nav__link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem 0.5rem calc(0.75rem + 3px);
+  color: var(--color-text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+}
+
+.primary-nav__link:hover {
+  color: var(--color-primary);
+  background-color: var(--color-background);
+}
+
+/* The current page is marked by a bar and weight as well as color (kept in forced colors). */
+.primary-nav__link[aria-current="page"] {
+  padding-left: 0.75rem;
+  color: var(--color-primary);
+  font-weight: 700;
+  background-color: var(--color-primary-soft);
+  border-left: 3px solid var(--color-primary);
+}
+
+.primary-nav__icon {
+  flex-shrink: 0;
+}
+
+.app-topbar {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app-topbar__content {
+  width: min(100% - 2rem, var(--content-width));
+  min-height: var(--topbar-height);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+@media (width > 1100px) {
+  .app-layout {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  }
+
+  .app-sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100dvh;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.5rem;
+    padding: 1.25rem 0.75rem;
+    overflow-y: auto;
+    border-right: 1px solid var(--color-border);
+    border-bottom: 0;
+  }
+
+  .app-sidebar__brand {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 0.75rem;
+  }
+
+  .app-sidebar__nav {
+    overflow-x: visible;
+  }
+
+  .primary-nav__list {
+    flex-direction: column;
+  }
 }
 
 .app-main {
@@ -221,7 +345,7 @@
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  z-index: 100;
+  z-index: var(--z-dropdown);
   width: min(18rem, calc(100vw - 2rem));
   padding: 1rem;
   background-color: var(--color-surface);
@@ -775,19 +899,6 @@
 }
 
 @media (max-width: 640px) {
-  .app-header__content {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem 0;
-  }
-
-  .app-nav {
-    width: 100%;
-    gap: 1rem;
-    overflow-x: auto;
-  }
-
   .account-menu,
   .account-menu__trigger {
     width: 100%;
@@ -1214,7 +1325,7 @@
   position: fixed;
   top: 1rem;
   left: 50%;
-  z-index: 1000;
+  z-index: var(--z-banner);
   width: min(48rem, calc(100% - 2rem));
   transform: translateX(-50%);
   pointer-events: none;

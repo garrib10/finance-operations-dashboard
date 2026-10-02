@@ -256,6 +256,28 @@ Accessible roles, labels, input IDs, link names, and button names should be pref
 
 These values are exposed through `data-testid`.
 
+### Navigation and layout (v1.3.0)
+
+Signed-in pages use a sidebar layout (issue #95); Login and Register keep a simple
+header. No navigation `data-testid` values are added. Link and button names are
+unchanged from earlier releases, so existing locators such as link text "Transactions"
+keep working.
+
+| Element | Selector |
+| --- | --- |
+| Primary navigation | `nav` named "Primary navigation" with links "Dashboard" (`/`), "Transactions", and "Budgets" |
+| Current page | the matching primary link has `aria-current="page"` |
+| Brand | link "FinTrack" (to `/`) |
+| Account menu | button "Open account menu for {name}" (`#account-menu-trigger`) in the page `header`; panel `#account-menu-panel` |
+| Account links | inside `nav` "Account navigation": "Profile" and "Account Settings" (not in the primary navigation) |
+| Logout | button "Logout" in the open account menu |
+| Public pages | `nav` "Authentication navigation" with "Login" and "Register"; hidden while a session is being restored |
+| Landmarks | exactly one `header` and one `main#main-content`; "Skip to main content" targets it |
+
+Above 1100px the primary navigation is a sidebar column; at 1100px and below it is
+currently a horizontal bar above the page. Prefer role and name locators over layout
+position, since the narrow-screen navigation will become a menu-button drawer.
+
 ### Category controls (v1.3.0)
 
 Category features add no new `data-testid` values; automation should use these stable
