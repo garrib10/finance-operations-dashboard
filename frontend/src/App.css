@@ -52,10 +52,11 @@
 }
 
 /*
- * Signed-in application shell. At 1100px and below the sidebar is a horizontal bar
- * above the content (replaced by the mobile drawer in a later phase). Above 1100px it
- * becomes a sticky column in normal grid flow, so content never sits underneath it
- * and the page breakpoints, which switch at 1100px, keep describing the content area.
+ * Signed-in application shell. Above 1100px the sidebar is a sticky column in normal
+ * grid flow, so content never sits underneath it and the page breakpoints, which
+ * switch at 1100px, keep describing the content area. At 1100px and below the sidebar
+ * is hidden and the top bar's menu button opens the navigation drawer instead.
+ * DESKTOP_NAV_QUERY in navigation.ts must match these breakpoints.
  */
 .app-layout {
   min-height: 100vh;
@@ -66,12 +67,7 @@
 }
 
 .app-sidebar {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 0.5rem 1rem;
-  background-color: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  display: none;
 }
 
 .app-sidebar__header {
@@ -82,13 +78,9 @@
   gap: 0.5rem;
 }
 
-.app-sidebar__nav {
-  min-width: 0;
-  overflow-x: auto;
-}
-
 .primary-nav__list {
   display: flex;
+  flex-direction: column;
   gap: 0.25rem;
   margin: 0;
   padding: 0;
@@ -143,8 +135,97 @@
   margin: 0 auto;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 1rem;
+  gap: 0.75rem;
+}
+
+.app-topbar__content .account-menu {
+  margin-left: auto;
+}
+
+.app-topbar__menu,
+.mobile-nav__close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.app-topbar__menu:hover,
+.mobile-nav__close:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+/*
+ * Mobile navigation drawer: a native modal <dialog>, which provides focus containment,
+ * an inert background, and Escape handling. Only the slide-in is animated.
+ */
+.mobile-nav {
+  inset: 0 auto 0 0;
+  width: min(18rem, 85vw);
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 0;
+  border-right: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+.mobile-nav::backdrop {
+  background-color: rgb(15 23 42 / 0.45);
+}
+
+.mobile-nav[open] {
+  animation: mobile-nav-in 200ms ease-out;
+}
+
+.mobile-nav[open]::backdrop {
+  animation: mobile-nav-backdrop-in 200ms ease-out;
+}
+
+.mobile-nav__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  height: 100%;
+  padding: 1rem 0.75rem;
+  overflow-y: auto;
+}
+
+.mobile-nav__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-left: 0.75rem;
+}
+
+/* Page scrolling is locked while the drawer is open. */
+:root.scroll-locked {
+  overflow: hidden;
+}
+
+@keyframes mobile-nav-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes mobile-nav-backdrop-in {
+  from {
+    opacity: 0;
+  }
 }
 
 @media (width > 1100px) {
@@ -154,6 +235,7 @@
   }
 
   .app-sidebar {
+    display: flex;
     position: sticky;
     top: 0;
     height: 100vh;
@@ -164,8 +246,14 @@
     padding: 1.25rem 0.75rem;
     /* Not a scroll container, so tooltips can extend past the column edge. The
        content (brand row and three links) fits even short desktop windows. */
+    background-color: var(--color-surface);
     border-right: 1px solid var(--color-border);
-    border-bottom: 0;
+  }
+
+  /* The drawer controls belong to narrow screens only. */
+  .app-topbar__menu,
+  .app-topbar__brand {
+    display: none;
   }
 
   .app-sidebar__brand {
@@ -173,14 +261,6 @@
     align-items: center;
     min-height: 44px;
     padding: 0 0.75rem;
-  }
-
-  .app-sidebar__nav {
-    overflow-x: visible;
-  }
-
-  .primary-nav__list {
-    flex-direction: column;
   }
 
   .app-sidebar {
@@ -564,7 +644,8 @@
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  /* minmax(0, …) lets wide tables scroll inside their panel instead of widening the page. */
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 1.5rem;
   margin-bottom: 1.5rem;
 }
@@ -674,7 +755,7 @@
 
 .budget-details {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
   margin: 0 0 1rem;
 }
@@ -962,11 +1043,11 @@
 
 @media (max-width: 1100px) {
   .dashboard-summary {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .dashboard-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .transaction-filters {
@@ -974,11 +1055,11 @@
   }
 
   .budget-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .budget-charts-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -986,7 +1067,7 @@
 
 @media (max-width: 700px) {
   .dashboard-summary {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .dashboard-panel {
@@ -994,12 +1075,12 @@
   }
 
   .budget-details {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .transaction-form,
   .transaction-filters {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .transaction-form > div:last-child,
@@ -1015,7 +1096,7 @@
   .budget-form,
   .budget-period-filter,
   .budget-card__content {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .budget-form > div:last-child {
@@ -1042,19 +1123,10 @@
 }
 
 @media (max-width: 640px) {
-  .account-menu,
-  .account-menu__trigger {
-    width: 100%;
-  }
-
+  /* Compact avatar-only trigger; its accessible name still includes the user's name. */
+  .account-menu__name,
   .account-menu__chevron {
-    margin-left: auto;
-  }
-
-  .account-menu__panel {
-    left: 0;
-    right: auto;
-    width: 100%;
+    display: none;
   }
 
   .app-main {
@@ -1450,11 +1522,11 @@
 
 @media (max-width: 700px) {
   .category-select {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .budget-period-filter {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .category-manager__item {
@@ -1540,5 +1612,10 @@
 
   .app-layout[data-sidebar-collapsed="true"] .app-sidebar__header > * {
     transition: none;
+  }
+
+  .mobile-nav[open],
+  .mobile-nav[open]::backdrop {
+    animation: none;
   }
 }

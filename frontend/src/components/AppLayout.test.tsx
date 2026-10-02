@@ -3,10 +3,10 @@ vi.mock("../context/AuthContext", async (importOriginal) => ({
   useAuth: vi.fn(),
 }));
 
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../context/AuthContext";
 import { accountContext } from "../test/accountFixtures";
@@ -24,12 +24,25 @@ function CounterPage() {
   );
 }
 
-function renderShell(path = "/transactions"): void {
-  render(
+/** Navigates without the drawer, standing in for browser back/forward. */
+function DashboardPage() {
+  const navigate = useNavigate();
+  return (
+    <section>
+      <h1>Dashboard page</h1>
+      <button type="button" onClick={() => navigate("/budgets")}>Go to budgets</button>
+    </section>
+  );
+}
+
+const sidebar = () => document.getElementById("app-sidebar")!;
+
+function renderShell(path = "/transactions") {
+  return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route element={<AppLayout />}>
-          <Route path="/" element={<section><h1>Dashboard page</h1></section>} />
+          <Route path="/" element={<DashboardPage />} />
           <Route path="/transactions" element={<CounterPage />} />
           <Route path="/budgets" element={<section><h1>Budgets page</h1></section>} />
         </Route>
@@ -61,7 +74,7 @@ describe("AppLayout", () => {
   it("shows the brand and primary navigation in the sidebar", () => {
     renderShell();
 
-    expect(screen.getByRole("link", { name: "FinTrack" })).toHaveAttribute("href", "/");
+    expect(within(sidebar()).getByRole("link", { name: "FinTrack" })).toHaveAttribute("href", "/");
     const navs = screen.getAllByRole("navigation");
     expect(navs).toHaveLength(1);
     expect(navs[0]).toHaveAccessibleName("Primary navigation");
@@ -159,7 +172,7 @@ describe("AppLayout", () => {
       }
       expect(within(nav).getByRole("link", { name: "Transactions" })).toHaveAttribute("aria-current", "page");
       expect(within(nav).getByRole("link", { name: "Dashboard" })).not.toHaveAttribute("aria-current");
-      expect(screen.getByRole("link", { name: "FinTrack" })).toHaveAttribute("href", "/");
+      expect(within(sidebar()).getByRole("link", { name: "FinTrack" })).toHaveAttribute("href", "/");
     });
 
     it("gives every icon-only control a decorative tooltip matching its name", () => {
@@ -188,6 +201,160 @@ describe("AppLayout", () => {
 
       expect(screen.getByRole("button", { name: "Count 1" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /account menu/i })).toBe(accountTrigger);
+    });
+  });
+
+  describe("mobile navigation drawer", () => {
+    const menuButton = () => screen.getByRole("button", { name: "Open navigation menu" });
+    const drawer = () => document.getElementById("mobile-navigation") as HTMLDialogElement;
+    const isScrollLocked = () => document.documentElement.classList.contains("scroll-locked");
+
+    async function openDrawer(path?: string) {
+      const user = userEvent.setup();
+      const view = renderShell(path);
+      await user.click(menuButton());
+      return { user, view };
+    }
+
+    it("has a labelled menu button that controls a closed drawer", () => {
+      renderShell();
+
+      expect(menuButton()).toHaveAttribute("type", "button");
+      expect(menuButton()).toHaveAttribute("aria-haspopup", "dialog");
+      expect(menuButton()).toHaveAttribute("aria-expanded", "false");
+      expect(menuButton()).toHaveAttribute("aria-controls", "mobile-navigation");
+      expect(drawer().tagName).toBe("DIALOG");
+      expect(drawer()).toHaveAttribute("aria-label", "Navigation menu");
+      expect(drawer().open).toBe(false);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      // While closed, the drawer adds no second navigation.
+      expect(screen.getAllByRole("navigation")).toHaveLength(1);
+      expect(within(screen.getByRole("banner")).getByRole("link", { name: "FinTrack" })).toHaveAttribute("href", "/");
+    });
+
+    it("opens as a modal, focuses the close button, and locks page scrolling", async () => {
+      const showModal = vi.spyOn(HTMLDialogElement.prototype, "showModal");
+      await openDrawer();
+
+      expect(showModal).toHaveBeenCalledOnce();
+      expect(screen.getByRole("dialog", { name: "Navigation menu" })).toBe(drawer());
+      expect(drawer().open).toBe(true);
+      expect(menuButton()).toHaveAttribute("aria-expanded", "true");
+      expect(within(drawer()).getByRole("button", { name: "Close navigation menu" })).toHaveFocus();
+      expect(isScrollLocked()).toBe(true);
+      const nav = within(drawer()).getByRole("navigation", { name: "Primary navigation" });
+      expect(within(nav).getAllByRole("link").map((link) => link.getAttribute("href")))
+        .toEqual(["/", "/transactions", "/budgets"]);
+      expect(within(nav).getByRole("link", { name: "Transactions" })).toHaveAttribute("aria-current", "page");
+    });
+
+    it("closes with the close button and returns focus to the menu button", async () => {
+      const { user } = await openDrawer();
+
+      await user.click(within(drawer()).getByRole("button", { name: "Close navigation menu" }));
+
+      expect(drawer().open).toBe(false);
+      expect(menuButton()).toHaveAttribute("aria-expanded", "false");
+      expect(menuButton()).toHaveFocus();
+      expect(isScrollLocked()).toBe(false);
+    });
+
+    it("closes on Escape (the dialog cancel event)", async () => {
+      await openDrawer();
+      const cancel = new Event("cancel", { cancelable: true });
+
+      fireEvent(drawer(), cancel);
+
+      expect(cancel.defaultPrevented).toBe(true);
+      expect(drawer().open).toBe(false);
+      expect(menuButton()).toHaveFocus();
+    });
+
+    it("closes on a backdrop click but not on a click inside the panel", async () => {
+      const { user } = await openDrawer();
+
+      await user.click(within(drawer()).getByRole("navigation"));
+      expect(drawer().open).toBe(true);
+
+      fireEvent.click(drawer());
+      expect(drawer().open).toBe(false);
+      expect(isScrollLocked()).toBe(false);
+    });
+
+    it("closes after following a link and shows the new page", async () => {
+      const { user } = await openDrawer();
+
+      await user.click(within(drawer()).getByRole("link", { name: "Budgets" }));
+
+      expect(screen.getByRole("heading", { name: "Budgets page" })).toBeInTheDocument();
+      expect(drawer().open).toBe(false);
+      expect(menuButton()).toHaveFocus();
+      expect(isScrollLocked()).toBe(false);
+    });
+
+    it("closes when following the brand link or the current page's link", async () => {
+      const { user } = await openDrawer();
+      await user.click(within(drawer()).getByRole("link", { name: "Transactions" }));
+      expect(drawer().open).toBe(false);
+
+      await user.click(menuButton());
+      await user.click(within(drawer()).getByRole("link", { name: "FinTrack" }));
+      expect(drawer().open).toBe(false);
+      expect(screen.getByRole("heading", { name: "Dashboard page" })).toBeInTheDocument();
+    });
+
+    it("closes when the route changes another way, such as browser back or forward", async () => {
+      const { user } = await openDrawer("/");
+
+      // jsdom does not make the page inert, so a page control can stand in for history.
+      await user.click(screen.getByRole("button", { name: "Go to budgets" }));
+
+      expect(screen.getByRole("heading", { name: "Budgets page" })).toBeInTheDocument();
+      expect(drawer().open).toBe(false);
+      expect(isScrollLocked()).toBe(false);
+    });
+
+    it("closes when the window widens to the desktop layout", async () => {
+      const listeners = new Set<() => void>();
+      const query = {
+        matches: false,
+        addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+        removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+      };
+      const matchMedia = vi.fn(() => query);
+      vi.stubGlobal("matchMedia", matchMedia);
+      try {
+        await openDrawer();
+        expect(matchMedia).toHaveBeenCalledWith("(width > 1100px)");
+        expect(drawer().open).toBe(true);
+
+        query.matches = true;
+        listeners.forEach((listener) => listener());
+
+        await vi.waitFor(() => expect(drawer().open).toBe(false));
+        expect(listeners.size).toBe(0);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it("stays in sync when the browser closes the dialog itself", async () => {
+      await openDrawer();
+
+      drawer().close();
+
+      await vi.waitFor(() => expect(menuButton()).toHaveAttribute("aria-expanded", "false"));
+      expect(isScrollLocked()).toBe(false);
+      expect(menuButton()).toHaveFocus();
+    });
+
+    it("cleans up when the shell unmounts, such as after logout", async () => {
+      const { view } = await openDrawer();
+      expect(isScrollLocked()).toBe(true);
+
+      view.unmount();
+
+      expect(isScrollLocked()).toBe(false);
     });
   });
 });

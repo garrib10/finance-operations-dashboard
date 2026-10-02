@@ -1,5 +1,8 @@
 import { ArrowLeftRight, LayoutDashboard, PiggyBank, type LucideIcon } from "lucide-react";
 
+/** Above this width the sidebar is shown; at 1100px and below, the drawer. Matches App.css. */
+export const DESKTOP_NAV_QUERY = "(width > 1100px)";
+
 export interface NavItem {
   label: string;
   path: string;
@@ -10,8 +13,8 @@ export interface NavItem {
 }
 
 /**
- * The primary destinations shown in every navigation surface (sidebar and, from
- * phase 3, the mobile drawer). Profile and Account Settings stay in the account menu.
+ * The primary destinations shown in every navigation surface (desktop sidebar and mobile
+ * drawer). Profile and Account Settings stay in the account menu.
  */
 export const PRIMARY_NAV: readonly NavItem[] = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard, end: true },

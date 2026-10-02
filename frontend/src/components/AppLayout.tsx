@@ -1,8 +1,10 @@
-import { useState } from "react";
-import { Link, Outlet } from "react-router-dom";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import { Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { DESKTOP_NAV_QUERY } from "../navigation";
 import { readSidebarCollapsed, saveSidebarCollapsed } from "../utils/sidebarPreference";
 import { AccountMenu } from "./AccountMenu";
+import { MOBILE_NAV_ID, MobileNavDrawer } from "./MobileNavDrawer";
 import { PrimaryNav } from "./PrimaryNav";
 
 const SIDEBAR_ID = "app-sidebar";
@@ -14,11 +16,18 @@ const SIDEBAR_ID = "app-sidebar";
  * direct child of <main>; the page CSS relies on that.
  *
  * Collapsing only changes a data attribute, so the routed page is never remounted.
- * The collapsed styles apply above 1100px only; narrower screens ignore the preference.
+ * The collapsed styles apply above 1100px only; narrower screens ignore the preference
+ * and use the menu button and drawer instead.
  */
 export function AppLayout() {
+  const location = useLocation();
   // Read synchronously so the first render already has the saved width (no flash).
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readSidebarCollapsed);
+  // The drawer is open only for the location it was opened on, so any navigation
+  // (a link, browser back or forward) closes it without an extra effect.
+  const [drawerOpenedAt, setDrawerOpenedAt] = useState<string | null>(null);
+  const isDrawerOpen = drawerOpenedAt === location.key;
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const toggleLabel = isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar";
   const ToggleIcon = isSidebarCollapsed ? PanelLeftOpen : PanelLeftClose;
 
@@ -27,6 +36,24 @@ export function AppLayout() {
     setIsSidebarCollapsed(collapsed);
     saveSidebarCollapsed(collapsed);
   }
+
+  function closeDrawer(): void {
+    setDrawerOpenedAt(null);
+  }
+
+  // Widening to the desktop layout closes the drawer, so two navigations never coexist.
+  useEffect(() => {
+    if (!isDrawerOpen || typeof window.matchMedia !== "function") return;
+
+    const desktop = window.matchMedia(DESKTOP_NAV_QUERY);
+    function closeOnDesktop(): void {
+      if (desktop.matches) setDrawerOpenedAt(null);
+    }
+
+    closeOnDesktop();
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
+  }, [isDrawerOpen]);
 
   return (
     <div className="app-layout" data-sidebar-collapsed={isSidebarCollapsed}>
@@ -57,6 +84,23 @@ export function AppLayout() {
       <div className="app-layout__body">
         <header className="app-topbar">
           <div className="app-topbar__content">
+            <button
+              ref={menuButtonRef}
+              type="button"
+              className="app-topbar__menu"
+              aria-label="Open navigation menu"
+              aria-haspopup="dialog"
+              aria-expanded={isDrawerOpen}
+              aria-controls={MOBILE_NAV_ID}
+              onClick={() => setDrawerOpenedAt(location.key)}
+            >
+              <Menu aria-hidden="true" size={22} />
+            </button>
+
+            <Link className="app-brand app-topbar__brand" to="/">
+              FinTrack
+            </Link>
+
             <AccountMenu />
           </div>
         </header>
@@ -65,6 +109,8 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      <MobileNavDrawer open={isDrawerOpen} onClose={closeDrawer} returnFocusRef={menuButtonRef} />
     </div>
   );
 }

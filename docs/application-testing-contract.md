@@ -274,13 +274,17 @@ keep working.
 | Public pages | `nav` "Authentication navigation" with "Login" and "Register"; hidden while a session is being restored |
 | Landmarks | exactly one `header` and one `main#main-content`; "Skip to main content" targets it |
 | Sidebar toggle (above 1100px) | button "Collapse sidebar" / "Expand sidebar" with `aria-expanded`, controlling `#app-sidebar` |
+| Menu button (1100px and below) | button "Open navigation menu" with `aria-expanded`, controlling `#mobile-navigation` |
+| Navigation drawer | `dialog` named "Navigation menu" containing the primary navigation; close button "Close navigation menu" |
 
 Above 1100px the primary navigation is a sidebar column that can be collapsed to
 icons. Collapsed links keep their names ("Dashboard", "Transactions", "Budgets"), so
 name-based locators work in both states; the choice is saved per browser in
 `localStorage` under `fintrack:sidebar-collapsed` ("true" or "false"). At 1100px and
-below the navigation is currently a horizontal bar above the page. Prefer role and name locators over layout
-position, since the narrow-screen navigation will become a menu-button drawer.
+below the sidebar is hidden: open the drawer with the menu button, then follow a link
+(the drawer closes on navigation, Escape, the close button, or a backdrop click). Below
+640px the account menu button shows only the avatar; its name is unchanged. Prefer role
+and name locators over layout position.
 
 ### Category controls (v1.3.0)
 
