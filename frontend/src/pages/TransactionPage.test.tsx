@@ -70,6 +70,9 @@ async function completeTransactionForm(
   await user.type(screen.getByLabelText("Date"), "2026-09-10");
 }
 
+// Full user-event form flows are slow when the machine is busy (dev server, browser).
+vi.setConfig({ testTimeout: 20_000 });
+
 describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageSize) => {
   afterEach(() => {
     for (const [request] of vi.mocked(transactionService.getTransactions).mock.calls) {

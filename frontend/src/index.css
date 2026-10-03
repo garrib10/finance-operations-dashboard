@@ -22,6 +22,7 @@
   --color-border: #e2e8f0;
   --color-primary: #2563eb;
   --color-primary-dark: #1d4ed8;
+  --color-primary-soft: #eff6ff;
   --color-success: #15803d;
   --color-success-bg: #f0fdf4;
   --color-success-border: #bbf7d0;
@@ -37,6 +38,17 @@
   --shadow-md: 0 8px 24px rgb(15 23 42 / 0.08);
 
   --content-width: 1200px;
+
+  /* Application shell (issue #95). The sidebar is shown above the 1100px breakpoint. */
+  --sidebar-width: 15rem;
+  --sidebar-collapsed-width: 4.5rem;
+  --topbar-height: 4rem;
+
+  /* Stacking layers, lowest to highest. Add new layers here rather than raising values. */
+  --z-sidebar: 50; /* desktop sidebar and its collapsed-mode tooltips */
+  --z-dropdown: 100;
+  --z-banner: 1000;
+  --z-skip-link: 1000;
 }
 
 * {
@@ -93,7 +105,7 @@ select:focus-visible {
   position: fixed;
   top: 1rem;
   left: 1rem;
-  z-index: 1000;
+  z-index: var(--z-skip-link);
   padding: 0.75rem 1rem;
   color: #ffffff;
   background: #1f2937;

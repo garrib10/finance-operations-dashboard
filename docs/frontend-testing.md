@@ -257,3 +257,75 @@ Items not ticked have not been performed yet. Record evidence as described above
 - [ ] 200% zoom and 320/375 px widths: icon grid and long names wrap, no horizontal
       scroll, management controls remain reachable.
 - [ ] Reduced motion setting: no unexpected animation.
+
+## Issue #95 (v1.3.0) responsive sidebar navigation
+
+Signed-in pages use an application shell (`AppLayout`); Login, Register, and the session
+restoration screens use `PublicLayout` and never show the sidebar or drawer.
+
+| Width | Navigation |
+| --- | --- |
+| Above 1100px | Sticky sidebar, 240px expanded or 72px collapsed (icons only, tooltips on hover and keyboard focus). The collapse toggle sits beside the brand; when collapsed, hovering the "F" or focusing the toggle reveals the expand button. The width changes instantly. |
+| 1100px and below | Compact top bar (menu button, brand, account menu) and a native modal `<dialog>` drawer that slides in (no motion with reduced motion). Below 640px the account button shows only the avatar. |
+
+- **Destinations:** Dashboard (`/`, exact match), Transactions, Budgets, defined once in
+  `navigation.ts`. Profile and Account Settings stay in the account menu, which is in the
+  top bar at every size. The current page has `aria-current="page"` and a visible bar.
+- **Collapse preference:** `localStorage` key `fintrack:sidebar-collapsed` (`"true"` or
+  `"false"`), per device, kept after logout, written only when toggled. Anything else, or
+  unavailable storage, means expanded. The drawer ignores it.
+- **Drawer:** opens with focus on "Close navigation menu"; closes on that button, Escape,
+  a backdrop click, following a link, any route change (including Back and Forward),
+  widening past 1100px, and logout or session expiry. Focus returns to the menu button
+  when it still exists, and page scrolling is locked only while the drawer is open.
+
+### Automated coverage
+
+| Area | Tests |
+| --- | --- |
+| Public and signed-in layouts, one `main` and one `header`, skip link, restoration without sign-in links, logout removing the shell, Profile and Settings through the account menu | `App.test.tsx`, `PublicLayout.test.tsx`, `ProtectedRoute.test.tsx` |
+| Only the three destinations, current page for each route, query strings and trailing slashes, Dashboard exact match, decorative icons and tooltips | `PrimaryNav.test.tsx` |
+| Collapse toggle name, state, focus, saving, storage failures, collapsed names and tooltips, page and account menu not remounted, Back and Forward moving the current-page marker | `AppLayout.test.tsx`, `sidebarPreference.test.ts` |
+| Drawer: menu button attributes, `showModal`, initial focus, every close path, focus return, scroll-lock cleanup, desktop resize, browser-initiated close, unmount, independence from the collapse preference | `AppLayout.test.tsx` |
+| Account menu behaviour, photo and initials fallback, logout | `AccountMenu.test.tsx`, `AuthProvider.account.test.tsx`, `AccountPhoto.test.tsx` |
+| Breakpoint shared by CSS and code, no width animation, reduced-motion drawer rule, collapsed styles scoped to the sidebar | `tests/navigationStyles.test.ts` |
+
+**Limits of jsdom.** jsdom has no `showModal()`, so `src/test/setup.ts` provides a
+stand-in that only tracks the open state and the `close` event. Unit tests therefore
+cannot prove native focus containment, the inert background, backdrop rendering, CSS
+geometry, zoom behaviour, or screen-reader output; those are manual checks below.
+
+### Issue #95 manual verification (October 2, 2026)
+
+Performed by the maintainer in Chrome with DevTools device emulation against the local
+backend (not staging):
+
+- Desktop: sidebar layout, current-page marker, sidebar staying in place while the page
+  scrolls, collapse and expand, the "F" hover swap, tooltips on hover and keyboard focus
+  (to the right), compact brand, preference kept after refresh and logout, no toggle and
+  full labels below 1100px, and the collapsed layout at 1102px.
+- Narrow layout: top bar at 1100px and 375px (iPhone SE); account menu opening and fitting
+  at both widths; Dashboard, Transactions, and Budgets without sideways page scrolling at
+  375px (`scrollWidth` 375); tables scrolling inside their cards.
+- Drawer: slide-in and dimmed page, focus starting on the close button, Tab contained in
+  the drawer, page behind not scrollable or clickable, and closing with Escape, the close
+  button, the backdrop, a link, browser Back, and widening past 1100px; scrolling restored
+  and focus back on the menu button afterwards.
+- Account and session: account menu, Profile and Account Settings links, display-name
+  update in the menu, logout to Login from both layouts, no Login/Register flash on
+  refresh, skip link first with visible focus outlines, and 200% zoom switching to the
+  narrow layout.
+
+A Dashboard overflow found at 375px (a grid column stretched by the Recent Transactions
+table) was fixed during Phase 3 by using `minmax(0, …)` columns.
+
+### Issue #95 checks still outstanding
+
+- [ ] 320px, 768px, 1024px, 1280px, and 1440px widths, and the drawer at 200% zoom
+- [ ] Screen reader pass (VoiceOver): link names, toggle and menu-button state, dialog
+      name, current page, no duplicate tooltip announcements
+- [ ] Reduced motion: drawer appears without sliding
+- [ ] A long display name: truncated with an ellipsis in the top bar, shown in full in the
+      open account menu (CSS added in Phase 4)
+- [ ] Budgets charts redraw once after collapsing or expanding the sidebar
+- [ ] Windows High Contrast or forced colours: current-page bar still visible

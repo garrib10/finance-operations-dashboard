@@ -41,11 +41,13 @@ The project demonstrates layered backend architecture, short-lived JWTs with rot
 - Custom categories with approved icons, created together with a transaction or budget in one
   database transaction and reusable everywhere; database-enforced per-user name uniqueness and
   ownership
+- Responsive application shell: a collapsible desktop sidebar that remembers its state and
+  an accessible mobile navigation drawer, with keyboard and reduced-motion support
 - Search, filtering, sorting, pagination, and financial analytics
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
 - **915 passing backend tests** (877 unit + 38 MySQL integration) with **98.82% instruction coverage** and **95.61% branch coverage**
-- **657 passing frontend tests** across **41 test files** with **99.51% statement, 98.47% branch, 99.52% function, and 100% line coverage**
+- **720 passing frontend tests** across **46 test files** with **99.52% statement, 98.5% branch, 99.54% function, and 100% line coverage**
 
 ---
 
@@ -183,6 +185,11 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 
 ### Responsive Frontend
 
+- Desktop sidebar navigation with icons and a clearly marked current page
+- Collapsible icon-only sidebar mode with tooltips, saved per device
+- Mobile and tablet navigation drawer (1100px and below) built on the native modal
+  `<dialog>`, with focus handling, Escape and backdrop dismissal, and scroll locking
+- Skip link, labelled navigation landmarks, and reduced-motion support
 - Desktop, tablet, and mobile layouts
 - Centralized, type-safe API communication
 - Reusable currency and date formatting
@@ -223,8 +230,8 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 | ----------------- | ------------------------------------------------------------------- |
 | Backend           | **915 tests passing** (877 unit, 38 MySQL integration)              |
 | Backend Coverage  | **98.82% instruction coverage, 95.61% branch coverage**             |
-| Frontend          | **657 tests passing across 41 test files**                          |
-| Frontend Coverage | **99.51% statements, 98.47% branches, 99.52% functions, 100% lines** |
+| Frontend          | **720 tests passing across 46 test files**                          |
+| Frontend Coverage | **99.52% statements, 98.5% branches, 99.54% functions, 100% lines** |
 
 For branch behavior, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
@@ -291,6 +298,8 @@ Coverage includes:
 - Preference-aware date rendering and all transaction request paths
 - Category selection, custom-category creation, icon picker, category management, category filters,
   server field messages beside their inputs, icon fallback, and stale-session category state
+- Responsive navigation: public versus signed-in layouts, current-page state, sidebar collapse
+  and saved preference, every mobile-drawer close path, focus return, and scroll-lock cleanup
 
 Run the frontend suite:
 

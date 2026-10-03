@@ -79,6 +79,9 @@ describe("ProtectedRoute", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent("Loading...");
     expect(screen.queryByText("Protected Content")).not.toBeInTheDocument();
+    // Restoration renders in the public shell, never the sidebar, and hides sign-in links.
+    expect(screen.getByRole("main")).toContainElement(screen.getByRole("status"));
+    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
   });
 
   it("redirects unauthenticated users and preserves the attempted route", () => {
@@ -170,6 +173,8 @@ describe("ProtectedRoute", () => {
       }),
     ).toBeInTheDocument();
 
+    expect(screen.getByRole("main")).toContainElement(screen.getByRole("alert"));
+    expect(screen.getByRole("link", { name: "FinTrack" })).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(
       "We couldn’t restore your session. Check your connection and try again.",
     );

@@ -12,40 +12,387 @@
   margin-top: 1.5rem;
 }
 
-.app-header {
-  background-color: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.app-header__content {
-  width: min(100% - 2rem, var(--content-width));
-  min-height: 64px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 2rem;
-}
-
 .app-brand {
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--color-primary);
 }
 
-.app-nav {
+/* Public pages (Login, Register, session restoration) */
+
+.public-header {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.public-header__content {
+  width: min(100% - 2rem, var(--content-width));
+  min-height: var(--topbar-height);
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 2rem;
+}
+
+.public-nav {
   display: flex;
   align-items: center;
   gap: 1.5rem;
 }
 
-.app-nav a {
+.public-nav a {
   color: var(--color-text-muted);
   font-weight: 500;
 }
 
-.app-nav a:hover {
+.public-nav a:hover {
   color: var(--color-primary);
+}
+
+/*
+ * Signed-in application shell. Above 1100px the sidebar is a sticky column in normal
+ * grid flow, so content never sits underneath it and the page breakpoints, which
+ * switch at 1100px, keep describing the content area. At 1100px and below the sidebar
+ * is hidden and the top bar's menu button opens the navigation drawer instead.
+ * DESKTOP_NAV_QUERY in navigation.ts must match these breakpoints.
+ */
+.app-layout {
+  min-height: 100vh;
+}
+
+.app-layout__body {
+  min-width: 0;
+}
+
+.app-sidebar {
+  display: none;
+}
+
+.app-sidebar__header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.primary-nav__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.primary-nav__link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem 0.5rem calc(0.75rem + 3px);
+  color: var(--color-text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+}
+
+.primary-nav__link:hover {
+  color: var(--color-primary);
+  background-color: var(--color-background);
+}
+
+/* The current page is marked by a bar and weight as well as color (kept in forced colors). */
+.primary-nav__link[aria-current="page"] {
+  padding-left: 0.75rem;
+  color: var(--color-primary);
+  font-weight: 700;
+  background-color: var(--color-primary-soft);
+  border-left: 3px solid var(--color-primary);
+}
+
+.primary-nav__icon {
+  flex-shrink: 0;
+}
+
+/* Desktop-only sidebar parts: the collapse toggle, compact brand, and tooltips. */
+.app-sidebar__brand-mark,
+.app-sidebar__toggle,
+.sidebar-tooltip {
+  display: none;
+}
+
+.app-topbar {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app-topbar__content {
+  width: min(100% - 2rem, var(--content-width));
+  min-height: var(--topbar-height);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-topbar__content .account-menu {
+  margin-left: auto;
+}
+
+.app-topbar__menu,
+.mobile-nav__close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.app-topbar__menu:hover,
+.mobile-nav__close:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+/*
+ * Mobile navigation drawer: a native modal <dialog>, which provides focus containment,
+ * an inert background, and Escape handling. Only the slide-in is animated.
+ */
+.mobile-nav {
+  inset: 0 auto 0 0;
+  width: min(18rem, 85vw);
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 0;
+  border-right: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+.mobile-nav::backdrop {
+  background-color: rgb(15 23 42 / 0.45);
+}
+
+.mobile-nav[open] {
+  animation: mobile-nav-in 200ms ease-out;
+}
+
+.mobile-nav[open]::backdrop {
+  animation: mobile-nav-backdrop-in 200ms ease-out;
+}
+
+.mobile-nav__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  height: 100%;
+  padding: 1rem 0.75rem;
+  overflow-y: auto;
+}
+
+.mobile-nav__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-left: 0.75rem;
+}
+
+/* Page scrolling is locked while the drawer is open. */
+:root.scroll-locked {
+  overflow: hidden;
+}
+
+@keyframes mobile-nav-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes mobile-nav-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (width > 1100px) {
+  .app-layout {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  }
+
+  .app-sidebar {
+    display: flex;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100dvh;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.5rem;
+    padding: 1.25rem 0.75rem;
+    /* Not a scroll container, so tooltips can extend past the column edge. The
+       content (brand row and three links) fits even short desktop windows. */
+    background-color: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+  }
+
+  /* The drawer controls belong to narrow screens only. */
+  .app-topbar__menu,
+  .app-topbar__brand {
+    display: none;
+  }
+
+  .app-sidebar__brand {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 0.75rem;
+  }
+
+  .app-sidebar {
+    z-index: var(--z-sidebar);
+  }
+
+  .primary-nav__link {
+    position: relative;
+  }
+
+  .app-sidebar__toggle {
+    position: relative;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    color: var(--color-text-muted);
+    background: none;
+    border: 0;
+    border-radius: var(--radius-sm);
+  }
+
+  .app-sidebar__toggle:hover {
+    color: var(--color-primary);
+    background-color: var(--color-background);
+  }
+
+  .app-sidebar__toggle-icon {
+    flex-shrink: 0;
+  }
+
+  /*
+   * Collapsed sidebar: icons only. Width changes instantly (no animation) so charts
+   * reflow once. Labels use the .visually-hidden declarations, scoped here so the
+   * preference never hides labels at 1100px and below.
+   */
+  .app-layout[data-sidebar-collapsed="true"] {
+    grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
+  }
+
+  /*
+   * Collapsed header: the "F" and the expand button share one spot. Hovering the
+   * header, or focusing the button with the keyboard, swaps the F for the button.
+   * The button stays focusable and named throughout; only its opacity changes.
+   */
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__header {
+    display: grid;
+    place-items: center;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__header > * {
+    grid-area: 1 / 1;
+    transition: opacity 150ms ease;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__toggle {
+    z-index: 1; /* local: above the brand it overlaps within the header cell */
+    opacity: 0;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__header:hover .app-sidebar__toggle,
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__toggle:focus-visible {
+    opacity: 1;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__header:hover .app-sidebar__brand,
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__header:has(.app-sidebar__toggle:focus-visible) .app-sidebar__brand {
+    opacity: 0;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__brand {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__brand-name {
+    display: none;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__brand-mark {
+    display: inline;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar .primary-nav__link {
+    justify-content: center;
+    gap: 0;
+    padding: 0.5rem;
+  }
+
+  /* Keep the icon centred when the 3px current-page bar is present. */
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar .primary-nav__link[aria-current="page"] {
+    padding-left: calc(0.5rem - 3px);
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar .primary-nav__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Decorative tooltip (aria-hidden): the hidden label is the accessible name. */
+  .sidebar-tooltip {
+    position: absolute;
+    top: 50%;
+    left: calc(100% + 0.75rem);
+    padding: 0.375rem 0.625rem;
+    color: #ffffff;
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+    background-color: var(--color-text);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  /* Link tooltips appear only when collapsed; the icon-only toggle always has one. */
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar .primary-nav__link:is(:hover, :focus-visible) .sidebar-tooltip,
+  .app-sidebar__toggle:is(:hover, :focus-visible) .sidebar-tooltip {
+    display: block;
+  }
 }
 
 .app-main {
@@ -208,8 +555,13 @@
 }
 
 .account-menu__name {
+  /* Display names can be 100 characters; truncate visually (the button's accessible
+     name and the open panel keep the full name) so the top bar never overflows. */
+  max-width: 14rem;
+  overflow: hidden;
   font-weight: 600;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .account-menu__chevron {
@@ -221,7 +573,7 @@
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  z-index: 100;
+  z-index: var(--z-dropdown);
   width: min(18rem, calc(100vw - 2rem));
   padding: 1rem;
   background-color: var(--color-surface);
@@ -237,6 +589,7 @@
   margin-bottom: 0.75rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
 }
 
 .account-menu__identity span {
@@ -297,7 +650,8 @@
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  /* minmax(0, …) lets wide tables scroll inside their panel instead of widening the page. */
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 1.5rem;
   margin-bottom: 1.5rem;
 }
@@ -407,7 +761,7 @@
 
 .budget-details {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
   margin: 0 0 1rem;
 }
@@ -695,11 +1049,11 @@
 
 @media (max-width: 1100px) {
   .dashboard-summary {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .dashboard-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .transaction-filters {
@@ -707,11 +1061,11 @@
   }
 
   .budget-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .budget-charts-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -719,7 +1073,7 @@
 
 @media (max-width: 700px) {
   .dashboard-summary {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .dashboard-panel {
@@ -727,12 +1081,12 @@
   }
 
   .budget-details {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .transaction-form,
   .transaction-filters {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .transaction-form > div:last-child,
@@ -748,7 +1102,7 @@
   .budget-form,
   .budget-period-filter,
   .budget-card__content {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .budget-form > div:last-child {
@@ -775,32 +1129,10 @@
 }
 
 @media (max-width: 640px) {
-  .app-header__content {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem 0;
-  }
-
-  .app-nav {
-    width: 100%;
-    gap: 1rem;
-    overflow-x: auto;
-  }
-
-  .account-menu,
-  .account-menu__trigger {
-    width: 100%;
-  }
-
+  /* Compact avatar-only trigger; its accessible name still includes the user's name. */
+  .account-menu__name,
   .account-menu__chevron {
-    margin-left: auto;
-  }
-
-  .account-menu__panel {
-    left: 0;
-    right: auto;
-    width: 100%;
+    display: none;
   }
 
   .app-main {
@@ -1196,11 +1528,11 @@
 
 @media (max-width: 700px) {
   .category-select {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .budget-period-filter {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .category-manager__item {
@@ -1214,7 +1546,7 @@
   position: fixed;
   top: 1rem;
   left: 50%;
-  z-index: 1000;
+  z-index: var(--z-banner);
   width: min(48rem, calc(100% - 2rem));
   transform: translateX(-50%);
   pointer-events: none;
@@ -1281,6 +1613,15 @@
 
 @media (prefers-reduced-motion: reduce) {
   .status-banner--visible {
+    animation: none;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__header > * {
+    transition: none;
+  }
+
+  .mobile-nav[open],
+  .mobile-nav[open]::backdrop {
     animation: none;
   }
 }
