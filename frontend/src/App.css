@@ -320,7 +320,7 @@
   }
 
   .app-layout[data-sidebar-collapsed="true"] .app-sidebar__toggle {
-    z-index: 1;
+    z-index: 1; /* local: above the brand it overlaps within the header cell */
     opacity: 0;
   }
 
@@ -347,18 +347,18 @@
     display: inline;
   }
 
-  .app-layout[data-sidebar-collapsed="true"] .primary-nav__link {
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar .primary-nav__link {
     justify-content: center;
     gap: 0;
     padding: 0.5rem;
   }
 
   /* Keep the icon centred when the 3px current-page bar is present. */
-  .app-layout[data-sidebar-collapsed="true"] .primary-nav__link[aria-current="page"] {
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar .primary-nav__link[aria-current="page"] {
     padding-left: calc(0.5rem - 3px);
   }
 
-  .app-layout[data-sidebar-collapsed="true"] .primary-nav__label {
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar .primary-nav__label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -389,7 +389,7 @@
   }
 
   /* Link tooltips appear only when collapsed; the icon-only toggle always has one. */
-  .app-layout[data-sidebar-collapsed="true"] .primary-nav__link:is(:hover, :focus-visible) .sidebar-tooltip,
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar .primary-nav__link:is(:hover, :focus-visible) .sidebar-tooltip,
   .app-sidebar__toggle:is(:hover, :focus-visible) .sidebar-tooltip {
     display: block;
   }
@@ -555,8 +555,13 @@
 }
 
 .account-menu__name {
+  /* Display names can be 100 characters; truncate visually (the button's accessible
+     name and the open panel keep the full name) so the top bar never overflows. */
+  max-width: 14rem;
+  overflow: hidden;
   font-weight: 600;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .account-menu__chevron {
@@ -584,6 +589,7 @@
   margin-bottom: 0.75rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
 }
 
 .account-menu__identity span {

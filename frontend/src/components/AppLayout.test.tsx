@@ -35,6 +35,22 @@ function DashboardPage() {
   );
 }
 
+/** Steps through history, standing in for the browser's Back and Forward buttons. */
+function BudgetsPage() {
+  const navigate = useNavigate();
+  return (
+    <section>
+      <h1>Budgets page</h1>
+      <button type="button" onClick={() => navigate(-1)}>History back</button>
+    </section>
+  );
+}
+
+function TransactionsForwardProbe() {
+  const navigate = useNavigate();
+  return <button type="button" onClick={() => navigate(1)}>History forward</button>;
+}
+
 const sidebar = () => document.getElementById("app-sidebar")!;
 
 function renderShell(path = "/transactions") {
@@ -44,7 +60,7 @@ function renderShell(path = "/transactions") {
         <Route element={<AppLayout />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/transactions" element={<CounterPage />} />
-          <Route path="/budgets" element={<section><h1>Budgets page</h1></section>} />
+          <Route path="/budgets" element={<BudgetsPage />} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -103,6 +119,32 @@ describe("AppLayout", () => {
     expect(screen.getByRole("link", { name: "Dashboard" })).not.toHaveAttribute("aria-current");
     // The shell itself is not remounted.
     expect(screen.getByRole("button", { name: /account menu/i })).toBe(accountTrigger);
+  });
+
+  it("moves the current-page marker with browser back and forward", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/transactions"]}>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route path="/transactions" element={<section><h1>Transactions page</h1><TransactionsForwardProbe /></section>} />
+            <Route path="/budgets" element={<BudgetsPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+    const current = () => within(sidebar()).getByRole("link", { current: "page" });
+
+    await user.click(within(sidebar()).getByRole("link", { name: "Budgets" }));
+    expect(current()).toHaveAccessibleName("Budgets");
+
+    await user.click(screen.getByRole("button", { name: "History back" }));
+    expect(screen.getByRole("heading", { name: "Transactions page" })).toBeInTheDocument();
+    expect(current()).toHaveAccessibleName("Transactions");
+
+    await user.click(screen.getByRole("button", { name: "History forward" }));
+    expect(screen.getByRole("heading", { name: "Budgets page" })).toBeInTheDocument();
+    expect(current()).toHaveAccessibleName("Budgets");
   });
 
   describe("collapsible sidebar", () => {
@@ -346,6 +388,18 @@ describe("AppLayout", () => {
       await vi.waitFor(() => expect(menuButton()).toHaveAttribute("aria-expanded", "false"));
       expect(isScrollLocked()).toBe(false);
       expect(menuButton()).toHaveFocus();
+    });
+
+    it("is unaffected by the desktop collapse preference", async () => {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, "true");
+      await openDrawer();
+
+      // Collapsed styles are scoped to the sidebar, which never contains the drawer.
+      expect(sidebar()).not.toContainElement(drawer());
+      const nav = within(drawer()).getByRole("navigation", { name: "Primary navigation" });
+      for (const name of ["Dashboard", "Transactions", "Budgets"]) {
+        expect(within(nav).getByRole("link", { name })).toBeInTheDocument();
+      }
     });
 
     it("cleans up when the shell unmounts, such as after logout", async () => {

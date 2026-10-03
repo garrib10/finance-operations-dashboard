@@ -17,14 +17,22 @@ function DestinationProbe() {
   return <output data-testid="destination">{location.pathname}|{location.state?.from?.pathname}</output>;
 }
 
-function renderApp(path: string, authenticated = true, overrides: Partial<AuthContextValue> = {}) {
-  const context: AuthContextValue = {
-    user: authenticated ? accountUser : null,
-    isAuthenticated: authenticated,
+function signedInContext(): AuthContextValue {
+  return {
+    user: accountUser,
+    isAuthenticated: true,
     isLoading: false,
     restorationError: null,
     login: vi.fn(), logout: vi.fn(), retrySessionRestore: vi.fn(), sessionNotice: null, completePasswordChange: vi.fn(),
     updateProfile: vi.fn(), updatePreferences: vi.fn(), uploadProfilePhoto: vi.fn(), removeProfilePhoto: vi.fn(),
+  };
+}
+
+function renderApp(path: string, authenticated = true, overrides: Partial<AuthContextValue> = {}) {
+  const context: AuthContextValue = {
+    ...signedInContext(),
+    user: authenticated ? accountUser : null,
+    isAuthenticated: authenticated,
     ...overrides,
   };
   return render(<AuthContext.Provider value={context}>
@@ -82,6 +90,21 @@ describe("application routing and account forms", () => {
     expect(within(screen.getByRole("main")).getByRole("status")).toHaveTextContent("Loading...");
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Login" })).not.toBeInTheDocument();
+  });
+
+  it("removes the signed-in shell and returns to Login when the session ends", () => {
+    const view = renderApp("/budgets");
+    expect(screen.getByRole("navigation", { name: "Primary navigation" })).toBeInTheDocument();
+
+    // Logout, expiry, a password change, and cross-tab logout all clear the user like this.
+    view.rerender(<AuthContext.Provider value={{ ...signedInContext(), user: null, isAuthenticated: false }}>
+      <MemoryRouter initialEntries={["/budgets"]}><App /><DestinationProbe /></MemoryRouter>
+    </AuthContext.Provider>);
+
+    expect(screen.getByRole("heading", { name: "Login destination" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Primary navigation" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /account menu|navigation menu/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("main")).toHaveLength(1);
   });
 
   it("keeps Profile and Account Settings in the account menu, not the primary navigation", async () => {
