@@ -26,15 +26,27 @@ describe("useCategorySummary", () => {
     expect(result.current.summary?.categories).toEqual([groceriesRow]);
   });
 
-  it("reports the API message, or a generic one, when loading fails", async () => {
-    vi.mocked(getCategorySummary).mockRejectedValueOnce(new ApiError("Service unavailable", 503));
+  it("reports one fixed message, never server or network details, when loading fails", async () => {
+    vi.mocked(getCategorySummary).mockRejectedValueOnce(new ApiError("SQL timeout on host db-1", 503));
     const { result } = renderHook(() => useCategorySummary());
     await waitFor(() => expect(result.current.status).toBe("error"));
-    expect(result.current.error).toBe("Service unavailable");
+    expect(result.current.error).toBe("Unable to load categories. Please try again.");
 
     vi.mocked(getCategorySummary).mockRejectedValueOnce(new Error("network"));
-    await act(() => result.current.reload());
-    expect(result.current.error).toBe("Unable to load your categories. Please try again.");
+    let ok: boolean | undefined;
+    await act(async () => { ok = await result.current.reload(); });
+    expect(ok).toBe(false);
+    expect(result.current.error).toBe("Unable to load categories. Please try again.");
+  });
+
+  it("resolves reload with whether fresh data arrived", async () => {
+    vi.mocked(getCategorySummary).mockResolvedValue(summaryList([groceriesRow]));
+    const { result } = renderHook(() => useCategorySummary());
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+
+    let ok: boolean | undefined;
+    await act(async () => { ok = await result.current.reload(); });
+    expect(ok).toBe(true);
   });
 
   it("keeps the newest response when an older request finishes last", async () => {

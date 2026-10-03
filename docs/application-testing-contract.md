@@ -308,7 +308,8 @@ server's reporting month (issue #100). No new `data-testid` values are added.
 | Edit | button "Edit {name}" (custom only) opens a form named "Edit {name}" with "Save category" and "Cancel" |
 | Delete | button "Delete {name}" (custom only); `aria-disabled="true"` plus a reason "Used by …" when in use; confirmation group "Delete “{name}”? This cannot be undone." with "Delete category" and "Keep category" |
 | Card links | "View transactions for {name}" (`/transactions?category={id}`), or "Add a transaction for {name}" (`/transactions?addCategory={id}`) when the category has no transactions; "Set budget for {name}" or "Edit budget for {name}" (`/budgets?category={id}`, only for categories that take budgets) |
-| Messages | success banners "Created/Saved/Deleted “{name}”."; persistent `role="alert"` with "Dismiss" for refusals |
+| Messages | success banner "“{name}” was created/updated/deleted successfully." (after the summary refresh); refresh warning `role="status"` starting "Warning: “{name}” was updated, but the latest category summary could not be loaded." with "Try again"; errors `role="alert"` starting "Error:" with "Dismiss error"; initial load failure "Error: Unable to load categories. Please try again." with "Try again" |
+| Inline notice | `InlineNotice`: visible label "Error:" (`role="alert"`), "Warning:" or "Note:" (`role="status"`); optional action button and "Dismiss error" / "Dismiss warning" / "Dismiss note" |
 
 Cards are ordered by name, then ID, unless another sort is chosen; the toolbar affects the
 cards only, never the summary strip or spending table. Transactions and Budgets accept `?category={id}`: a
@@ -334,7 +335,7 @@ IDs, labels, and accessible names.
 | Field errors | `#transaction-category-error` / `#budget-category-error` (selection), `#…-category-new-name-error`, `#…-category-icon-error`, `#transaction-amount-error`, `#budget-monthly-limit-error` |
 | Duplicate recovery | button "Use existing category “{name}”" under the name error |
 | Category management | on the Categories page only (see above); Transactions and Budgets have no management panel or "Manage categories" link |
-| Confirmation banner | `#status-banner-stack [role="status"]`: "Transaction added./updated./deleted.", "Budget created./updated./deleted.", "Saved “{name}”.", "Deleted “{name}”."; close button "Dismiss message" |
+| Confirmation banner | `#status-banner-stack [role="status"]`: "Transaction added./updated./deleted.", "Budget created./updated./deleted.", "“{name}” was created/updated/deleted successfully."; close button "Dismiss message" |
 
 Existing category options use the numeric category ID as their value. Built-in categories
 show a "Built-in" badge and no edit or delete buttons. Category icons are decorative

@@ -172,12 +172,13 @@ both workflows. Financial and dashboard responses carry `categoryIconKey`. See t
   it is immediately available in every selector and filter.
 - **Confirmations:** successful saves and deletes ("Transaction added.", "Transaction
   updated.", "Transaction deleted.", "Budget created.", "Budget updated.", "Budget
-  deleted.", and "Created/Saved/Deleted “name”." on the Categories page) appear in a banner at the
+  deleted.", and "“name” was created/updated/deleted successfully." on the Categories page) appear in a banner at the
   top of the window (`StatusBanner`). It is announced through an always-present
   `role="status"` region, closes itself after 3 seconds, pauses while hovered or focused,
   and has a "Dismiss message" button. Starting another edit or delete clears it. Errors
-  and warnings never use the banner and stay until the user acts or dismisses them; if the
-  list cannot be refreshed after a save, a persistent warning replaces the banner.
+  and warnings never use the banner: they are an `InlineNotice` in the page (see
+  "Messages and focus" below) and stay until the user acts or dismisses them; if the list
+  cannot be refreshed after a save, a persistent warning replaces the banner.
 
 ## Categories page (issue #100)
 
@@ -209,7 +210,49 @@ managed. It shows each category's usage for the server's reporting month (see th
   do not take budgets get no budget action, even if a budget exists.
 - **After a change:** the shared category list (used by every dropdown) updates first,
   then the usage summary reloads. A failed refresh never undoes or misreports a change
-  that the server accepted: the last data stays, with a warning and a retry.
+  that the server accepted: the last data stays (a deleted category is still hidden),
+  with a warning and a retry.
+
+**Messages and focus.** The page has one status area holding at most one message:
+
+- **Success** ("“{name}” was created successfully." / "updated" / "deleted") appears only
+  after the server accepted the change **and** the usage summary has reloaded. It uses the
+  floating `StatusBanner` (`role="status"`, closes after 3 seconds, pauses on hover or
+  focus, "Dismiss message"). The name is captured before a delete, and an edit reports the
+  new name.
+- **Refresh warning:** if the change succeeded but the summary could not be reloaded, a
+  warning (never a failure or a plain success) says so: "“{name}” was updated, but the
+  latest category summary could not be loaded. Try again, or refresh the page to see the
+  current data." Its "Try again" reloads the summary and clears the warning on success.
+- **Errors and warnings** use `InlineNotice` in the page flow: a visible label ("Error:",
+  "Warning:", "Note:") and an icon carry the severity, never colour alone. Errors are
+  `role="alert"`; warnings and notes are `role="status"`. They never close by
+  themselves; "Dismiss error" / "Dismiss warning" closes one, and it stays closed until a
+  new message appears.
+- **Initial load failure:** "Error: Unable to load categories. Please try again." with
+  "Try again"; no summary, table, or cards are shown, so nothing stale looks current.
+  Server and network details are never displayed.
+- **Starting an operation** (Create, Edit, or Delete) replaces any earlier message.
+  Searching, filtering, sorting, and summary refreshes never bring one back.
+- **Field errors stay on the form:** client validation and server field messages (`name`,
+  `iconKey`) appear beside their inputs with `aria-invalid` and `aria-describedby`; the
+  form's own summary (`role="alert"`) holds a general submission error once, and the page
+  does not repeat it. The form stays open with the user's values.
+- **Delete failures:** nothing is removed until the server confirms. An unexpected failure
+  shows "Error: “{name}” was not deleted. Please try again." and keeps the confirmation
+  open for a retry; `409 CATEGORY_IN_USE` closes it with an explanation (a retry cannot
+  succeed). A category changed elsewhere (`404`, or built-in `403`) closes the form or
+  confirmation and refreshes both lists.
+- **Focus:** after create, the new card's heading; after edit, that card's Edit button
+  (found by category ID, so it works after the card moves); after delete, the next card
+  in the current order, else the previous one, else the "All categories" heading. A form
+  failure focuses the first invalid field, or the form's error message when no field is at
+  fault; a page-level error with nothing to fix focuses the notice; an in-use refusal
+  focuses the card's Delete button; a failed delete keeps focus on "Delete category".
+  Passive refreshes never move focus.
+- **Pending:** "Creating…", "Saving…", and "Deleting…" replace the button text and the
+  buttons are disabled until the request finishes, so nothing is submitted twice.
+  Banners report outcomes only.
 
 **Spending distribution.** "Spending in {Month Year}" (the server's reporting month, never
 the browser clock) is a table with the columns Category, Spent, and Share:

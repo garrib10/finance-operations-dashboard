@@ -21,7 +21,8 @@ import { ApiError } from "../services/api";
 import * as categoryService from "../services/categoryService";
 import { getCategorySummary } from "../services/categoryService";
 import { category, sampleCategories } from "../test/categoryFixtures";
-import { accountContext, accountUser } from "../test/accountFixtures";
+import type { CategorySummaryList } from "../types/category";
+import { accountContext, accountUser, deferred } from "../test/accountFixtures";
 import {
   groceriesRow,
   petCareRow,
@@ -236,8 +237,12 @@ describe("CategoriesPage", () => {
       .mockResolvedValueOnce(summaryList(allRows));
     renderWithProviders();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Unable to load your categories. Please try again.");
-    await user.click(screen.getByRole("button", { name: "Try again" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Error: Unable to load categories. Please try again.");
+    // Nothing from an earlier load is shown as current.
+    expect(screen.queryByText("Categories", { selector: "dt" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("article")).not.toBeInTheDocument();
+    await user.click(within(alert).getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByRole("heading", { name: "All categories" })).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -446,7 +451,7 @@ describe("CategoriesPage", () => {
       await user.click(within(confirm).getByRole("button", { name: "Delete category" }));
 
       expect(categoryService.deleteCategory).toHaveBeenCalledExactlyOnceWith(9);
-      expect(await screen.findByText("Deleted “Hobbies”.")).toHaveAttribute("role", "status");
+      expect(await screen.findByText("“Hobbies” was deleted successfully.")).toHaveAttribute("role", "status");
       await waitFor(() => expect(screen.queryByRole("article", { name: "Hobbies" })).not.toBeInTheDocument());
       await waitFor(() => expect(screen.getByRole("heading", { name: "Pet Care" })).toHaveFocus());
       expect(getCategorySummary).toHaveBeenCalledTimes(2);
@@ -510,19 +515,29 @@ describe("CategoriesPage", () => {
       expect(screen.getByRole("button", { name: "Delete Hobbies" })).toHaveFocus();
 
       // It stays until dismissed.
-      await user.click(within(alert).getByRole("button", { name: "Dismiss" }));
+      await user.click(within(alert).getByRole("button", { name: "Dismiss error" }));
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 
-    it("reports an unexpected delete failure and keeps the category", async () => {
-      vi.mocked(categoryService.deleteCategory).mockRejectedValue(new Error("network"));
+    it("reports an unexpected delete failure, keeps the category, and keeps the confirmation for a retry", async () => {
+      vi.mocked(categoryService.deleteCategory)
+        .mockRejectedValueOnce(new Error("network"))
+        .mockResolvedValueOnce(undefined);
       const user = await renderPage();
       await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
       await user.click(screen.getByRole("button", { name: "Delete category" }));
 
-      expect(await screen.findByRole("alert")).toHaveTextContent("Unable to delete the category. Please try again.");
+      expect(await screen.findByRole("alert")).toHaveTextContent("Error: “Hobbies” was not deleted. Please try again.");
       expect(card("Hobbies")).toBeInTheDocument();
-      await waitFor(() => expect(screen.getByRole("button", { name: "Delete Hobbies" })).toHaveFocus());
+      expect(screen.queryByText(/was deleted successfully/)).not.toBeInTheDocument();
+      const retry = within(card("Hobbies")).getByRole("button", { name: "Delete category" });
+      await waitFor(() => expect(retry).toBeEnabled());
+      expect(retry).toHaveFocus();
+
+      // A successful retry replaces the error with the success message.
+      await user.click(retry);
+      expect(await screen.findByText("“Hobbies” was deleted successfully.")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 
     it.each([
@@ -563,7 +578,7 @@ describe("CategoriesPage", () => {
 
       expect(categoryService.updateCategory).toHaveBeenCalledExactlyOnceWith(7,
         { name: "Pets", budgetEnabled: true, iconKey: "heart-pulse" });
-      expect(await screen.findByText("Saved “Pets”.")).toHaveAttribute("role", "status");
+      expect(await screen.findByText("“Pets” was updated successfully.")).toHaveAttribute("role", "status");
       await waitFor(() => expect(screen.getByRole("button", { name: "Edit Pets" })).toHaveFocus());
       expect(getCategorySummary).toHaveBeenCalledTimes(2);
       expect(categoryService.getCategories).toHaveBeenCalledTimes(2);
@@ -600,9 +615,11 @@ describe("CategoriesPage", () => {
       await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
       await user.click(screen.getByRole("button", { name: "Save category" }));
 
-      expect(await screen.findByRole("alert")).toHaveTextContent("Built-in categories cannot be changed or deleted.");
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent("Built-in categories cannot be changed or deleted.");
       expect(screen.queryByRole("form")).not.toBeInTheDocument();
-      await waitFor(() => expect(screen.getByRole("heading", { name: "All categories" })).toHaveFocus());
+      // No field to fix: focus moves to the explanation.
+      await waitFor(() => expect(alert).toHaveFocus());
     });
 
     it("closes the form and explains when the category no longer exists", async () => {
@@ -637,12 +654,12 @@ describe("CategoriesPage", () => {
 
       expect(categoryService.createCategory).toHaveBeenCalledExactlyOnceWith(
         { name: "Gifts", budgetEnabled: true, iconKey: "gift" });
-      expect(await screen.findByText("Created “Gifts”.")).toHaveAttribute("role", "status");
+      expect(await screen.findByText("“Gifts” was created successfully.")).toHaveAttribute("role", "status");
       await waitFor(() => expect(screen.getByRole("heading", { name: "Gifts" })).toHaveFocus());
       expect(screen.queryByRole("form")).not.toBeInTheDocument();
 
       await user.click(screen.getByRole("button", { name: "Dismiss message" }));
-      expect(screen.queryByText("Created “Gifts”.")).not.toBeInTheDocument();
+      expect(screen.queryByText("“Gifts” was created successfully.")).not.toBeInTheDocument();
     });
 
     it("validates the name and shows a duplicate on the field", async () => {
@@ -681,6 +698,150 @@ describe("CategoriesPage", () => {
     });
   });
 
+  describe("status messages", () => {
+    it("announces success only after the change and the refresh have both finished", async () => {
+      const refresh = deferred<CategorySummaryList>();
+      vi.mocked(getCategorySummary)
+        .mockResolvedValueOnce(summaryList(allRows))
+        .mockReturnValueOnce(refresh.promise);
+      vi.mocked(categoryService.updateCategory).mockResolvedValue(category({ id: 7, name: "Pet Care" }));
+      const user = await renderPage();
+      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await user.click(screen.getByRole("button", { name: "Save category" }));
+
+      await waitFor(() => expect(getCategorySummary).toHaveBeenCalledTimes(2));
+      expect(screen.queryByText(/was updated successfully/)).not.toBeInTheDocument();
+
+      refresh.resolve(summaryList(allRows));
+      expect(await screen.findByText("“Pet Care” was updated successfully.")).toBeInTheDocument();
+      expect(screen.getAllByText(/was updated successfully/)).toHaveLength(1);
+    });
+
+    it.each([
+      ["created", "“Gifts” was created, but the latest category summary could not be loaded."],
+      ["deleted", "“Hobbies” was deleted, but the latest category summary could not be loaded."],
+    ])("warns, without claiming failure, when a category was %s but the refresh failed", async (verb, message) => {
+      vi.mocked(getCategorySummary)
+        .mockResolvedValueOnce(summaryList(allRows))
+        .mockRejectedValueOnce(new Error("network"));
+      vi.mocked(categoryService.createCategory).mockResolvedValue(category({ id: 60, name: "Gifts" }));
+      vi.mocked(categoryService.deleteCategory).mockResolvedValue(undefined);
+      const user = await renderPage();
+
+      if (verb === "created") {
+        await user.click(screen.getByRole("button", { name: "Create category" }));
+        await user.type(screen.getByLabelText("Category name"), "Gifts");
+        await user.click(within(screen.getByRole("form", { name: "Create category" })).getByRole("button", { name: "Create category" }));
+      } else {
+        await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+        await user.click(screen.getByRole("button", { name: "Delete category" }));
+      }
+
+      expect(await screen.findByText(new RegExp(message)))
+        .toHaveTextContent("Try again, or refresh the page to see the current data.");
+      expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(screen.queryByText(/successfully/)).not.toBeInTheDocument();
+      if (verb === "deleted") {
+        // Gone on the server, so it is not shown from the stale summary either.
+        expect(screen.queryByRole("article", { name: "Hobbies" })).not.toBeInTheDocument();
+      }
+    });
+
+    it("keeps an edit open with its values and a single error when saving fails", async () => {
+      vi.mocked(categoryService.updateCategory).mockRejectedValue(new Error("network"));
+      const user = await renderPage();
+      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await user.clear(screen.getByLabelText("Category name"));
+      await user.type(screen.getByLabelText("Category name"), "Pets");
+      await user.click(screen.getByRole("button", { name: "Save category" }));
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent("Unable to save the category. Please try again.");
+      expect(screen.getAllByRole("alert")).toHaveLength(1); // In the form only, not also on the page.
+      expect(screen.getByRole("form", { name: "Edit Pet Care" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Category name")).toHaveValue("Pets");
+      expect(alert).toHaveFocus();
+    });
+
+    it("keeps server field errors beside their inputs, not in a page banner", async () => {
+      vi.mocked(categoryService.createCategory).mockRejectedValue(new ApiError("Validation failed", 400,
+        { name: "Category name must be 50 characters or fewer", iconKey: "Choose one of the approved icons" }));
+      const user = await renderPage();
+      await user.click(screen.getByRole("button", { name: "Create category" }));
+      await user.type(screen.getByLabelText("Category name"), "Gifts");
+      await user.click(within(screen.getByRole("form", { name: "Create category" })).getByRole("button", { name: "Create category" }));
+
+      const name = screen.getByLabelText("Category name");
+      await waitFor(() => expect(name).toHaveAttribute("aria-invalid", "true"));
+      expect(name).toHaveAccessibleDescription("Category name must be 50 characters or fewer");
+      expect(screen.getByRole("radiogroup", { name: "Icon" })).toHaveAccessibleDescription("Choose one of the approved icons");
+      expect(name).toHaveValue("Gifts");
+      expect(name).toHaveFocus();
+      expect(document.getElementById("categories-page-notice")).not.toBeInTheDocument();
+    });
+
+    it("replaces an old error when a new operation starts, and filters never bring it back", async () => {
+      vi.mocked(categoryService.deleteCategory).mockRejectedValue(new Error("network"));
+      const user = await renderPage();
+      await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+      await user.click(screen.getByRole("button", { name: "Delete category" }));
+      expect(await screen.findByRole("alert")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+      await user.selectOptions(screen.getByLabelText("Filter categories"), "custom");
+      await user.selectOptions(screen.getByLabelText("Filter categories"), "all");
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("keeps a dismissed success message dismissed until the next change", async () => {
+      vi.mocked(categoryService.updateCategory).mockResolvedValue(category({ id: 7, name: "Pet Care" }));
+      const user = await renderPage();
+      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await user.click(screen.getByRole("button", { name: "Save category" }));
+      await screen.findByText("“Pet Care” was updated successfully.");
+
+      await user.click(screen.getByRole("button", { name: "Dismiss message" }));
+      await user.type(screen.getByLabelText("Search categories"), "p");
+      expect(screen.queryByText(/was updated successfully/)).not.toBeInTheDocument();
+    });
+
+    it("returns focus to the edited card even when the new name moves it", async () => {
+      const renamed = { ...unusedRow, name: "Zoo trips" };
+      vi.mocked(getCategorySummary)
+        .mockResolvedValueOnce(summaryList(allRows))
+        .mockResolvedValueOnce(summaryList([groceriesRow, salaryRow, petCareRow, renamed]));
+      vi.mocked(categoryService.updateCategory).mockResolvedValue(category({ id: 9, name: "Zoo trips" }));
+      const user = await renderPage();
+      expect(cardNames()[1]).toBe("Hobbies");
+
+      await user.click(screen.getByRole("button", { name: "Edit Hobbies" }));
+      await user.clear(screen.getByLabelText("Category name"));
+      await user.type(screen.getByLabelText("Category name"), "Zoo trips");
+      await user.click(screen.getByRole("button", { name: "Save category" }));
+
+      await waitFor(() => expect(screen.getByRole("button", { name: "Edit Zoo trips" })).toHaveFocus());
+      expect(cardNames().at(-1)).toBe("Zoo trips");
+    });
+
+    it("moves focus to the list heading when the last category is deleted", async () => {
+      vi.mocked(getCategorySummary)
+        .mockResolvedValueOnce(summaryList([unusedRow]))
+        .mockResolvedValueOnce(summaryList([]));
+      vi.mocked(categoryService.deleteCategory).mockResolvedValue(undefined);
+      const user = await renderPage();
+      await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+      await user.click(screen.getByRole("button", { name: "Delete category" }));
+
+      await waitFor(() => expect(screen.getByRole("heading", { name: "All categories" })).toHaveFocus());
+      expect(screen.getByText("You don’t have any categories yet.")).toBeInTheDocument();
+      expect(await screen.findByText("“Hobbies” was deleted successfully.")).toBeInTheDocument();
+    });
+  });
+
   describe("refresh after a change", () => {
     it("keeps the change and offers a retry when the usage summary cannot refresh", async () => {
       vi.mocked(getCategorySummary)
@@ -693,13 +854,17 @@ describe("CategoriesPage", () => {
       await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
       await user.click(screen.getByRole("button", { name: "Save category" }));
 
-      const warning = await screen.findByText("Your change was saved, but category usage could not be refreshed.");
-      expect(screen.getByText("Saved “Pet Care”.")).toBeInTheDocument();
+      const warning = await screen.findByText(/“Pet Care” was updated, but the latest category summary could not be loaded\./);
+      expect(warning).toHaveTextContent("Warning: “Pet Care” was updated, but the latest category summary could not be loaded. Try again, or refresh the page to see the current data.");
+      expect(warning.closest("[role='status']")).toBeInTheDocument();
+      // Honest: neither a plain success nor a failure.
+      expect(screen.queryByText(/was updated successfully/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Unable to save/)).not.toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
       expect(card("Pet Care")).toBeInTheDocument();
 
-      await user.click(within(warning.closest("div")!).getByRole("button", { name: "Refresh usage" }));
-      await waitFor(() => expect(screen.queryByText(/could not be refreshed/)).not.toBeInTheDocument());
+      await user.click(screen.getByRole("button", { name: "Try again" }));
+      await waitFor(() => expect(screen.queryByText(/could not be loaded/)).not.toBeInTheDocument());
     });
 
     it("keeps the change and warns when the shared category list cannot refresh", async () => {
@@ -712,7 +877,7 @@ describe("CategoriesPage", () => {
 
       expect(await screen.findByText(/Category options could not be refreshed. Your changes were saved./))
         .toBeInTheDocument();
-      expect(screen.getByText("Saved “Pet Care”.")).toBeInTheDocument();
+      expect(screen.getByText("“Pet Care” was updated successfully.")).toBeInTheDocument();
     });
   });
 });

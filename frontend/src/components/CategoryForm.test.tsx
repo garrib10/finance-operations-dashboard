@@ -115,7 +115,11 @@ describe("CategoryForm", () => {
     const { user, name } = renderForm({ onSubmit: vi.fn().mockRejectedValue(new Error("network")) });
     await user.click(screen.getByRole("button", { name: "Save category" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Unable to save the category. Please try again.");
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Unable to save the category. Please try again.");
+    // No field to fix, so focus moves to the message rather than being lost.
+    expect(alert).toHaveFocus();
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
     expect(name()).toHaveValue("Pet Care");
   });
 

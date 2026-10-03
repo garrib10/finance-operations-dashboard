@@ -11,12 +11,21 @@ interface CategoryDeleteConfirmProps {
 export function CategoryDeleteConfirm({ categoryName, onConfirm, onCancel }: CategoryDeleteConfirmProps) {
   const labelId = useId();
   const [pending, setPending] = useState(false);
+  const [attempts, setAttempts] = useState(0);
   const busy = useRef(false);
   const confirmRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     confirmRef.current?.focus();
   }, []);
+
+  // Still open after an attempt means the delete failed: if focus was lost while the
+  // button was disabled, put it back on "Delete category" so the user can retry.
+  useEffect(() => {
+    if (attempts > 0 && (!document.activeElement || document.activeElement === document.body)) {
+      confirmRef.current?.focus();
+    }
+  }, [attempts]);
 
   async function handleConfirm(): Promise<void> {
     if (busy.current) return;
@@ -27,6 +36,7 @@ export function CategoryDeleteConfirm({ categoryName, onConfirm, onCancel }: Cat
     } finally {
       busy.current = false;
       setPending(false);
+      setAttempts((count) => count + 1);
     }
   }
 

@@ -1633,6 +1633,97 @@
   background-color: var(--color-success-soft);
 }
 
+/* Persistent notices in the page flow: a visible label and icon carry the severity,
+   the colour only reinforces it. No animation, so nothing to reduce for motion. */
+.inline-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 1.5rem;
+  padding: 0.85rem 0.85rem 0.85rem 1rem;
+  color: var(--color-text);
+  background-color: var(--color-primary-soft);
+  border: 1px solid var(--color-info-border);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+}
+
+.inline-notice:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.inline-notice--warning {
+  background-color: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  border-left-color: var(--color-warning);
+}
+
+.inline-notice--error {
+  background-color: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+  border-left-color: var(--color-danger);
+}
+
+.inline-notice--info {
+  border-left-color: var(--color-primary);
+}
+
+.inline-notice__icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: var(--color-primary);
+}
+
+.inline-notice--warning .inline-notice__icon,
+.inline-notice--warning .inline-notice__label {
+  color: var(--color-warning);
+}
+
+.inline-notice--error .inline-notice__icon,
+.inline-notice--error .inline-notice__label {
+  color: var(--color-danger);
+}
+
+.inline-notice__message {
+  flex: 1 1 14rem;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.inline-notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.inline-notice__dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  color: var(--color-text-muted);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+
+.inline-notice__dismiss:hover {
+  color: var(--color-text);
+  background-color: rgb(15 23 42 / 0.06);
+}
+
+.inline-notice__dismiss:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 @keyframes status-banner-in {
   from {
     opacity: 0;
@@ -1656,14 +1747,6 @@
 }
 
 /* ---------------------------------------------------------------- Categories page (#100) */
-
-.categories-page__error {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 0 0 1.5rem;
-}
 
 .category-summary-strip {
   display: grid;

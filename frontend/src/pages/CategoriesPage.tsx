@@ -7,6 +7,7 @@ import { CategoryRefreshNotice } from "../components/CategoryRefreshNotice";
 import { resolveIconKey } from "../components/categoryIconRegistry";
 import { CategorySpendingTable } from "../components/CategorySpendingTable";
 import { CategorySummaryStrip } from "../components/CategorySummaryStrip";
+import { InlineNotice } from "../components/InlineNotice";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../context/AuthContext";
 import { useCategories } from "../context/CategoryContext";
@@ -28,7 +29,29 @@ import { categoryCardIds } from "../utils/categoryUsage";
 const LIST_HEADING_ID = "categories-list-heading";
 const CREATE_BUTTON_ID = "categories-create-button";
 const SEARCH_ID = "category-search";
+const NOTICE_ID = "categories-page-notice";
 const NOT_FOUND_MESSAGE = "This category no longer exists. The list has been refreshed.";
+
+/**
+ * The page's one status message. Success floats in StatusBanner and closes itself; the
+ * others stay in the page as an InlineNotice until dismissed or replaced. A `retry`
+ * notice offers "Try again" to reload the usage summary.
+ */
+interface PageStatus {
+  type: "success" | "info" | "warning" | "error";
+  message: string;
+  retry?: boolean;
+}
+
+/** A change the server accepted, but whose fresh summary could not be loaded. */
+function refreshWarning(name: string, verb: "created" | "updated" | "deleted"): PageStatus {
+  return {
+    type: "warning",
+    message: `“${name}” was ${verb}, but the latest category summary could not be loaded. `
+      + "Try again, or refresh the page to see the current data.",
+    retry: true,
+  };
+}
 
 type Workflow =
   | { kind: "none" }
@@ -38,9 +61,9 @@ type Workflow =
 
 /**
  * The home for category management. Changes go through CategoryContext (the shared
- * list every category dropdown uses), then the usage summary is reloaded. A successful
- * change is never reported as failed: if a refresh fails, the change stands and a
- * warning offers a retry.
+ * list every category dropdown uses), then the usage summary is reloaded. Success is
+ * announced only once fresh data has arrived; a change the server accepted is never
+ * reported as failed: if the refresh fails, a warning says so and offers a retry.
  */
 function CategoriesPage() {
   const { user } = useAuth();
@@ -49,19 +72,20 @@ function CategoriesPage() {
   const dateFormat = user?.preferences?.dateFormat ?? "MEDIUM";
 
   const [workflow, setWorkflow] = useState<Workflow>({ kind: "none" });
-  const [pageError, setPageError] = useState("");
-  const [statusMessage, setStatusMessage] = useState("");
+  const [pageStatus, setPageStatus] = useState<PageStatus | null>(null);
   // Search, filter, and sort for the cards only (never the summary or spending table).
   const [discovery, setDiscovery] = useState<CategoryDiscovery>(DEFAULT_DISCOVERY);
   // The category just worked on stays visible until the toolbar next changes, so a rename
   // or a cancel never makes the card (and its focus target) vanish.
   const [recentId, setRecentId] = useState<number | null>(null);
+  // Deleted on the server: hidden at once, even if the summary refresh then fails.
+  const [removedIds, setRemovedIds] = useState<readonly number[]>([]);
   // Element to focus once the list has re-rendered, with a fallback if it is gone.
   const pendingFocus = useRef<{ id: string; fallback: string } | null>(null);
 
   const monthLabel = summary ? formatReportingMonth(summary.month, summary.year) : "";
   const monthName = monthLabel.split(" ")[0];
-  const rows = summary?.categories ?? [];
+  const rows = (summary?.categories ?? []).filter((row) => !removedIds.includes(row.id));
   const workflowId = workflow.kind === "edit" || workflow.kind === "delete" ? workflow.id : null;
   const visible = discoverCategories(rows, discovery, [workflowId, recentId]);
   const keptVisible = visible.find((row) => !matchesSearch(row, discovery.query) || !matchesFilter(row, discovery.filter));
@@ -72,10 +96,10 @@ function CategoriesPage() {
     const target = pendingFocus.current;
     if (!target || status === "loading") return;
     const element = document.getElementById(target.id) ?? document.getElementById(target.fallback);
-    if (element) {
-      element.focus();
-      pendingFocus.current = null;
-    }
+    element?.focus();
+    // Keep trying on the next render if the target could not take focus yet (a button
+    // that is still disabled while its request finishes, say).
+    if (element && document.activeElement === element) pendingFocus.current = null;
   });
 
   function focusAfterRender(id: string, fallback = LIST_HEADING_ID): void {
@@ -98,11 +122,33 @@ function CategoriesPage() {
     focusAfterRender(SEARCH_ID); // The Clear button disappears, so keep focus nearby.
   }
 
+  /** Starting a new operation replaces whatever an earlier one reported. */
+  function startWorkflow(next: Workflow): void {
+    setPageStatus(null);
+    setWorkflow(next);
+  }
+
+  /**
+   * After the server accepted a change: reload the usage summary, then report success
+   * only if fresh data arrived; otherwise warn honestly that the change did happen.
+   */
+  async function reportAfterRefresh(name: string, verb: "created" | "updated" | "deleted"): Promise<void> {
+    const refreshed = await reload();
+    setPageStatus(refreshed
+      ? { type: "success", message: `“${name}” was ${verb} successfully.` }
+      : refreshWarning(name, verb));
+  }
+
+  async function retryRefresh(): Promise<void> {
+    const refreshed = await reload();
+    if (refreshed) setPageStatus(null);
+  }
+
   /** A category changed elsewhere: refresh both lists and explain. */
   function handleGone(message: string): void {
     setWorkflow({ kind: "none" });
-    setPageError(message);
-    focusAfterRender(LIST_HEADING_ID);
+    setPageStatus({ type: "error", message });
+    focusAfterRender(NOTICE_ID);
     void reloadCategories();
     void reload();
   }
@@ -110,11 +156,9 @@ function CategoriesPage() {
   async function handleCreate(draft: CategoryDraft): Promise<void> {
     const created = await createCategory({ name: draft.name, budgetEnabled: true, iconKey: draft.iconKey });
     setWorkflow({ kind: "none" });
-    setPageError("");
-    setStatusMessage(`Created “${created.name}”.`);
     setRecentId(created.id);
     focusAfterRender(categoryCardIds(created.id).heading);
-    await reload();
+    await reportAfterRefresh(created.name, "created");
   }
 
   async function handleSave(category: CategorySummary, draft: CategoryDraft): Promise<void> {
@@ -125,11 +169,9 @@ function CategoriesPage() {
         iconKey: draft.iconKey,
       });
       setWorkflow({ kind: "none" });
-      setPageError("");
-      setStatusMessage(`Saved “${updated.name}”.`);
       setRecentId(category.id);
       focusAfterRender(categoryCardIds(category.id).edit);
-      await reload();
+      await reportAfterRefresh(updated.name, "updated");
     } catch (caught) {
       if (caught instanceof ApiError && caught.code === CATEGORY_NOT_FOUND) {
         handleGone(NOT_FOUND_MESSAGE);
@@ -148,22 +190,25 @@ function CategoriesPage() {
     const neighbour = visible[index + 1] ?? visible[index - 1];
     const ids = categoryCardIds(category.id);
 
+    const name = category.name; // Captured before the card (and its data) go away.
+
     try {
       await deleteCategory(category.id);
       setWorkflow({ kind: "none" });
-      setPageError("");
-      setStatusMessage(`Deleted “${category.name}”.`);
+      setRemovedIds((removed) => [...removed, category.id]);
       focusAfterRender(neighbour ? categoryCardIds(neighbour.id).heading : LIST_HEADING_ID);
-      await reload();
+      await reportAfterRefresh(name, "deleted");
     } catch (caught) {
       if (caught instanceof ApiError && caught.code === CATEGORY_IN_USE) {
-        // The usage changed after the page loaded; the server is authoritative.
+        // The usage changed after the page loaded; the server is authoritative. Nothing
+        // was removed, and a retry cannot succeed, so the confirmation closes.
         setWorkflow({ kind: "none" });
         setRecentId(category.id);
-        setPageError(
-          `“${category.name}” is still used by transactions or budgets, so it can’t be deleted. `
-          + "Change the category on those transactions and budgets, or delete them, then try again.",
-        );
+        setPageStatus({
+          type: "error",
+          message: `“${name}” is still used by transactions or budgets, so it can’t be deleted. `
+            + "Change the category on those transactions and budgets, or delete them, then try again.",
+        });
         focusAfterRender(ids.delete);
         void reload();
       } else if (caught instanceof ApiError && caught.code === CATEGORY_NOT_FOUND) {
@@ -171,10 +216,9 @@ function CategoriesPage() {
       } else if (caught instanceof ApiError && caught.code === CATEGORY_BUILT_IN) {
         handleGone(caught.message);
       } else {
-        setWorkflow({ kind: "none" });
-        setRecentId(category.id);
-        setPageError("Unable to delete the category. Please try again.");
-        focusAfterRender(ids.delete);
+        // Nothing was deleted: keep the confirmation open (it refocuses its button) so the
+        // user can try again.
+        setPageStatus({ type: "error", message: `“${name}” was not deleted. Please try again.` });
       }
     }
   }
@@ -216,36 +260,32 @@ function CategoriesPage() {
         </p>
       </div>
 
-      <StatusBanner message={statusMessage} onDismiss={() => setStatusMessage("")} />
-
-      {pageError && (
-        <div className="form-error categories-page__error" role="alert">
-          <span>{pageError}</span>{" "}
-          <button type="button" className="button button--secondary button--small" onClick={() => setPageError("")}>
-            Dismiss
-          </button>
-        </div>
-      )}
+      {/* One status area: a floating success confirmation, or one persistent notice. */}
+      <StatusBanner
+        message={pageStatus?.type === "success" ? pageStatus.message : ""}
+        onDismiss={() => setPageStatus(null)}
+      />
 
       {status === "error" && !summary && (
-        <div className="form-error categories-page__error" role="alert">
-          <span>{error}</span>{" "}
-          <button type="button" className="button button--secondary button--small" onClick={() => void reload()}>
-            Try again
-          </button>
-        </div>
+        // The first load failed: there is no data, so nothing stale is shown.
+        <InlineNotice variant="error" action={{ label: "Try again", onClick: () => void reload() }}>
+          {error}
+        </InlineNotice>
       )}
 
-      {status === "error" && summary && (
-        <div className="form-warning categories-page__error" role="status">
-          <span>Your change was saved, but category usage could not be refreshed.</span>{" "}
-          <button type="button" className="button button--secondary button--small" onClick={() => void reload()}>
-            Refresh usage
-          </button>
-        </div>
+      {pageStatus && pageStatus.type !== "success" && (
+        <InlineNotice
+          id={NOTICE_ID}
+          variant={pageStatus.type}
+          action={pageStatus.retry ? { label: "Try again", onClick: () => void retryRefresh() } : undefined}
+          onDismiss={() => setPageStatus(null)}
+        >
+          {pageStatus.message}
+        </InlineNotice>
       )}
 
-      <CategoryRefreshNotice />
+      {/* The shared category-list warning; the page's own notice takes priority. */}
+      {(!pageStatus || pageStatus.type === "success") && <CategoryRefreshNotice />}
 
       {!summary && status === "loading" && <p role="status">Loading categories…</p>}
 
@@ -265,10 +305,7 @@ function CategoriesPage() {
                 id={CREATE_BUTTON_ID}
                 type="button"
                 className="button button--primary"
-                onClick={() => {
-                  setStatusMessage("");
-                  setWorkflow({ kind: "create" });
-                }}
+                onClick={() => startWorkflow({ kind: "create" })}
               >
                 Create category
               </button>
@@ -320,14 +357,8 @@ function CategoriesPage() {
                     monthTotal={monthSpendingTotal(rows)}
                     monthName={monthName}
                     dateFormat={dateFormat}
-                    onEdit={() => {
-                      setStatusMessage("");
-                      setWorkflow({ kind: "edit", id: category.id });
-                    }}
-                    onDelete={() => {
-                      setStatusMessage("");
-                      setWorkflow({ kind: "delete", id: category.id });
-                    }}
+                    onEdit={() => startWorkflow({ kind: "edit", id: category.id })}
+                    onDelete={() => startWorkflow({ kind: "delete", id: category.id })}
                     workflow={workflowFor(category)}
                   />
                 </li>

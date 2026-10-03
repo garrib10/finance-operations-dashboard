@@ -1,4 +1,5 @@
 import { useCategories } from "../context/CategoryContext";
+import { InlineNotice } from "./InlineNotice";
 
 /**
  * Non-blocking warning when the category list could not be refreshed after a change that
@@ -10,17 +11,11 @@ export function CategoryRefreshNotice() {
   if (!refreshError) return null;
 
   return (
-    <div className="form-warning" role="status">
-      <span>{refreshError} Your changes were saved.</span>{" "}
-      <button
-        type="button"
-        className="button button--secondary button--small"
-        onClick={() => {
-          void reload();
-        }}
-      >
-        Retry loading categories
-      </button>
-    </div>
+    <InlineNotice
+      variant="warning"
+      action={{ label: "Retry loading categories", onClick: () => void reload() }}
+    >
+      {refreshError} Your changes were saved.
+    </InlineNotice>
   );
 }

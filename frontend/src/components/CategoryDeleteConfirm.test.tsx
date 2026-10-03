@@ -54,4 +54,21 @@ describe("CategoryDeleteConfirm", () => {
     expect(onCancel).toHaveBeenCalledOnce();
     expect(onConfirm).not.toHaveBeenCalled();
   });
+
+  it("puts focus back on Delete category if it was lost while the delete failed", async () => {
+    const pending = deferred<void>();
+    const { user } = renderConfirm(vi.fn(() => pending.promise));
+    await user.click(screen.getByRole("button", { name: "Delete category" }));
+    // Browsers drop focus from a button that becomes disabled; jsdom does not, so move
+    // focus to a temporary element and remove it, leaving focus on the body.
+    const elsewhere = document.body.appendChild(document.createElement("button"));
+    elsewhere.focus();
+    elsewhere.remove();
+    expect(document.activeElement).toBe(document.body);
+
+    // The page handles the failure itself and resolves, leaving the confirmation open.
+    pending.resolve();
+    await screen.findByRole("button", { name: "Delete category" });
+    expect(screen.getByRole("button", { name: "Delete category" })).toHaveFocus();
+  });
 });

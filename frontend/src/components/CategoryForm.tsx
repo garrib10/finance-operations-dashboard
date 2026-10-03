@@ -52,13 +52,16 @@ export function CategoryForm({
   const busy = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+  const alertRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     if (focusNameOnOpen) nameRef.current?.focus();
   }, [focusNameOnOpen]);
 
   useEffect(() => {
-    if (failureAttempt) focusFirstInvalid(formRef.current);
+    // The first invalid field; with none (a general failure) the form's error message, so
+    // focus is not lost when the disabled submit button comes back.
+    if (failureAttempt && !focusFirstInvalid(formRef.current)) alertRef.current?.focus();
   }, [failureAttempt]);
 
   async function handleSubmit(event: ReactSubmitEvent<HTMLFormElement>): Promise<void> {
@@ -104,7 +107,7 @@ export function CategoryForm({
       noValidate
     >
       {alert && (
-        <p role="alert" className="form-error">
+        <p ref={alertRef} role="alert" className="form-error" tabIndex={-1}>
           {alert}
         </p>
       )}

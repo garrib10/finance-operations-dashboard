@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError } from "../services/api";
 import { getCategorySummary } from "../services/categoryService";
 import type { CategorySummaryList } from "../types/category";
 
 export type CategorySummaryStatus = "loading" | "ready" | "error";
 
-const LOAD_ERROR = "Unable to load your categories. Please try again.";
+/** Always this fixed text: server or network details are never shown on the page. */
+export const SUMMARY_LOAD_ERROR = "Unable to load categories. Please try again.";
 
 /**
  * Loads the Categories page's usage summary. Kept out of CategoryContext, which holds the
@@ -18,26 +18,34 @@ export function useCategorySummary() {
   const [error, setError] = useState("");
   const latestRequest = useRef(0);
 
-  /** Requests the summary; state changes only once the response arrives. */
-  const load = useCallback(async (request: number): Promise<void> => {
+  /**
+   * Requests the summary; state changes only once the response arrives. Resolves false
+   * when this request failed (a superseded request defers to the newer one: true).
+   */
+  const load = useCallback(async (request: number): Promise<boolean> => {
     try {
       const response = await getCategorySummary();
-      if (request !== latestRequest.current) return;
+      if (request !== latestRequest.current) return true;
       setSummary(response);
       setError("");
       setStatus("ready");
-    } catch (caught) {
-      if (request !== latestRequest.current) return;
-      setError(caught instanceof ApiError ? caught.message : LOAD_ERROR);
+      return true;
+    } catch {
+      if (request !== latestRequest.current) return true;
+      setError(SUMMARY_LOAD_ERROR);
       setStatus("error");
+      return false;
     }
   }, []);
 
-  /** Shows the loading state, then refreshes (for Retry and after changes). */
-  const reload = useCallback(async (): Promise<void> => {
+  /**
+   * Shows the loading state, then refreshes (for Retry and after changes). Resolves
+   * whether fresh data arrived, so callers can report a change honestly.
+   */
+  const reload = useCallback(async (): Promise<boolean> => {
     setStatus("loading");
     setError("");
-    await load(++latestRequest.current);
+    return load(++latestRequest.current);
   }, [load]);
 
   useEffect(() => {
