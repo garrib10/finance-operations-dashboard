@@ -42,13 +42,13 @@ import {
 import type {
   BudgetAnalyticsResponse,
   BudgetResponse,
-  BudgetStatus,
   CreateBudgetRequest,
   UpdateBudgetRequest,
 } from "../types/budget";
 
 import type { CategoryResponse } from "../types/category";
 import { formatCurrency } from "../utils/formatters";
+import { formatBudgetStatus } from "../utils/budgetStatus";
 
 interface BudgetFormState {
   /** A category ID, CREATE_CATEGORY_VALUE, or "" when nothing is chosen. */
@@ -100,22 +100,6 @@ function formatBudgetMonth(month: number, year: number): string {
     month: "long",
     year: "numeric",
   }).format(new Date(year, month - 1, 1));
-}
-
-function formatBudgetStatus(status: BudgetStatus): string {
-  switch (status) {
-    case "ON_TRACK":
-      return "On Track";
-
-    case "CAUTION":
-      return "Caution";
-
-    case "WARNING":
-      return "Warning";
-
-    case "OVER_BUDGET":
-      return "Over Budget";
-  }
 }
 
 function BudgetPage() {

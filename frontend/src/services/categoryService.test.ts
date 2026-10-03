@@ -8,6 +8,7 @@ import {
   createCategory,
   deleteCategory,
   getCategories,
+  getCategorySummary,
   updateCategory,
 } from "./categoryService";
 import type { CategoryResponse } from "../types/category";
@@ -28,6 +29,14 @@ describe("categoryService", () => {
 
     await expect(getCategories()).resolves.toEqual([]);
     expect(mockApiRequest).toHaveBeenCalledWith("/api/categories");
+  });
+
+  it("loads the category usage summary", async () => {
+    const summary = { month: 10, year: 2026, categories: [] };
+    mockApiRequest.mockResolvedValue(summary);
+
+    await expect(getCategorySummary()).resolves.toEqual(summary);
+    expect(mockApiRequest).toHaveBeenCalledWith("/api/categories/summary");
   });
 
   it("returns built-in status and icon keys unchanged", async () => {

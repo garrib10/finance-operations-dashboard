@@ -9,6 +9,7 @@ import { accountUser } from "./test/accountFixtures";
 vi.mock("./pages/DashboardPage", () => ({ default: () => <h1>Dashboard destination</h1> }));
 vi.mock("./pages/TransactionPage", () => ({ default: () => <h1>Transactions destination</h1> }));
 vi.mock("./pages/BudgetPage", () => ({ default: () => <h1>Budgets destination</h1> }));
+vi.mock("./pages/CategoriesPage", () => ({ default: () => <h1>Categories destination</h1> }));
 vi.mock("./pages/LoginPage", () => ({ default: () => <h1>Login destination</h1> }));
 vi.mock("./pages/RegisterPage", () => ({ default: () => <h1>Register destination</h1> }));
 
@@ -49,13 +50,14 @@ describe("application routing and account forms", () => {
     expect(screen.getByRole("link", { name: "Skip to main content" })).toHaveAttribute("href", "#main-content");
   });
 
-  it.each(["/profile", "/settings", "/transactions", "/budgets", "/"])("redirects signed-out access to %s and preserves its destination", (path) => {
+  it.each(["/profile", "/settings", "/transactions", "/budgets", "/categories", "/"])("redirects signed-out access to %s and preserves its destination", (path) => {
     renderApp(path, false);
     expect(screen.getByRole("heading", { name: "Login destination" })).toBeInTheDocument();
     expect(screen.getByTestId("destination")).toHaveTextContent(`/login|${path}`);
   });
 
-  it.each([["/", "Dashboard"], ["/transactions", "Transactions"], ["/budgets", "Budgets"], ["/unknown", "Dashboard"]])("preserves existing route behavior for %s", (path, title) => {
+  it.each([["/", "Dashboard"], ["/transactions", "Transactions"], ["/budgets", "Budgets"], ["/categories", "Categories"],
+    ["/unknown", "Dashboard"]])("preserves existing route behavior for %s", (path, title) => {
     renderApp(path);
     expect(screen.getByRole("heading", { name: `${title} destination` })).toBeInTheDocument();
   });
@@ -65,7 +67,7 @@ describe("application routing and account forms", () => {
     expect(screen.getByTestId("destination")).toHaveTextContent("/login|/");
   });
 
-  it.each(["/", "/transactions", "/budgets", "/profile", "/settings"])("renders %s inside the signed-in shell", (path) => {
+  it.each(["/", "/transactions", "/budgets", "/categories", "/profile", "/settings"])("renders %s inside the signed-in shell", (path) => {
     renderApp(path);
 
     expect(screen.getByRole("navigation", { name: "Primary navigation" })).toBeInTheDocument();

@@ -5,29 +5,7 @@ import { getDashboard } from "../services/dashboardService";
 import type { DashboardResponse } from "../types/dashboard";
 import { formatCurrency, formatDate } from "../utils/formatters";
 import { CategoryLabel } from "../components/CategoryIcon";
-
-function formatBudgetStatus(status: string): string {
-  switch (status) {
-    case "ON_TRACK":
-      return "On Track";
-
-    case "CAUTION":
-      return "Caution";
-
-    case "WARNING":
-      return "Warning";
-
-    case "OVER_BUDGET":
-      return "Over Budget";
-
-    default:
-      return status;
-  }
-}
-
-function clampProgressPercentage(percentage: number): number {
-  return Math.min(Math.max(percentage, 0), 100);
-}
+import { clampProgressPercentage, formatBudgetStatus } from "../utils/budgetStatus";
 
 function DashboardPage() {
   const { user } = useAuth();

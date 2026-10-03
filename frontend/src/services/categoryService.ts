@@ -1,6 +1,7 @@
 import { apiRequest } from "./api";
 import type {
   CategoryResponse,
+  CategorySummaryList,
   CreateCategoryRequest,
   UpdateCategoryRequest,
 } from "../types/category";
@@ -13,6 +14,11 @@ export const CATEGORY_IN_USE = "CATEGORY_IN_USE";
 
 export function getCategories(): Promise<CategoryResponse[]> {
   return apiRequest<CategoryResponse[]>("/api/categories");
+}
+
+/** Usage of every category the user owns, for the server's reporting month. */
+export function getCategorySummary(): Promise<CategorySummaryList> {
+  return apiRequest<CategorySummaryList>("/api/categories/summary");
 }
 
 export function createCategory(

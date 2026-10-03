@@ -10,6 +10,7 @@ import { PublicLayout } from "./components/PublicLayout";
 import { CategoryProvider } from "./context/CategoryProvider";
 import ProtectedRoute from "./components/ProtectedRoute";
 import BudgetPage from "./pages/BudgetPage";
+import CategoriesPage from "./pages/CategoriesPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -36,6 +37,7 @@ function App() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/transactions" element={<TransactionPage />} />
               <Route path="/budgets" element={<BudgetPage />} />
+              <Route path="/categories" element={<CategoriesPage />} />
             </Route>
           </Route>
 

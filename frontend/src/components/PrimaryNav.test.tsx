@@ -18,7 +18,8 @@ describe("PrimaryNav", () => {
 
     const label = (link: HTMLElement) => link.querySelector(".primary-nav__label")?.textContent;
     expect(within(nav).getAllByRole("link").map((link) => [label(link), link.getAttribute("href")]))
-      .toEqual([["Dashboard", "/"], ["Transactions", "/transactions"], ["Budgets", "/budgets"]]);
+      .toEqual([["Dashboard", "/"], ["Transactions", "/transactions"], ["Budgets", "/budgets"],
+        ["Categories", "/categories"]]);
     expect(within(nav).queryByRole("link", { name: /profile|settings/i })).not.toBeInTheDocument();
   });
 
@@ -28,6 +29,7 @@ describe("PrimaryNav", () => {
     ["/budgets", "Budgets"],
     ["/transactions?page=2#history", "Transactions"],
     ["/budgets/", "Budgets"],
+    ["/categories", "Categories"],
   ])("marks only the current destination on %s", (path, label) => {
     const nav = renderAt(path);
 

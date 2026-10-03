@@ -265,7 +265,7 @@ keep working.
 
 | Element | Selector |
 | --- | --- |
-| Primary navigation | `nav` named "Primary navigation" with links "Dashboard" (`/`), "Transactions", and "Budgets" |
+| Primary navigation | `nav` named "Primary navigation" with links "Dashboard" (`/`), "Transactions", "Budgets", and "Categories" (`/categories`) |
 | Current page | the matching primary link has `aria-current="page"` |
 | Brand | link "FinTrack" (to `/`) |
 | Account menu | button "Open account menu for {name}" (`#account-menu-trigger`) in the page `header`; panel `#account-menu-panel` |
@@ -279,12 +279,30 @@ keep working.
 
 Above 1100px the primary navigation is a sidebar column that can be collapsed to
 icons. Collapsed links keep their names ("Dashboard", "Transactions", "Budgets"), so
-name-based locators work in both states; the choice is saved per browser in
+name-based locators work in both states (including "Categories"); the choice is saved per browser in
 `localStorage` under `fintrack:sidebar-collapsed` ("true" or "false"). At 1100px and
 below the sidebar is hidden: open the drawer with the menu button, then follow a link
 (the drawer closes on navigation, Escape, the close button, or a backdrop click). Below
 640px the account menu button shows only the avatar; its name is unchanged. Prefer role
 and name locators over layout position.
+
+### Categories page (v1.3.0)
+
+`/categories` is protected and lists every category the user owns with its usage for the
+server's reporting month (issue #100). No new `data-testid` values are added.
+
+| Element | Selector |
+| --- | --- |
+| Page | `h1` "Categories"; loading `role="status"` "Loading categories…"; failure `role="alert"` with button "Try again" |
+| Summary strip | `dl` with terms "Categories", "Top this month", "Over budget", "With spending" |
+| Category card | `article` named by the category (for example "Pet Care"), badge "Built-in" or "Custom" |
+| Card figures | "Spent in {Month}", "Share of spending" (only when the month has spending) |
+| Budget progress | `role="progressbar"` named "{Category} budget used", `aria-valuenow` 0–100, `aria-valuetext` "{n}% used"; status text such as "Warning" |
+| No budget | "No budget for {Month}", shown only for categories that take budgets |
+| Activity | "{n} transactions · {m} budgets · Last used {date}" or "Not used yet" |
+
+Cards are ordered by name, then ID. Management actions on the page arrive in a later phase
+of issue #100; until then category management stays on the Transactions and Budgets pages.
 
 ### Category controls (v1.3.0)
 

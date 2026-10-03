@@ -1625,3 +1625,218 @@
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------- Categories page (#100) */
+
+.categories-page__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1.5rem;
+}
+
+.category-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0 0 2rem;
+}
+
+.category-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 1.1rem 1.25rem;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.category-stat dt {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.category-stat dd {
+  margin: 0;
+}
+
+.category-stat__value {
+  color: var(--color-text);
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.category-stat__value--name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.category-stat__value--name .category-icon {
+  flex-shrink: 0;
+  margin-top: 0;
+}
+
+.category-stat__detail {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.categories-page__list-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.categories-page__list-header h2 {
+  margin: 0;
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.category-grid > li {
+  display: flex;
+  min-width: 0;
+}
+
+.category-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+  padding: 1.25rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.category-card__header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.category-card__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+  border-radius: var(--radius-md);
+}
+
+.category-card__icon-svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.category-card__name {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.category-card .category-badge {
+  flex-shrink: 0;
+}
+
+.category-card__figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.category-card__figures div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.category-card__figures dt {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.category-card__figures dd {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.category-card__budget {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.category-card__budget-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-main .category-card__note,
+.app-main .category-card__usage {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+/* Keep "Last used <date>" together when the activity line wraps. */
+.category-card__last-used {
+  white-space: nowrap;
+}
+
+.app-main .category-card__usage {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 1100px) {
+  .category-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .category-summary-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
