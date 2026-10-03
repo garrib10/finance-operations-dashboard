@@ -122,6 +122,15 @@ describe("CategorySelect", () => {
     expect(lastValue).toBe("1");
   });
 
+  it("shows a muted generic icon until a category is chosen", async () => {
+    const { container } = renderSelect();
+    await screen.findByRole("option", { name: "Pet Care" });
+
+    const icon = container.querySelector(".category-select__control svg");
+    expect(icon).toHaveClass("lucide-tags", "category-icon--placeholder");
+    expect(icon).toHaveAttribute("aria-hidden", "true");
+  });
+
   it("chooses icons with the keyboard and shows the choice beside the select", async () => {
     const user = userEvent.setup();
     const { container } = renderSelect({ initial: CREATE_CATEGORY_VALUE });

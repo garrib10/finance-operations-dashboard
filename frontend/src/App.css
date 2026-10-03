@@ -1360,20 +1360,75 @@
   min-width: 0;
 }
 
-.category-select__control {
-  display: flex;
+/* Field icons sit inside the control on the left, like a search box: the category's own
+   icon, and the Type, Amount, Description, Date and budget icons. */
+.category-select__control,
+.icon-field {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.category-select__control > svg,
+.icon-field > svg {
+  position: absolute;
+  top: 50%;
+  left: 0.85rem;
+  margin: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* Doubled class so this outranks page rules such as ".budget-form select". */
+.category-select__control.category-select__control > select,
+.icon-field.icon-field > input,
+.icon-field.icon-field > select {
+  width: 100%;
+  padding-left: 2.6rem;
+}
+
+/* An icon that waits for input (Amount, Description): no gap while the field is empty. */
+.icon-field.icon-field--empty > input {
+  padding-left: 0.75rem;
+}
+
+.field-icon {
+  color: var(--color-primary);
+}
+
+.category-icon--placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Budget form: Category + Monthly Limit, then Month + Year, then the buttons. The
+   category only spans the row while its new-category fields are open. */
+.budget-form .category-select:not(:has(.category-create)) {
+  grid-column: auto;
+  display: block;
+}
+
+.budget-form > div:last-child {
+  grid-column: 1 / -1;
+}
+
+.icon-label,
+.transaction-type-label {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
+  gap: 0.4rem;
+  white-space: nowrap;
 }
 
-.category-select__control .category-icon {
-  margin-top: 0;
+.transaction-type-icon {
+  flex-shrink: 0;
 }
 
-.category-select__control select {
-  flex: 1;
-  min-width: 0;
+.transaction-type-icon--income {
+  color: var(--color-success);
+}
+
+.transaction-type-icon--expense {
+  color: var(--color-danger);
 }
 
 .category-create {
@@ -1464,54 +1519,33 @@
   color: #ffffff;
 }
 
-.category-manager {
-  margin-top: 2rem;
-}
-
-.category-manager__header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.category-manager__panel {
-  margin-top: 1rem;
-}
-
-.category-manager__list {
-  display: grid;
-  gap: 0.5rem;
-  margin: 1rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.category-manager__item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background-color: var(--color-surface);
-}
-
-.category-manager__actions,
-.category-manager__confirm {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.category-manager__form {
+/* Category create and edit forms, and the inline delete confirmation (Categories page). */
+.category-form {
   display: grid;
   gap: 1rem;
   width: 100%;
+}
+
+.category-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.category-delete-confirm {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+}
+
+.app-main .category-delete-confirm__message {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .category-badge {
@@ -1533,11 +1567,6 @@
 
   .budget-period-filter {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .category-manager__item {
-    align-items: stretch;
-    flex-direction: column;
   }
 }
 
@@ -1840,3 +1869,36 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.category-card__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.category-card__manage {
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* In-use Delete stays focusable (aria-disabled) so its reason is reachable. */
+.category-card [aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+/* Headings that receive focus after a change, so keyboard users can see where they are. */
+.category-card__name:focus-visible,
+#categories-list-heading:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+.categories-page__create {
+  margin-bottom: 1.5rem;
+}
+
+.categories-page__create h3 {
+  margin: 0;
+}
+

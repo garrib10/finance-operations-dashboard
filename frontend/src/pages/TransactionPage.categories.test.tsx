@@ -8,6 +8,7 @@ vi.mock("../services/categoryService", async (importOriginal) => ({
 vi.mock("../services/transactionService");
 
 import { render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../context/AuthContext";
@@ -16,6 +17,7 @@ import { ApiError } from "../services/api";
 import * as categoryService from "../services/categoryService";
 import * as transactionService from "../services/transactionService";
 import { accountContext, deferred } from "../test/accountFixtures";
+import { toDateInputValue } from "../utils/formatters";
 import { category, legacy, longUnicode, petCare, sampleCategories } from "../test/categoryFixtures";
 import type { TransactionResponse } from "../types/transaction";
 import { CREATE_CATEGORY_VALUE } from "../utils/categoryForm";
@@ -45,7 +47,7 @@ const gym = category({ id: 77, name: "Gym", iconKey: "dumbbell" });
 
 async function renderPage() {
   const user = userEvent.setup();
-  render(<CategoryProvider><TransactionPage /></CategoryProvider>);
+  render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
   await screen.findByText("Food Lion");
   await waitFor(() => expect(within(screen.getByLabelText("Category")).getByRole("option", { name: "Pet Care" }))
     .toBeInTheDocument());
@@ -55,6 +57,7 @@ async function renderPage() {
 async function fillFinancialFields(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Amount"), "40");
   await user.type(screen.getByLabelText("Description"), "Vet visit");
+  await user.clear(screen.getByLabelText("Date")); // The form starts on today.
   await user.type(screen.getByLabelText("Date"), "2026-09-20");
 }
 
@@ -327,23 +330,6 @@ describe("TransactionPage categories", () => {
     expect(vi.mocked(transactionService.getTransactions).mock.lastCall![0]).not.toHaveProperty("categoryId");
   });
 
-  it("refreshes the list after a rename and drops a deleted category from the form and filter", async () => {
-    vi.mocked(categoryService.deleteCategory).mockResolvedValue(undefined);
-    const user = await renderPage();
-    await user.selectOptions(screen.getByLabelText("Category"), String(petCare.id));
-    await user.selectOptions(screen.getByLabelText("Filter by category"), String(petCare.id));
-    await user.click(screen.getByRole("button", { name: "Apply Filters" }));
-    vi.mocked(categoryService.getCategories).mockResolvedValue(sampleCategories.filter((item) => item !== petCare));
-
-    await user.click(screen.getByRole("button", { name: "Manage categories" }));
-    await user.click(screen.getByRole("button", { name: "Delete Pet Care" }));
-    await user.click(screen.getByRole("button", { name: "Delete category" }));
-
-    await waitFor(() => expect(screen.getByLabelText("Filter by category")).toHaveValue(""));
-    expect(screen.getByLabelText("Category")).toHaveValue("");
-    expect(vi.mocked(transactionService.getTransactions).mock.lastCall![0]).not.toHaveProperty("categoryId");
-  });
-
   it("requires a category choice before submitting", async () => {
     const user = await renderPage();
     await fillFinancialFields(user);
@@ -358,16 +344,14 @@ describe("TransactionPage categories", () => {
     expect(transactionService.createTransaction).not.toHaveBeenCalled();
   });
 
-  it("warns when the list cannot refresh after a category change", async () => {
-    vi.mocked(categoryService.updateCategory).mockResolvedValue({ ...petCare, name: "Pets" });
-    const user = await renderPage();
-    vi.mocked(transactionService.getTransactions).mockRejectedValueOnce(new Error("network"));
+  it("has no category management panel or link; inline creation stays in the form", async () => {
+    await renderPage();
 
-    await user.click(screen.getByRole("button", { name: "Manage categories" }));
-    await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
-    await user.click(screen.getByRole("button", { name: "Save category" }));
-
-    expect(await screen.findByText(/The category was updated, but the transaction list could not be refreshed/))
+    expect(screen.queryByRole("link", { name: "Manage categories" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Manage categories|Hide categories/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit Pet Care" })).not.toBeInTheDocument();
+    // Inline creation stays in the form.
+    expect(within(screen.getByLabelText("Category")).getByRole("option", { name: "Create a custom category…" }))
       .toBeInTheDocument();
   });
 
@@ -389,5 +373,143 @@ describe("TransactionPage categories", () => {
     // Starting another edit clears the earlier confirmation.
     await user.click(screen.getByRole("button", { name: "Edit" }));
     expect(screen.queryByText("Transaction updated.")).not.toBeInTheDocument();
+  });
+});
+
+/** Shows the current URL and steps through history, standing in for Back and Forward. */
+function HistoryProbe() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return (
+    <>
+      <output data-testid="url">{location.pathname}{location.search}</output>
+      <button type="button" onClick={() => navigate(-1)}>History back</button>
+      <button type="button" onClick={() => navigate(1)}>History forward</button>
+    </>
+  );
+}
+
+describe("TransactionPage category deep link", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(accountContext());
+    vi.mocked(categoryService.getCategories).mockResolvedValue(sampleCategories);
+    vi.mocked(transactionService.getTransactions).mockResolvedValue(page([transaction()]));
+  });
+
+  async function renderAt(entries: string[], index = entries.length - 1) {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={entries} initialIndex={index}>
+        <CategoryProvider><TransactionPage /></CategoryProvider>
+        <HistoryProbe />
+      </MemoryRouter>,
+    );
+    await screen.findByText("Food Lion");
+    return user;
+  }
+
+  const requests = () => vi.mocked(transactionService.getTransactions).mock.calls.map(([filters]) => filters);
+
+  it.each([["custom", petCare.id], ["built-in", 1]])("filters by a valid %s category with a single request", async (_kind, id) => {
+    await renderAt([`/transactions?category=${id}`]);
+
+    await waitFor(() => expect(screen.getByLabelText("Filter by category")).toHaveValue(String(id)));
+    expect(requests()).toHaveLength(1);
+    expect(requests()[0]).toMatchObject({ page: 0, categoryId: id });
+    expect(screen.getByTestId("url")).toHaveTextContent(`/transactions?category=${id}`);
+  });
+
+  it("takes the user to the filtered history", async () => {
+    await renderAt([`/transactions?category=${petCare.id}`]);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Transaction History" })).toHaveFocus());
+  });
+
+  it("leaves focus alone when the page has no link", async () => {
+    await renderAt(["/transactions"]);
+
+    expect(screen.getByRole("heading", { name: "Transaction History" })).not.toHaveFocus();
+  });
+
+  it.each([["text", "abc"], ["a decimal", "1.5"], ["zero", "0"], ["a negative ID", "-3"],
+    ["an unknown or another user's ID", "999"]])("ignores %s and removes only that parameter", async (_kind, value) => {
+    await renderAt([`/transactions?view=compact&category=${value}`]);
+
+    await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent("/transactions?view=compact"));
+    expect(requests()).toHaveLength(1);
+    expect(requests()[0]).not.toHaveProperty("categoryId");
+    expect(screen.getByLabelText("Filter by category")).toHaveValue("");
+  });
+
+  it("applies and clears the link's filter with browser back and forward", async () => {
+    const user = await renderAt(["/transactions", `/transactions?category=${petCare.id}`]);
+    await waitFor(() => expect(screen.getByLabelText("Filter by category")).toHaveValue(String(petCare.id)));
+
+    await user.click(screen.getByRole("button", { name: "History back" }));
+    await waitFor(() => expect(screen.getByLabelText("Filter by category")).toHaveValue(""));
+    expect(requests().at(-1)).not.toHaveProperty("categoryId");
+
+    await user.click(screen.getByRole("button", { name: "History forward" }));
+    await waitFor(() => expect(screen.getByLabelText("Filter by category")).toHaveValue(String(petCare.id)));
+    expect(requests().at(-1)).toMatchObject({ page: 0, categoryId: petCare.id });
+  });
+
+  it("keeps a manually chosen filter when the page has no link", async () => {
+    const user = await renderAt(["/transactions"]);
+    await user.selectOptions(screen.getByLabelText("Filter by category"), String(petCare.id));
+    await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+
+    expect(requests().at(-1)).toMatchObject({ categoryId: petCare.id });
+    expect(screen.getByTestId("url")).toHaveTextContent(/^\/transactions$/);
+  });
+});
+
+describe("TransactionPage add-transaction link", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(accountContext());
+    vi.mocked(categoryService.getCategories).mockResolvedValue(sampleCategories);
+    vi.mocked(transactionService.getTransactions).mockResolvedValue(page([transaction()]));
+  });
+
+  async function renderAt(path: string) {
+    render(
+      <MemoryRouter initialEntries={[path]}>
+        <CategoryProvider><TransactionPage /></CategoryProvider>
+        <HistoryProbe />
+      </MemoryRouter>,
+    );
+    await screen.findByText("Food Lion");
+  }
+
+  it("starts a new transaction with the category chosen, without filtering the history", async () => {
+    await renderAt(`/transactions?addCategory=${petCare.id}`);
+
+    await waitFor(() => expect(screen.getByLabelText("Category")).toHaveValue(String(petCare.id)));
+    expect(screen.getByRole("heading", { name: "Add Transaction" })).toHaveFocus();
+    expect(screen.getByLabelText("Date")).toHaveValue(toDateInputValue(new Date()));
+    expect(screen.getByLabelText("Filter by category")).toHaveValue("");
+    const requests = vi.mocked(transactionService.getTransactions).mock.calls;
+    expect(requests).toHaveLength(1);
+    expect(requests[0][0]).not.toHaveProperty("categoryId");
+  });
+
+  it.each([["text", "abc"], ["an unknown or another user's ID", "999"]])("ignores %s and removes only that parameter", async (_kind, value) => {
+    await renderAt(`/transactions?view=compact&addCategory=${value}`);
+
+    await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent("/transactions?view=compact"));
+    expect(screen.getByLabelText("Category")).toHaveValue("");
+  });
+
+  it("defaults the date to today but keeps it editable", async () => {
+    const user = userEvent.setup();
+    await renderAt(`/transactions?addCategory=${petCare.id}`);
+    const date = screen.getByLabelText("Date");
+    await waitFor(() => expect(date).toHaveValue(toDateInputValue(new Date())));
+
+    await user.clear(date);
+    await user.type(date, "2026-09-15");
+    expect(date).toHaveValue("2026-09-15");
   });
 });

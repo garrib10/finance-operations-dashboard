@@ -1,8 +1,11 @@
-import { useId } from "react";
+import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import type { DateFormatPreference } from "../types/account";
 import type { CategorySummary } from "../types/category";
 import { clampProgressPercentage, formatBudgetStatus } from "../utils/budgetStatus";
 import { formatShare, spendingShare } from "../utils/categorySummary";
+import { ADD_TRANSACTION_PARAM, CATEGORY_PARAM } from "../utils/categoryDeepLink";
+import { categoryCardIds, deleteBlockedReason } from "../utils/categoryUsage";
 import { formatCurrency, formatDate } from "../utils/formatters";
 import { CategoryIcon } from "./CategoryIcon";
 
@@ -13,7 +16,14 @@ interface CategoryCardProps {
   /** For example "October" (the server's reporting month). */
   monthName: string;
   dateFormat: DateFormatPreference;
+  /** Opens the edit form (custom categories only). */
+  onEdit?: () => void;
+  /** Opens the delete confirmation (custom categories that can be deleted). */
+  onDelete?: () => void;
+  /** Shown in place of the management actions while editing or confirming a delete. */
+  workflow?: ReactNode;
 }
+
 
 function plural(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
@@ -23,8 +33,17 @@ function plural(count: number, word: string): string {
  * One category's month at a glance. A budget that exists is always shown; "No budget" is
  * offered only for categories that take budgets (budgetEnabled), never for the others.
  */
-export function CategoryCard({ category, monthTotal, monthName, dateFormat }: CategoryCardProps) {
-  const headingId = useId();
+export function CategoryCard({
+  category,
+  monthTotal,
+  monthName,
+  dateFormat,
+  onEdit,
+  onDelete,
+  workflow,
+}: CategoryCardProps) {
+  const ids = categoryCardIds(category.id);
+  const headingId = ids.heading;
   const budget = category.currentMonthBudget;
   const unused = category.transactionCount === 0 && category.budgetCount === 0;
 
@@ -34,7 +53,7 @@ export function CategoryCard({ category, monthTotal, monthName, dateFormat }: Ca
         <span className="category-card__icon">
           <CategoryIcon iconKey={category.iconKey} className="category-card__icon-svg" />
         </span>
-        <h3 id={headingId} className="category-card__name">{category.name}</h3>
+        <h3 id={headingId} className="category-card__name" tabIndex={-1}>{category.name}</h3>
         <span className="category-badge">{category.builtIn ? "Built-in" : "Custom"}</span>
       </div>
 
@@ -105,6 +124,82 @@ export function CategoryCard({ category, monthTotal, monthName, dateFormat }: Ca
           </>
         )}
       </p>
+
+      <div className="category-card__links">
+        {/* Nothing to view yet, so offer to record the first transaction instead. */}
+        {category.transactionCount === 0 ? (
+          <Link
+            className="button button--secondary button--small"
+            to={`/transactions?${ADD_TRANSACTION_PARAM}=${category.id}`}
+            aria-label={`Add a transaction for ${category.name}`}
+          >
+            Add transaction
+          </Link>
+        ) : (
+          <Link
+            className="button button--secondary button--small"
+            to={`/transactions?${CATEGORY_PARAM}=${category.id}`}
+            aria-label={`View transactions for ${category.name}`}
+          >
+            View transactions
+          </Link>
+        )}
+        {category.budgetEnabled && (
+          <Link
+            className="button button--secondary button--small"
+            to={`/budgets?category=${category.id}`}
+            aria-label={`${budget ? "Edit" : "Set"} budget for ${category.name}`}
+          >
+            {budget ? "Edit budget" : "Set budget"}
+          </Link>
+        )}
+      </div>
+
+      {!category.builtIn && (workflow ?? (
+        <div className="category-card__manage">
+          <div className="category-card__links">
+            <button
+              id={ids.edit}
+              type="button"
+              className="button button--secondary button--small"
+              aria-label={`Edit ${category.name}`}
+              onClick={onEdit}
+            >
+              Edit
+            </button>
+            {category.canDelete ? (
+              <button
+                id={ids.delete}
+                type="button"
+                className="button button--secondary button--small"
+                aria-label={`Delete ${category.name}`}
+                onClick={onDelete}
+              >
+                Delete
+              </button>
+            ) : (
+              // Focusable (aria-disabled, not disabled) so keyboard users can find the reason.
+              <button
+                id={ids.delete}
+                type="button"
+                className="button button--secondary button--small"
+                aria-label={`Delete ${category.name}`}
+                aria-disabled="true"
+                aria-describedby={ids.deleteReason}
+                onClick={(event) => event.preventDefault()}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+          {!category.canDelete && (
+            <p id={ids.deleteReason} className="category-card__note">
+              {deleteBlockedReason(category.transactionCount, category.budgetCount)} Change or remove
+              those first to delete this category.
+            </p>
+          )}
+        </div>
+      ))}
     </article>
   );
 }

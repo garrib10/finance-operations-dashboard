@@ -206,7 +206,8 @@ Automated coverage (`npm run test:coverage`):
 
 Manual check (desktop, 375 px, and 200% zoom): create a transaction with a new category and
 icon, confirm it appears in the budget form and both filters, rename and re-icon it from
-"Manage categories", try deleting it while in use (refused), then delete an unused one.
+the Categories page (management moved there in issue #100), try deleting it while in use
+(refused), then delete an unused one.
 Icon grids should wrap, long names should wrap, and nothing should scroll horizontally.
 
 ### Issue #19 local manual verification (October 2, 2026)
@@ -244,7 +245,7 @@ Items not ticked have not been performed yet. Record evidence as described above
       state is clear without color, and focus is visible.
 - [ ] Duplicate recovery: the name error is announced with the field, and "Use existing
       category" selects it and keeps the other values.
-- [ ] Rename and re-icon from "Manage categories"; focus returns to the edit button.
+- [ ] Rename and re-icon on the Categories page; focus returns to the Edit button.
 - [ ] In-use delete refusal is announced; focus returns to the delete button.
 - [ ] Cancel edit and keep-category return focus to the button that opened them; a
       completed delete moves focus to the "Hide categories" toggle.

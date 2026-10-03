@@ -1,3 +1,4 @@
+import { Tags } from "lucide-react";
 import type { Ref } from "react";
 import { useCategories } from "../context/CategoryContext";
 import type { CategoryResponse } from "../types/category";
@@ -72,9 +73,10 @@ export function CategorySelect({
         <label htmlFor={id}>{label}</label>
 
         <div className="category-select__control">
-          {(selected || creating) && (
-            <CategoryIcon iconKey={selected ? selected.iconKey : draft.iconKey} />
-          )}
+          {/* The chosen (or new) category's icon; a muted generic one until then. */}
+          {selected || creating
+            ? <CategoryIcon iconKey={selected ? selected.iconKey : draft.iconKey} />
+            : <Tags className="category-icon category-icon--placeholder" aria-hidden="true" focusable="false" size={18} />}
 
           <select
             ref={selectRef}

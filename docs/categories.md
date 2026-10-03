@@ -163,9 +163,8 @@ both workflows. Financial and dashboard responses carry `categoryIconKey`. See t
   `newCategory.iconKey`), with `aria-invalid` and `aria-describedby`; the first invalid
   control receives focus, and anything unrecognized is shown as text in the form summary.
   A duplicate new-category name keeps the whole form and offers the existing category.
-- **Management:** "Manage categories" on the transaction and budget pages renames,
-  re-icons, and deletes (with confirmation) custom categories; built-in ones show no
-  controls. In-use, duplicate, missing, and built-in responses are shown, never hidden.
+- **Management:** moved to the Categories page in issue #100 (see below), reached from the
+  sidebar. Inline creation in the transaction and budget forms is unchanged.
 - **Filters:** transactions filter by `categoryId` on the server (first page on apply,
   cleared by Reset). Budgets filter the loaded month by category in the browser, with a
   separate message when the month has budgets but none in that category.
@@ -173,13 +172,58 @@ both workflows. Financial and dashboard responses carry `categoryIconKey`. See t
   it is immediately available in every selector and filter.
 - **Confirmations:** successful saves and deletes ("Transaction added.", "Transaction
   updated.", "Transaction deleted.", "Budget created.", "Budget updated.", "Budget
-  deleted.", and "Saved/Deleted “name”." in Manage categories) appear in a banner at the
+  deleted.", and "Created/Saved/Deleted “name”." on the Categories page) appear in a banner at the
   top of the window (`StatusBanner`). It is announced through an always-present
   `role="status"` region, closes itself after 3 seconds, pauses while hovered or focused,
   and has a "Dismiss message" button. Starting another edit or delete clears it. Errors
-  and warnings never use the banner and stay until the user acts, except the in-use delete
-  refusal, which closes after 3 seconds because the category stays visibly listed; if the list cannot be
-  refreshed after a save, a persistent warning replaces the banner.
+  and warnings never use the banner and stay until the user acts or dismisses them; if the
+  list cannot be refreshed after a save, a persistent warning replaces the banner.
+
+## Categories page (issue #100)
+
+`/categories` (the "Categories" link in the sidebar and drawer) is where categories are
+managed. It shows each category's usage for the server's reporting month (see the
+[summary endpoint](categories-api.md#get-apicategoriessummary)) and offers:
+
+- **Create category:** name and icon (the same rules and approved icons as everywhere
+  else). New categories are custom and take budgets. Focus moves to the new card.
+- **Edit {name}** (custom only): rename, change the icon, or both. Focus returns to the
+  card's Edit button; Cancel discards the changes.
+- **Delete {name}** (custom only): an inline confirmation ("Delete category" / "Keep
+  category"). Afterwards focus moves to the next card, else the previous one, else the
+  list heading.
+- **Built-in categories** show no Edit or Delete; the API refuses those changes anyway.
+- **Delete eligibility:** Delete is active only when the summary's `canDelete` is true
+  (custom and unused). Otherwise it stays focusable with `aria-disabled="true"` and a
+  visible reason built from the counts, such as "Used by 12 transactions and 1 budget."
+  That is only a pre-check: if a transaction or budget is added before the delete, the
+  server's `409 CATEGORY_IN_USE` keeps the category, the usage is refreshed, and a
+  persistent message explains that its transactions and budgets must be changed or
+  deleted first. Historical budgets also count, so the budget link below does not always
+  show what is blocking a delete.
+- **Links:** "View transactions" opens `/transactions?category={id}`, filtered and scrolled
+  to the history table. A category with no transactions shows "Add transaction" instead,
+  which opens `/transactions?addCategory={id}` with the new-transaction form focused and the
+  category chosen (an invalid `addCategory` is removed silently). Categories that take
+  budgets also get "Set budget" or "Edit budget" (`/budgets?category={id}`). Categories that
+  do not take budgets get no budget action, even if a budget exists.
+- **After a change:** the shared category list (used by every dropdown) updates first,
+  then the usage summary reloads. A failed refresh never undoes or misreports a change
+  that the server accepted: the last data stays, with a warning and a retry.
+
+**Category deep links.** `?category={id}` is read once the user's category list has
+loaded, and accepted only as a positive whole number that is one of the user's own
+categories (built-in or custom). Anything else (text, decimals, zero, negatives, unknown,
+deleted, or another user's ID) is never sent to the API: the parameter is removed with a
+history replacement, other parameters are kept, and the page loads normally, so another
+user's ID behaves exactly like a missing one.
+
+- **Transactions:** a valid link sets the category filter and loads page 1 once (no
+  unfiltered request first). Browser Back and Forward re-apply or clear it.
+- **Budgets:** if the displayed month has a budget for the category, it opens in the
+  existing edit form; otherwise, for a category that takes budgets, the create form opens
+  with the category preselected for the displayed month (nothing is saved automatically).
+  A category that does not take budgets is ignored.
 
 ## Not implemented yet
 

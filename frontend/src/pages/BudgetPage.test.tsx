@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { accountContext, accountUser } from "../test/accountFixtures";
 import type { ReactNode } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import BudgetPage from "./BudgetPage";
@@ -183,7 +184,7 @@ describe("BudgetPage", () => {
     mockGetBudgets.mockReturnValue(new Promise(() => {}));
     mockGetCategories.mockReturnValue(new Promise(() => {}));
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     expect(screen.getByText("Loading budgets...")).toBeInTheDocument();
   });
@@ -192,7 +193,7 @@ describe("BudgetPage", () => {
     mockGetBudgets.mockResolvedValue([groceriesBudget, diningBudget]);
     mockAnalyticsForLoadedBudgets();
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     expect(
       await screen.findByRole("heading", { name: "Monthly Budgets" }),
@@ -211,6 +212,8 @@ describe("BudgetPage", () => {
 
     expect(groceriesCard).toBeInTheDocument();
     expect(groceriesCard).toHaveTextContent("Groceries");
+    // The figures stay text-only; only the category name has an icon.
+    expect(groceriesCard.querySelector(".budget-card__content svg")).toBeNull();
 
     expect(diningCard).toBeInTheDocument();
     expect(diningCard).toHaveTextContent("Dining");
@@ -278,7 +281,7 @@ describe("BudgetPage", () => {
       status: statuses[id as keyof typeof statuses],
     }));
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     expect(await screen.findByText("Caution")).toBeInTheDocument();
     expect(screen.getByText("Warning")).toBeInTheDocument();
@@ -292,7 +295,7 @@ describe("BudgetPage", () => {
       budgetId: 999,
     });
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     const budgetCard = await screen.findByTestId("budget-card-1");
 
@@ -310,7 +313,7 @@ describe("BudgetPage", () => {
     mockGetBudgets.mockResolvedValue([groceriesBudget, diningBudget]);
     mockAnalyticsForLoadedBudgets();
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Groceries" });
 
@@ -355,7 +358,7 @@ describe("BudgetPage", () => {
     mockGetBudgets.mockResolvedValue([archivedBudget]);
     mockGetBudgetAnalytics.mockResolvedValue(archivedAnalytics);
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Create Budget" });
 
@@ -387,7 +390,7 @@ describe("BudgetPage", () => {
 
     mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Create Budget" });
 
@@ -414,7 +417,7 @@ describe("BudgetPage", () => {
     const user = userEvent.setup();
     mockGetBudgets.mockResolvedValue([]);
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Create Budget" });
 
@@ -462,7 +465,7 @@ describe("BudgetPage", () => {
       }),
     );
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Create Budget" });
 
@@ -497,7 +500,7 @@ describe("BudgetPage", () => {
     mockGetBudgets.mockResolvedValue([]);
     mockCreateBudget.mockRejectedValue(new Error("Request failed"));
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Create Budget" });
 
@@ -523,7 +526,7 @@ describe("BudgetPage", () => {
 
     mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Groceries" });
 
@@ -553,7 +556,7 @@ describe("BudgetPage", () => {
     mockGetBudgets.mockResolvedValue([groceriesBudget]);
     mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Groceries" });
 
@@ -604,7 +607,7 @@ describe("BudgetPage", () => {
     mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
     mockUpdateBudget.mockRejectedValue(new Error("Request failed"));
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Groceries" });
     await user.click(screen.getByRole("button", { name: "Edit" }));
@@ -640,7 +643,7 @@ describe("BudgetPage", () => {
       .mockResolvedValueOnce(groceriesAnalytics)
       .mockRejectedValueOnce(new Error("Analytics refresh failed"));
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Groceries" });
     await user.click(screen.getByRole("button", { name: "Edit" }));
@@ -672,7 +675,7 @@ describe("BudgetPage", () => {
     mockGetBudgets.mockResolvedValue([groceriesBudget]);
     mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Groceries" });
 
@@ -714,7 +717,7 @@ describe("BudgetPage", () => {
 
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Groceries" });
 
@@ -742,7 +745,7 @@ describe("BudgetPage", () => {
     mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Groceries" });
     await user.click(screen.getByRole("button", { name: "Edit" }));
@@ -771,7 +774,7 @@ describe("BudgetPage", () => {
     mockDeleteBudget.mockRejectedValue(error);
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Groceries" });
     await user.click(screen.getByRole("button", { name: "Delete" }));
@@ -787,7 +790,7 @@ describe("BudgetPage", () => {
 
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Groceries" });
 
@@ -810,7 +813,7 @@ describe("BudgetPage", () => {
       new ApiError("Budget already exists for this category and month", 409),
     );
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Create Budget" });
 
@@ -829,7 +832,7 @@ describe("BudgetPage", () => {
       new ApiError("Unable to load budgets.", 500),
     );
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Unable to load budgets.",
@@ -839,7 +842,7 @@ describe("BudgetPage", () => {
   it("shows a fallback error when the budget page cannot load", async () => {
     mockGetBudgets.mockRejectedValue(new Error("Network unavailable"));
 
-    render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+    render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Unable to load budget information. Please try again.",

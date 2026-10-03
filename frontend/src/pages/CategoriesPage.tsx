@@ -1,16 +1,174 @@
+import { useEffect, useRef, useState } from "react";
 import { CategoryCard } from "../components/CategoryCard";
+import { CategoryDeleteConfirm } from "../components/CategoryDeleteConfirm";
+import { CategoryForm } from "../components/CategoryForm";
+import { CategoryRefreshNotice } from "../components/CategoryRefreshNotice";
+import { resolveIconKey } from "../components/categoryIconRegistry";
 import { CategorySummaryStrip } from "../components/CategorySummaryStrip";
+import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../context/AuthContext";
+import { useCategories } from "../context/CategoryContext";
 import { useCategorySummary } from "../hooks/useCategorySummary";
+import { ApiError } from "../services/api";
+import { CATEGORY_BUILT_IN, CATEGORY_IN_USE, CATEGORY_NOT_FOUND } from "../services/categoryService";
+import type { CategorySummary } from "../types/category";
+import { EMPTY_CATEGORY_DRAFT, type CategoryDraft } from "../utils/categoryForm";
 import { formatReportingMonth, monthSpendingTotal } from "../utils/categorySummary";
+import { categoryCardIds } from "../utils/categoryUsage";
 
+const LIST_HEADING_ID = "categories-list-heading";
+const CREATE_BUTTON_ID = "categories-create-button";
+const NOT_FOUND_MESSAGE = "This category no longer exists. The list has been refreshed.";
+
+type Workflow =
+  | { kind: "none" }
+  | { kind: "create" }
+  | { kind: "edit"; id: number }
+  | { kind: "delete"; id: number };
+
+/**
+ * The home for category management. Changes go through CategoryContext (the shared
+ * list every category dropdown uses), then the usage summary is reloaded. A successful
+ * change is never reported as failed: if a refresh fails, the change stands and a
+ * warning offers a retry.
+ */
 function CategoriesPage() {
   const { user } = useAuth();
   const { summary, status, error, reload } = useCategorySummary();
+  const { createCategory, updateCategory, deleteCategory, reload: reloadCategories } = useCategories();
   const dateFormat = user?.preferences?.dateFormat ?? "MEDIUM";
+
+  const [workflow, setWorkflow] = useState<Workflow>({ kind: "none" });
+  const [pageError, setPageError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  // Element to focus once the list has re-rendered, with a fallback if it is gone.
+  const pendingFocus = useRef<{ id: string; fallback: string } | null>(null);
 
   const monthLabel = summary ? formatReportingMonth(summary.month, summary.year) : "";
   const monthName = monthLabel.split(" ")[0];
+  const rows = summary?.categories ?? [];
+
+  useEffect(() => {
+    const target = pendingFocus.current;
+    if (!target || status === "loading") return;
+    const element = document.getElementById(target.id) ?? document.getElementById(target.fallback);
+    if (element) {
+      element.focus();
+      pendingFocus.current = null;
+    }
+  });
+
+  function focusAfterRender(id: string, fallback = LIST_HEADING_ID): void {
+    pendingFocus.current = { id, fallback };
+  }
+
+  function close(focusId: string): void {
+    setWorkflow({ kind: "none" });
+    focusAfterRender(focusId);
+  }
+
+  /** A category changed elsewhere: refresh both lists and explain. */
+  function handleGone(message: string): void {
+    setWorkflow({ kind: "none" });
+    setPageError(message);
+    focusAfterRender(LIST_HEADING_ID);
+    void reloadCategories();
+    void reload();
+  }
+
+  async function handleCreate(draft: CategoryDraft): Promise<void> {
+    const created = await createCategory({ name: draft.name, budgetEnabled: true, iconKey: draft.iconKey });
+    setWorkflow({ kind: "none" });
+    setPageError("");
+    setStatusMessage(`Created “${created.name}”.`);
+    focusAfterRender(categoryCardIds(created.id).heading);
+    await reload();
+  }
+
+  async function handleSave(category: CategorySummary, draft: CategoryDraft): Promise<void> {
+    try {
+      const updated = await updateCategory(category.id, {
+        name: draft.name,
+        budgetEnabled: category.budgetEnabled,
+        iconKey: draft.iconKey,
+      });
+      setWorkflow({ kind: "none" });
+      setPageError("");
+      setStatusMessage(`Saved “${updated.name}”.`);
+      focusAfterRender(categoryCardIds(category.id).edit);
+      await reload();
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.code === CATEGORY_NOT_FOUND) {
+        handleGone(NOT_FOUND_MESSAGE);
+      } else if (caught instanceof ApiError && caught.code === CATEGORY_BUILT_IN) {
+        handleGone(caught.message);
+      } else {
+        throw caught; // Duplicate names, field messages, and other failures stay on the form.
+      }
+    }
+  }
+
+  async function handleDelete(category: CategorySummary): Promise<void> {
+    // Decide where focus goes before the card disappears: next card, previous, or the list.
+    const index = rows.findIndex((row) => row.id === category.id);
+    const neighbour = rows[index + 1] ?? rows[index - 1];
+    const ids = categoryCardIds(category.id);
+
+    try {
+      await deleteCategory(category.id);
+      setWorkflow({ kind: "none" });
+      setPageError("");
+      setStatusMessage(`Deleted “${category.name}”.`);
+      focusAfterRender(neighbour ? categoryCardIds(neighbour.id).heading : LIST_HEADING_ID);
+      await reload();
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.code === CATEGORY_IN_USE) {
+        // The usage changed after the page loaded; the server is authoritative.
+        setWorkflow({ kind: "none" });
+        setPageError(
+          `“${category.name}” is still used by transactions or budgets, so it can’t be deleted. `
+          + "Change the category on those transactions and budgets, or delete them, then try again.",
+        );
+        focusAfterRender(ids.delete);
+        void reload();
+      } else if (caught instanceof ApiError && caught.code === CATEGORY_NOT_FOUND) {
+        handleGone(NOT_FOUND_MESSAGE);
+      } else if (caught instanceof ApiError && caught.code === CATEGORY_BUILT_IN) {
+        handleGone(caught.message);
+      } else {
+        setWorkflow({ kind: "none" });
+        setPageError("Unable to delete the category. Please try again.");
+        focusAfterRender(ids.delete);
+      }
+    }
+  }
+
+  function workflowFor(category: CategorySummary) {
+    const ids = categoryCardIds(category.id);
+    if (workflow.kind === "edit" && workflow.id === category.id) {
+      return (
+        <CategoryForm
+          label={`Edit ${category.name}`}
+          initial={{ name: category.name, iconKey: resolveIconKey(category.iconKey) }}
+          submitLabel="Save category"
+          pendingLabel="Saving…"
+          failureMessage="Unable to save the category. Please try again."
+          onSubmit={(draft) => handleSave(category, draft)}
+          onCancel={() => close(ids.edit)}
+        />
+      );
+    }
+    if (workflow.kind === "delete" && workflow.id === category.id) {
+      return (
+        <CategoryDeleteConfirm
+          categoryName={category.name}
+          onConfirm={() => handleDelete(category)}
+          onCancel={() => close(ids.delete)}
+        />
+      );
+    }
+    return undefined;
+  }
 
   return (
     <section className="categories-page" aria-labelledby="categories-heading">
@@ -22,7 +180,18 @@ function CategoriesPage() {
         </p>
       </div>
 
-      {status === "error" && (
+      <StatusBanner message={statusMessage} onDismiss={() => setStatusMessage("")} />
+
+      {pageError && (
+        <div className="form-error categories-page__error" role="alert">
+          <span>{pageError}</span>{" "}
+          <button type="button" className="button button--secondary button--small" onClick={() => setPageError("")}>
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {status === "error" && !summary && (
         <div className="form-error categories-page__error" role="alert">
           <span>{error}</span>{" "}
           <button type="button" className="button button--secondary button--small" onClick={() => void reload()}>
@@ -31,34 +200,85 @@ function CategoriesPage() {
         </div>
       )}
 
+      {status === "error" && summary && (
+        <div className="form-warning categories-page__error" role="status">
+          <span>Your change was saved, but category usage could not be refreshed.</span>{" "}
+          <button type="button" className="button button--secondary button--small" onClick={() => void reload()}>
+            Refresh usage
+          </button>
+        </div>
+      )}
+
+      <CategoryRefreshNotice />
+
       {!summary && status === "loading" && <p role="status">Loading categories…</p>}
 
       {summary && (
-        summary.categories.length === 0 ? (
-          <p className="empty-state">You don’t have any categories yet.</p>
-        ) : (
-          <>
-            <CategorySummaryStrip rows={summary.categories} monthLabel={monthLabel} />
+        <>
+          {rows.length > 0 && <CategorySummaryStrip rows={rows} monthLabel={monthLabel} />}
 
-            <div className="categories-page__list-header">
-              <h2>All categories</h2>
-              <p>{summary.categories.length} categories, A–Z</p>
+          <div className="categories-page__list-header">
+            <div>
+              <h2 id={LIST_HEADING_ID} tabIndex={-1}>All categories</h2>
+              <p>{rows.length} {rows.length === 1 ? "category" : "categories"}, A–Z</p>
             </div>
+            {workflow.kind !== "create" && (
+              <button
+                id={CREATE_BUTTON_ID}
+                type="button"
+                className="button button--primary"
+                onClick={() => {
+                  setStatusMessage("");
+                  setWorkflow({ kind: "create" });
+                }}
+              >
+                Create category
+              </button>
+            )}
+          </div>
 
+          {workflow.kind === "create" && (
+            <div className="category-card categories-page__create">
+              <h3>New category</h3>
+              <CategoryForm
+                label="Create category"
+                initial={EMPTY_CATEGORY_DRAFT}
+                submitLabel="Create category"
+                pendingLabel="Creating…"
+                failureMessage="Unable to create the category. Please try again."
+                onSubmit={handleCreate}
+                onCancel={() => close(CREATE_BUTTON_ID)}
+                focusNameOnOpen
+              />
+            </div>
+          )}
+
+          {rows.length === 0 ? (
+            <p className="empty-state">You don’t have any categories yet.</p>
+          ) : (
             <ul className="category-grid">
-              {summary.categories.map((category) => (
+              {rows.map((category) => (
                 <li key={category.id}>
                   <CategoryCard
                     category={category}
-                    monthTotal={monthSpendingTotal(summary.categories)}
+                    monthTotal={monthSpendingTotal(rows)}
                     monthName={monthName}
                     dateFormat={dateFormat}
+                    onEdit={() => {
+                      setStatusMessage("");
+                      setWorkflow({ kind: "edit", id: category.id });
+                    }}
+                    onDelete={() => {
+                      setStatusMessage("");
+                      setWorkflow({ kind: "delete", id: category.id });
+                    }}
+                    workflow={workflowFor(category)}
                   />
                 </li>
               ))}
             </ul>
-          </>
-        )
+          )}
+        </>
       )}
     </section>
   );

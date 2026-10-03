@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { useAuth } from "./AuthContext";
 import { CategoryContext, type CategoryContextValue, type CategoryLoadStatus } from "./CategoryContext";
 import * as categoryService from "../services/categoryService";
-import type { CategoryResponse, UpdateCategoryRequest } from "../types/category";
+import type { CategoryResponse, CreateCategoryRequest, UpdateCategoryRequest } from "../types/category";
 
 const LOAD_ERROR = "Categories could not be loaded.";
 const REFRESH_ERROR = "Category options could not be refreshed.";
@@ -82,21 +82,37 @@ export function CategoryProvider({ children }: { children: ReactNode }) {
     if (!loadingRef.current) void fetchLatest();
   }, [fetchLatest]);
 
+  /**
+   * Applies a successful change to the list right away, so a failed refresh (which only
+   * sets refreshError) never shows stale data, then reloads for the server's order.
+   */
+  const applyLocally = useCallback((change: (categories: CategoryResponse[]) => CategoryResponse[]) => {
+    const owner = ownerRef.current;
+    setState((previous) => previous.owner === owner
+      ? { ...previous, categories: change(previous.categories) }
+      : previous);
+  }, []);
+
+  const createCategory = useCallback(async (request: CreateCategoryRequest) => {
+    const created = await categoryService.createCategory(request);
+    applyLocally((categories) => [...categories, created]);
+    await fetchLatest();
+    return created;
+  }, [applyLocally, fetchLatest]);
+
   const updateCategory = useCallback(async (id: number, request: UpdateCategoryRequest) => {
     const updated = await categoryService.updateCategory(id, request);
+    applyLocally((categories) => categories.map((category) => category.id === id ? updated : category));
     await fetchLatest();
     return updated;
-  }, [fetchLatest]);
+  }, [applyLocally, fetchLatest]);
 
   const deleteCategory = useCallback(async (id: number) => {
-    const owner = ownerRef.current;
     await categoryService.deleteCategory(id);
     // The delete succeeded: remove it now so a failed refresh never shows it again.
-    setState((previous) => previous.owner === owner
-      ? { ...previous, categories: previous.categories.filter((category) => category.id !== id) }
-      : previous);
+    applyLocally((categories) => categories.filter((category) => category.id !== id));
     await fetchLatest();
-  }, [fetchLatest]);
+  }, [applyLocally, fetchLatest]);
 
   const visible = state.owner === ownerId ? state : emptyState(ownerId);
 
@@ -107,10 +123,11 @@ export function CategoryProvider({ children }: { children: ReactNode }) {
     refreshError: visible.refreshError,
     ensureLoaded,
     reload: fetchLatest,
+    createCategory,
     updateCategory,
     deleteCategory,
   }), [visible.categories, visible.status, visible.loadError, visible.refreshError,
-    ensureLoaded, fetchLatest, updateCategory, deleteCategory]);
+    ensureLoaded, fetchLatest, createCategory, updateCategory, deleteCategory]);
 
   return <CategoryContext.Provider value={value}>{children}</CategoryContext.Provider>;
 }

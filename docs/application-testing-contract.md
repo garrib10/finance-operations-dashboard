@@ -214,10 +214,11 @@ Usage above 100% remains visible and available through `aria-valuetext`, while t
   `newCategory.iconKey` messages appear beside their controls with `aria-invalid`; the
   first invalid control receives focus. Amounts above 9,999,999,999.99 or with more than
   two decimals are rejected (`400`).
-- **Management:** custom categories can be renamed, re-iconed, or deleted from "Manage
-  categories". Deleting a category used by any transaction or budget is refused with
-  "This category is used by transactions or budgets and cannot be deleted." and the
-  category stays listed. That message (`role="alert"`) closes after 3 seconds. Built-in categories cannot be changed.
+- **Management:** custom categories are created, renamed, re-iconed, and deleted on the
+  Categories page (`/categories`, reached from the sidebar). Delete is inactive (`aria-disabled="true"`) with a visible reason for a
+  category in use; if the server still refuses a delete (`409`), a persistent
+  `role="alert"` explains it and the category stays listed. Built-in categories cannot be
+  changed.
 - **Filters:** the transaction filter is applied on the server and returns to page 1;
   Reset clears it. The budget filter narrows the loaded month in the browser and shows a
   distinct empty message when the month has budgets but none in that category.
@@ -301,8 +302,16 @@ server's reporting month (issue #100). No new `data-testid` values are added.
 | No budget | "No budget for {Month}", shown only for categories that take budgets |
 | Activity | "{n} transactions · {m} budgets · Last used {date}" or "Not used yet" |
 
-Cards are ordered by name, then ID. Management actions on the page arrive in a later phase
-of issue #100; until then category management stays on the Transactions and Budgets pages.
+| Create | button "Create category" opens a form named "Create category" (fields "Category name" and the "Icon" radiogroup; submit "Create category", "Cancel") |
+| Edit | button "Edit {name}" (custom only) opens a form named "Edit {name}" with "Save category" and "Cancel" |
+| Delete | button "Delete {name}" (custom only); `aria-disabled="true"` plus a reason "Used by …" when in use; confirmation group "Delete “{name}”? This cannot be undone." with "Delete category" and "Keep category" |
+| Card links | "View transactions for {name}" (`/transactions?category={id}`), or "Add a transaction for {name}" (`/transactions?addCategory={id}`) when the category has no transactions; "Set budget for {name}" or "Edit budget for {name}" (`/budgets?category={id}`, only for categories that take budgets) |
+| Messages | success banners "Created/Saved/Deleted “{name}”."; persistent `role="alert"` with "Dismiss" for refusals |
+
+Cards are ordered by name, then ID. Transactions and Budgets accept `?category={id}`: a
+category the user owns is applied (Transactions filters; Budgets opens that month's
+budget for editing or preselects it for a new one); any other value is removed from the
+URL without a request.
 
 ### Category controls (v1.3.0)
 
@@ -321,7 +330,7 @@ IDs, labels, and accessible names.
 | Budget fields | `#budget-monthly-limit`, `#budget-month`, `#budget-year` (labels unchanged) |
 | Field errors | `#transaction-category-error` / `#budget-category-error` (selection), `#…-category-new-name-error`, `#…-category-icon-error`, `#transaction-amount-error`, `#budget-monthly-limit-error` |
 | Duplicate recovery | button "Use existing category “{name}”" under the name error |
-| Category management | button "Manage categories"; per-row "Edit {name}" / "Delete {name}"; confirm "Delete category" / "Keep category"; edit form named "Edit {name}" with "Save category" |
+| Category management | on the Categories page only (see above); Transactions and Budgets have no management panel or "Manage categories" link |
 | Confirmation banner | `#status-banner-stack [role="status"]`: "Transaction added./updated./deleted.", "Budget created./updated./deleted.", "Saved “{name}”.", "Deleted “{name}”."; close button "Dismiss message" |
 
 Existing category options use the numeric category ID as their value. Built-in categories

@@ -17,6 +17,7 @@ vi.mock("recharts", () => ({
 
 import type { ReactNode } from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../context/AuthContext";
@@ -59,7 +60,7 @@ function useBudgets(budgets: BudgetResponse[]) {
 
 async function renderPage() {
   const user = userEvent.setup();
-  render(<CategoryProvider><BudgetPage /></CategoryProvider>);
+  render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
   await screen.findByRole("heading", { name: "Create Budget" });
   await waitFor(() => expect(within(screen.getByLabelText("Category")).getByRole("option", { name: "Pet Care" }))
     .toBeInTheDocument());
@@ -222,7 +223,10 @@ describe("BudgetPage categories", () => {
     expect(within(screen.getByTestId("budget-card-3")).getByRole("heading", { name: "Legacy" })
       .querySelector("svg")).toHaveClass("lucide-tag");
 
+    const filterIcon = () => screen.getByLabelText("Filter by category").parentElement?.querySelector("svg");
+    expect(filterIcon()).toHaveClass("lucide-tags");
     await user.selectOptions(screen.getByLabelText("Filter by category"), String(petCare.id));
+    expect(filterIcon()).toHaveClass("category-icon");
     expect(screen.getByTestId("budget-card-2")).toBeInTheDocument();
     expect(screen.queryByTestId("budget-card-1")).not.toBeInTheDocument();
     expect(screen.getByText("Pet Care", { selector: ".category-label__name" })).toBeInTheDocument();
@@ -234,21 +238,6 @@ describe("BudgetPage categories", () => {
     const otherMonth = month === 12 ? "1" : String(month + 1);
     await user.selectOptions(screen.getAllByLabelText("Month")[1], otherMonth);
     expect(screen.getByText(/No budgets found for/)).toBeInTheDocument();
-  });
-
-  it("drops a deleted category from the filter and reloads the cards", async () => {
-    vi.mocked(categoryService.deleteCategory).mockResolvedValue(undefined);
-    const user = await renderPage();
-    await user.selectOptions(screen.getByLabelText("Filter by category"), String(petCare.id));
-    vi.mocked(categoryService.getCategories).mockResolvedValue(sampleCategories.filter((item) => item !== petCare));
-
-    await user.click(screen.getByRole("button", { name: "Manage categories" }));
-    await user.click(screen.getByRole("button", { name: "Delete Pet Care" }));
-    await user.click(screen.getByRole("button", { name: "Delete category" }));
-
-    await waitFor(() => expect(screen.getByLabelText("Filter by category")).toHaveValue(""));
-    expect(budgetService.getBudgets).toHaveBeenCalledTimes(2);
-    expect(screen.getByTestId("budget-card-1")).toBeInTheDocument();
   });
 
   it("reports a category that no longer exists on the category field", async () => {
@@ -265,16 +254,12 @@ describe("BudgetPage categories", () => {
     expect(categoryService.getCategories).toHaveBeenCalledTimes(2);
   });
 
-  it("warns when the cards cannot refresh after a category change", async () => {
-    vi.mocked(categoryService.deleteCategory).mockResolvedValue(undefined);
-    const user = await renderPage();
-    vi.mocked(budgetService.getBudgets).mockRejectedValueOnce(new Error("network"));
+  it("has no category management panel or link; inline creation stays in the form", async () => {
+    await renderPage();
 
-    await user.click(screen.getByRole("button", { name: "Manage categories" }));
-    await user.click(screen.getByRole("button", { name: "Delete Pet Care" }));
-    await user.click(screen.getByRole("button", { name: "Delete category" }));
-
-    expect(await screen.findByText(/The category was updated, but the budget list could not be refreshed/))
+    expect(screen.queryByRole("link", { name: "Manage categories" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Manage categories|Hide categories/ })).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText("Category")).getByRole("option", { name: "Create a custom category…" }))
       .toBeInTheDocument();
   });
 
@@ -296,5 +281,90 @@ describe("BudgetPage categories", () => {
     // Starting another edit clears the earlier confirmation.
     await user.click(screen.getByRole("button", { name: "Edit" }));
     expect(screen.queryByText("Budget updated.")).not.toBeInTheDocument();
+  });
+});
+
+function HistoryProbe() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return (
+    <>
+      <output data-testid="url">{location.pathname}{location.search}</output>
+      <button type="button" onClick={() => navigate(-1)}>History back</button>
+      <button type="button" onClick={() => navigate(1)}>History forward</button>
+    </>
+  );
+}
+
+describe("BudgetPage category deep link", () => {
+  const savings = category({ id: 5, name: "Savings", builtIn: true, budgetEnabled: false, iconKey: "piggy-bank" });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(accountContext());
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
+    vi.mocked(categoryService.getCategories).mockResolvedValue([...sampleCategories, savings]);
+    // Groceries (ID 1) has a budget this month; Pet Care does not.
+    useBudgets([budget()]);
+  });
+
+  async function renderAt(entries: string[], index = entries.length - 1) {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={entries} initialIndex={index}>
+        <CategoryProvider><BudgetPage /></CategoryProvider>
+        <HistoryProbe />
+      </MemoryRouter>,
+    );
+    await screen.findByRole("heading", { name: /Create Budget|Edit Budget/ });
+    return user;
+  }
+
+  it("opens this month's existing budget for editing", async () => {
+    await renderAt(["/budgets?category=1"]);
+
+    expect(await screen.findByRole("heading", { name: "Edit Budget" })).toHaveFocus();
+    expect(screen.getByLabelText("Category")).toHaveValue("1");
+    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500);
+    expect(screen.getByRole("button", { name: "Update Budget" })).toBeInTheDocument();
+    expect(budgetService.createBudget).not.toHaveBeenCalled();
+  });
+
+  it("starts a new budget with the category preselected when there is none this month", async () => {
+    await renderAt([`/budgets?category=${petCare.id}`]);
+
+    await waitFor(() => expect(screen.getByLabelText("Category")).toHaveValue(String(petCare.id)));
+    expect(screen.getByRole("heading", { name: "Create Budget" })).toHaveFocus();
+    // The form's month and year (the period filter has its own "Month" field).
+    expect(document.getElementById("budget-month")).toHaveValue(String(month));
+    expect(document.getElementById("budget-year")).toHaveValue(year);
+    expect(budgetService.createBudget).not.toHaveBeenCalled();
+  });
+
+  it("does not start a budget for a category that does not take budgets", async () => {
+    await renderAt([`/budgets?category=${savings.id}`]);
+
+    await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent(/^\/budgets$/));
+    expect(screen.getByLabelText("Category")).toHaveValue("");
+    expect(screen.getByRole("heading", { name: "Create Budget" })).not.toHaveFocus();
+  });
+
+  it.each(["abc", "1.5", "0", "-1", "999"])("ignores %s and removes only that parameter", async (value) => {
+    await renderAt([`/budgets?tab=list&category=${value}`]);
+
+    await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent("/budgets?tab=list"));
+    expect(screen.getByLabelText("Category")).toHaveValue("");
+    expect(screen.getByRole("heading", { name: "Create Budget" })).toBeInTheDocument();
+  });
+
+  it("follows browser history between linked categories", async () => {
+    const user = await renderAt(["/budgets?category=1", `/budgets?category=${petCare.id}`]);
+    await waitFor(() => expect(screen.getByLabelText("Category")).toHaveValue(String(petCare.id)));
+    expect(screen.getByRole("heading", { name: "Create Budget" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "History back" }));
+
+    expect(await screen.findByRole("heading", { name: "Edit Budget" })).toHaveFocus();
+    expect(screen.getByLabelText("Category")).toHaveValue("1");
   });
 });

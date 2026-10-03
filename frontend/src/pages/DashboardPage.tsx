@@ -1,3 +1,4 @@
+import { TransactionTypeLabel } from "../components/TransactionTypeIcon";
 import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
 import { ApiError } from "../services/api";
@@ -168,7 +169,7 @@ function DashboardPage() {
                         <CategoryLabel name={transaction.categoryName} iconKey={transaction.categoryIconKey} />
                       </td>
 
-                      <td>{transaction.type}</td>
+                      <td><TransactionTypeLabel type={transaction.type} /></td>
 
                       <td>{formatDate(transaction.transactionDate, user?.preferences?.dateFormat)}</td>
 
