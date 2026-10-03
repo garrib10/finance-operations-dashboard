@@ -1721,6 +1721,174 @@
   font-size: 0.875rem;
 }
 
+/* Spending distribution: a plain table with an in-row bar that repeats the share. */
+.category-spending {
+  margin: 0 0 2rem;
+}
+
+.category-spending h2 {
+  margin: 0 0 0.35rem;
+}
+
+.app-main .category-spending__intro,
+.app-main .category-spending__note {
+  margin: 0 0 0.75rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.app-main .category-spending__note {
+  margin: 0.75rem 0 0;
+}
+
+.category-spending__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.category-spending__table th,
+.category-spending__table td {
+  padding: 0.6rem 0.5rem;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.category-spending__table thead th {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Category takes the room; Spent and Share keep a steady width. */
+.category-spending__table th:nth-child(2),
+.category-spending__table td:nth-child(2) {
+  width: 7.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.category-spending__table th:nth-child(3),
+.category-spending__table td:nth-child(3) {
+  width: 32%;
+}
+
+.category-spending__table tbody th {
+  font-weight: 600;
+}
+
+.category-spending__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.category-spending__name .category-icon {
+  margin-top: 0;
+}
+
+.category-spending__share {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+
+.category-spending__bar {
+  display: block;
+  height: 0.4rem;
+  margin-top: 0.3rem;
+  overflow: hidden;
+  background-color: var(--color-background);
+  border-radius: 999px;
+}
+
+.category-spending__bar > span {
+  display: block;
+  height: 100%;
+  background-color: var(--color-primary);
+  border-radius: inherit;
+}
+
+/* Search, filter, and sort for the category cards. */
+.category-toolbar {
+  margin: 0 0 1rem;
+}
+
+.category-toolbar__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.category-toolbar__controls .form-field {
+  flex: 1 1 11rem;
+  min-width: 0;
+}
+
+.category-toolbar__controls .category-toolbar__search {
+  flex-basis: 15rem;
+}
+
+.category-toolbar__controls select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.75rem;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.category-toolbar__controls select:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Phones: narrower fixed columns so long category names wrap instead of overflowing. */
+@media (max-width: 480px) {
+  .category-spending__table th,
+  .category-spending__table td {
+    padding: 0.55rem 0.3rem;
+  }
+
+  .category-spending__table th:nth-child(2),
+  .category-spending__table td:nth-child(2) {
+    width: 5.75rem;
+  }
+
+  .category-spending__table th:nth-child(3),
+  .category-spending__table td:nth-child(3) {
+    width: 4.75rem;
+  }
+}
+
+.app-main .category-toolbar__count {
+  margin: 0.75rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.app-main .category-toolbar__note {
+  margin: 0.25rem 0 0;
+}
+
+.categories-page__no-results {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 1.25rem;
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.app-main .categories-page__no-results p {
+  margin: 0;
+}
+
 .categories-page__list-header {
   display: flex;
   flex-wrap: wrap;

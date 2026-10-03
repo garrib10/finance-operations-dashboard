@@ -211,6 +211,55 @@ managed. It shows each category's usage for the server's reporting month (see th
   then the usage summary reloads. A failed refresh never undoes or misreports a change
   that the server accepted: the last data stays, with a warning and a retry.
 
+**Spending distribution.** "Spending in {Month Year}" (the server's reporting month, never
+the browser clock) is a table with the columns Category, Spent, and Share:
+
+- Only categories with expense spending this month (`currentMonthSpent > 0`) are listed;
+  the section says so. With no spending at all it shows "No spending recorded for
+  {Month Year}."
+- Rows are ordered by spending (highest first), then name, then ID.
+- Share = category spending ÷ the month's total spending × 100, shown to one decimal
+  place ("<0.1%" for a tiny non-zero share). A zero, missing, or invalid amount counts as
+  0, so the page never divides by zero.
+- Each row has a bar whose width is the unrounded share, clamped to 0–100%. The bar and
+  icon are decorative (`aria-hidden`); the amount and share are always visible as text.
+- If the shown (rounded) shares do not add up to exactly 100%, a note says the
+  percentages are rounded.
+
+**Finding categories.** A toolbar above the cards searches, filters, and sorts **the cards
+only**. The summary strip and the spending table always cover every category. The state
+lives on the page only (no URL parameters) and is applied in this order:
+
+1. **Search** ("Search categories"): the name contains the query, after trimming, Unicode
+   NFC normalization, and ignoring case (accents still count, so "cafe" does not find
+   "Café"). An empty or whitespace-only query matches everything.
+2. **Filter** ("Filter categories"):
+   - All categories.
+   - Custom: `builtIn` is false.
+   - Built-in: `builtIn` is true.
+   - Unused: no transactions and no budgets ever (`transactionCount` and `budgetCount`
+     both 0). Built-ins can be unused, though they still cannot be deleted.
+   - No budget this month: `currentMonthBudget` is null, whether or not the category takes
+     budgets.
+3. **Sort** ("Sort categories"), always ending on name (locale-aware, ignoring case) and
+   then ID, so the order never shuffles:
+   - Name: name, then ID (the default).
+   - This month's spending: highest first, then name, then ID.
+   - Most used: most transactions (all time), then this month's spending, then name, then ID.
+
+"Showing {n} of {total} categories" is a polite status region. "Clear category filters"
+(shown when anything differs from the defaults) resets all three and returns focus to the
+search box. When nothing matches, the page says so (instead of the "no categories" empty
+state) and offers "Show all categories".
+
+**Active forms while filtering.** A category being edited, or with its delete
+confirmation open, always stays visible, even if the search or filter no longer matches
+it, so unsaved changes are never discarded; a note explains why it is shown. After a
+save, cancel, or refused delete it stays until the toolbar next changes, so focus can
+return to it. A newly created category is likewise shown (and focused) until the next
+toolbar change. After a delete, focus moves to the next card in the current filtered and
+sorted order. After any change the refreshed data is searched, filtered, and sorted again.
+
 **Category deep links.** `?category={id}` is read once the user's category list has
 loaded, and accepted only as a positive whole number that is one of the user's own
 categories (built-in or custom). Anything else (text, decimals, zero, negatives, unknown,

@@ -301,14 +301,17 @@ server's reporting month (issue #100). No new `data-testid` values are added.
 | Budget progress | `role="progressbar"` named "{Category} budget used", `aria-valuenow` 0–100, `aria-valuetext` "{n}% used"; status text such as "Warning" |
 | No budget | "No budget for {Month}", shown only for categories that take budgets |
 | Activity | "{n} transactions · {m} budgets · Last used {date}" or "Not used yet" |
-
+| Spending table | `table` named "Spending in {Month Year}" with column headers Category, Spent, Share and a row header per category with spending; "No spending recorded for {Month Year}." when empty; rounding note "Percentages are rounded, so they may not add up to exactly 100%." |
+| Toolbar | search "Search categories", selects "Filter categories" (All categories, Custom, Built-in, Unused, No budget this month) and "Sort categories" (Name, This month’s spending, Most used); `role="status"` "Showing {n} of {total} categories"; button "Clear category filters" when not at the defaults |
+| No matches | "No categories match your search and filter." with button "Show all categories" |
 | Create | button "Create category" opens a form named "Create category" (fields "Category name" and the "Icon" radiogroup; submit "Create category", "Cancel") |
 | Edit | button "Edit {name}" (custom only) opens a form named "Edit {name}" with "Save category" and "Cancel" |
 | Delete | button "Delete {name}" (custom only); `aria-disabled="true"` plus a reason "Used by …" when in use; confirmation group "Delete “{name}”? This cannot be undone." with "Delete category" and "Keep category" |
 | Card links | "View transactions for {name}" (`/transactions?category={id}`), or "Add a transaction for {name}" (`/transactions?addCategory={id}`) when the category has no transactions; "Set budget for {name}" or "Edit budget for {name}" (`/budgets?category={id}`, only for categories that take budgets) |
 | Messages | success banners "Created/Saved/Deleted “{name}”."; persistent `role="alert"` with "Dismiss" for refusals |
 
-Cards are ordered by name, then ID. Transactions and Budgets accept `?category={id}`: a
+Cards are ordered by name, then ID, unless another sort is chosen; the toolbar affects the
+cards only, never the summary strip or spending table. Transactions and Budgets accept `?category={id}`: a
 category the user owns is applied (Transactions filters; Budgets opens that month's
 budget for editing or preselects it for a new one); any other value is removed from the
 URL without a request.

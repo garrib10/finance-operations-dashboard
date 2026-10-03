@@ -6,7 +6,10 @@ import {
   formatShare,
   monthSpendingTotal,
   overBudgetCount,
+  shareBarWidth,
+  spendingDistribution,
   spendingShare,
+  validSpend,
   topCategory,
   withSpendingCount,
 } from "./categorySummary";
@@ -61,5 +64,58 @@ describe("category summary helpers", () => {
   it("formats the server's reporting month", () => {
     expect(formatReportingMonth(10, 2026)).toBe("October 2026");
     expect(formatReportingMonth(1, 2027)).toBe("January 2027");
+  });
+
+  it("ignores invalid spending values instead of letting them break totals", () => {
+    expect(validSpend(Number.NaN)).toBe(0);
+    expect(validSpend(Number.POSITIVE_INFINITY)).toBe(0);
+    expect(validSpend(-5)).toBe(0);
+    expect(validSpend(12.5)).toBe(12.5);
+    expect(monthSpendingTotal([summaryRow({ id: 1, name: "A", currentMonthSpent: Number.NaN }), groceriesRow])).toBe(300);
+    expect(spendingShare(Number.NaN, 100)).toBe(0);
+    expect(spendingShare(10, Number.NaN)).toBe(0);
+  });
+
+  it("clamps bar widths between 0% and 100% and never divides by zero", () => {
+    expect(shareBarWidth(1, 3)).toBeCloseTo(33.333, 2);
+    expect(shareBarWidth(500, 100)).toBe(100);
+    expect(shareBarWidth(-10, 100)).toBe(0);
+    expect(shareBarWidth(10, 0)).toBe(0);
+  });
+});
+
+describe("spending distribution", () => {
+  it("lists only categories with spending, largest first, ties by name then ID", () => {
+    const distribution = spendingDistribution([
+      summaryRow({ id: 4, name: "beta", currentMonthSpent: 25 }),
+      summaryRow({ id: 9, name: "Zero", currentMonthSpent: 0 }),
+      summaryRow({ id: 3, name: "Alpha", currentMonthSpent: 25 }),
+      summaryRow({ id: 1, name: "Big", currentMonthSpent: 50 }),
+      summaryRow({ id: 2, name: "alpha", currentMonthSpent: 25 }),
+    ]);
+
+    expect(distribution.rows.map((row) => row.category.id)).toEqual([1, 2, 3, 4]);
+    expect(distribution.total).toBe(125);
+    expect(distribution.rows.map((row) => row.share)).toEqual([40, 20, 20, 20]);
+    expect(distribution.rows[0].barWidth).toBe(40);
+    expect(distribution.rounded).toBe(false);
+  });
+
+  it("flags rounded shares that do not add up to 100%", () => {
+    const thirds = spendingDistribution([1, 2, 3].map((id) => summaryRow({ id, name: `C${id}`, currentMonthSpent: 10 })));
+
+    expect(thirds.rows.map((row) => row.share)).toEqual([33.3, 33.3, 33.3]);
+    expect(thirds.rounded).toBe(true);
+  });
+
+  it("is empty, with nothing to round, when nothing was spent", () => {
+    expect(spendingDistribution([salaryRow, unusedRow])).toEqual({ rows: [], total: 0, rounded: false });
+  });
+
+  it("does not reorder the categories it is given", () => {
+    const source = [unusedRow, petCareRow, groceriesRow];
+    spendingDistribution(source);
+
+    expect(source.map((row) => row.id)).toEqual([9, 7, 1]);
   });
 });

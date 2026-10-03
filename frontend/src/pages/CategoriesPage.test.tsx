@@ -51,6 +51,7 @@ vi.setConfig({ testTimeout: 20_000 });
 const card = (name: string) => screen.getByRole("article", { name });
 /** The card's activity line as one string (the date is wrapped to keep it together). */
 const activity = (name: string) => card(name).querySelector(".category-card__usage");
+const cardNames = () => screen.queryAllByRole("article").map((article) => within(article).getByRole("heading").textContent);
 
 describe("CategoriesPage", () => {
   beforeEach(() => {
@@ -177,12 +178,11 @@ describe("CategoriesPage", () => {
     expect(within(card("Pet Care")).getByText(/Last used 2026-10-02/)).toBeInTheDocument();
   });
 
-  it("lists every category in the order the API returns (name, then ID)", async () => {
+  it("lists every category by name by default, whatever order the API returns", async () => {
     await renderPage();
 
-    expect(screen.getAllByRole("article").map((article) => within(article).getByRole("heading").textContent))
-      .toEqual(["Groceries", "Income", "Pet Care", "Hobbies"]);
-    expect(screen.getByText("4 categories, A–Z")).toBeInTheDocument();
+    expect(cardNames()).toEqual(["Groceries", "Hobbies", "Income", "Pet Care"]);
+    expect(screen.getByText("Showing 4 of 4 categories")).toHaveAttribute("role", "status");
   });
 
   it("links every category to its transactions and budget-enabled ones to their budget", async () => {
@@ -249,6 +249,169 @@ describe("CategoriesPage", () => {
 
     expect(await screen.findByText("You don’t have any categories yet.")).toBeInTheDocument();
     expect(screen.queryByRole("article")).not.toBeInTheDocument();
+  });
+
+  describe("spending distribution", () => {
+    it("shows the whole month's spending for the server's month, before the cards", async () => {
+      await renderPage();
+      const table = screen.getByRole("table", { name: "Spending in October 2026" });
+
+      expect(within(table).getAllByRole("rowheader").map((cell) => cell.textContent)).toEqual(["Groceries", "Pet Care"]);
+      expect(within(table).getByText("75.0%")).toBeInTheDocument();
+      expect(table.compareDocumentPosition(screen.getByRole("heading", { name: "All categories" })))
+        .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+
+    it("explains a month with no spending", async () => {
+      vi.mocked(getCategorySummary).mockResolvedValue(summaryList([salaryRow, unusedRow], 9, 2026));
+      await renderPage();
+
+      expect(screen.getByText("No spending recorded for September 2026.")).toBeInTheDocument();
+      expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("finding categories", () => {
+    const search = () => screen.getByLabelText("Search categories");
+    const strip = () => screen.getByText("Categories", { selector: "dt" }).closest("dl")!;
+
+    it("searches the cards only; the summary and spending table still cover every category", async () => {
+      const user = await renderPage();
+      await user.type(search(), "  PET ");
+
+      expect(cardNames()).toEqual(["Pet Care"]);
+      expect(screen.getByText("Showing 1 of 4 categories")).toBeInTheDocument();
+      expect(within(strip()).getByText("4")).toBeInTheDocument();
+      expect(within(strip()).getByText("$300.00 of $400.00")).toBeInTheDocument();
+      expect(within(screen.getByRole("table")).getByRole("rowheader", { name: "Groceries" })).toBeInTheDocument();
+    });
+
+    it.each([
+      ["Custom", ["Hobbies", "Pet Care"]],
+      ["Built-in", ["Groceries", "Income"]],
+      ["Unused", ["Hobbies"]],
+      ["No budget this month", ["Hobbies", "Income"]],
+      ["All categories", ["Groceries", "Hobbies", "Income", "Pet Care"]],
+    ])("filters to %s", async (option, expected) => {
+      const user = await renderPage();
+      await user.selectOptions(screen.getByLabelText("Filter categories"), screen.getByRole("option", { name: option }));
+
+      expect(cardNames()).toEqual(expected);
+      expect(screen.getByText(`Showing ${expected.length} of 4 categories`)).toBeInTheDocument();
+    });
+
+    it.each([
+      ["This month’s spending", ["Groceries", "Pet Care", "Hobbies", "Income"]],
+      ["Most used", ["Groceries", "Pet Care", "Income", "Hobbies"]],
+      ["Name", ["Groceries", "Hobbies", "Income", "Pet Care"]],
+    ])("sorts by %s", async (option, expected) => {
+      const user = await renderPage();
+      await user.selectOptions(screen.getByLabelText("Sort categories"), screen.getByRole("option", { name: option }));
+
+      expect(cardNames()).toEqual(expected);
+    });
+
+    it("combines search and filter, and offers a way back from no results", async () => {
+      const user = await renderPage();
+      await user.selectOptions(screen.getByLabelText("Filter categories"), "custom");
+      await user.type(search(), "groc");
+
+      expect(cardNames()).toEqual([]);
+      expect(screen.getByText("No categories match your search and filter.")).toBeInTheDocument();
+      expect(screen.getByText("Showing 0 of 4 categories")).toBeInTheDocument();
+      expect(screen.queryByText("You don’t have any categories yet.")).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Show all categories" }));
+      expect(cardNames()).toHaveLength(4);
+      expect(search()).toHaveValue("");
+      expect(screen.getByLabelText("Filter categories")).toHaveValue("all");
+    });
+
+    it("clears search, filter, and sort together and keeps focus in the toolbar", async () => {
+      const user = await renderPage();
+      expect(screen.queryByRole("button", { name: "Clear category filters" })).not.toBeInTheDocument();
+
+      await user.type(search(), "o");
+      await user.selectOptions(screen.getByLabelText("Sort categories"), "mostUsed");
+      await user.click(screen.getByRole("button", { name: "Clear category filters" }));
+
+      expect(search()).toHaveValue("");
+      expect(screen.getByLabelText("Sort categories")).toHaveValue("name");
+      expect(cardNames()).toEqual(["Groceries", "Hobbies", "Income", "Pet Care"]);
+      expect(screen.queryByRole("button", { name: "Clear category filters" })).not.toBeInTheDocument();
+      await waitFor(() => expect(search()).toHaveFocus());
+    });
+
+    it("keeps a category being edited visible, with an explanation, while the toolbar changes", async () => {
+      const user = await renderPage();
+      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await user.type(screen.getByLabelText("Category name"), "s");
+      await user.type(search(), "groc");
+
+      expect(screen.getByRole("form", { name: "Edit Pet Care" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Category name")).toHaveValue("Pet Cares"); // Nothing lost.
+      expect(cardNames()).toEqual(["Groceries", "Pet Care"]);
+      expect(screen.getByText(/“Pet Care” is shown because you’re working on it/)).toBeInTheDocument();
+
+      // After Cancel it stays until the toolbar next changes, so focus has somewhere to go.
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "Edit Pet Care" })).toHaveFocus());
+      await user.type(search(), "e");
+      expect(cardNames()).toEqual(["Groceries"]);
+      expect(screen.queryByText(/is shown because you’re working on it/)).not.toBeInTheDocument();
+    });
+
+    it("keeps a renamed category visible and focused when its new name no longer matches", async () => {
+      const renamed = { ...petCareRow, name: "Animals" };
+      vi.mocked(getCategorySummary)
+        .mockResolvedValueOnce(summaryList(allRows))
+        .mockResolvedValueOnce(summaryList([groceriesRow, salaryRow, renamed, unusedRow]));
+      vi.mocked(categoryService.updateCategory).mockResolvedValue(category({ id: 7, name: "Animals" }));
+      const user = await renderPage();
+      await user.type(search(), "pet");
+      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await user.clear(screen.getByLabelText("Category name"));
+      await user.type(screen.getByLabelText("Category name"), "Animals");
+      await user.click(screen.getByRole("button", { name: "Save category" }));
+
+      await waitFor(() => expect(screen.getByRole("button", { name: "Edit Animals" })).toHaveFocus());
+      expect(cardNames()).toEqual(["Animals"]);
+    });
+
+    it("shows a new category even when the current filter would hide it", async () => {
+      const created = summaryRow({ id: 60, name: "Gifts", iconKey: "gift" });
+      vi.mocked(getCategorySummary)
+        .mockResolvedValueOnce(summaryList(allRows))
+        .mockResolvedValueOnce(summaryList([created, ...allRows]));
+      vi.mocked(categoryService.createCategory).mockResolvedValue(category({ id: 60, name: "Gifts", iconKey: "gift" }));
+      const user = await renderPage();
+      await user.selectOptions(screen.getByLabelText("Filter categories"), "builtIn");
+      await user.click(screen.getByRole("button", { name: "Create category" }));
+      await user.type(screen.getByLabelText("Category name"), "Gifts");
+      await user.click(within(screen.getByRole("form", { name: "Create category" })).getByRole("button", { name: "Create category" }));
+
+      await waitFor(() => expect(screen.getByRole("heading", { name: "Gifts" })).toHaveFocus());
+      expect(cardNames()).toEqual(["Gifts", "Groceries", "Income"]);
+      // The refreshed data is filtered again on the next change.
+      await user.selectOptions(screen.getByLabelText("Filter categories"), "builtIn");
+      await user.selectOptions(screen.getByLabelText("Sort categories"), "mostUsed");
+      expect(cardNames()).toEqual(["Groceries", "Income"]);
+    });
+
+    it("moves focus after a delete to the next card as currently filtered and sorted", async () => {
+      vi.mocked(getCategorySummary)
+        .mockResolvedValueOnce(summaryList(allRows))
+        .mockResolvedValueOnce(summaryList([groceriesRow, salaryRow, petCareRow]));
+      vi.mocked(categoryService.deleteCategory).mockResolvedValue(undefined);
+      const user = await renderPage();
+      await user.selectOptions(screen.getByLabelText("Filter categories"), "custom");
+      await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+      await user.click(screen.getByRole("button", { name: "Delete category" }));
+
+      // Unfiltered, "Income" would follow "Hobbies"; with the Custom filter it is "Pet Care".
+      await waitFor(() => expect(screen.getByRole("heading", { name: "Pet Care" })).toHaveFocus());
+      expect(cardNames()).toEqual(["Pet Care"]);
+    });
   });
 
   describe("deleting", () => {

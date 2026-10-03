@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { CategoryCard } from "../components/CategoryCard";
 import { CategoryDeleteConfirm } from "../components/CategoryDeleteConfirm";
+import { CategoryDiscoveryToolbar } from "../components/CategoryDiscoveryToolbar";
 import { CategoryForm } from "../components/CategoryForm";
 import { CategoryRefreshNotice } from "../components/CategoryRefreshNotice";
 import { resolveIconKey } from "../components/categoryIconRegistry";
+import { CategorySpendingTable } from "../components/CategorySpendingTable";
 import { CategorySummaryStrip } from "../components/CategorySummaryStrip";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../context/AuthContext";
@@ -13,11 +15,19 @@ import { ApiError } from "../services/api";
 import { CATEGORY_BUILT_IN, CATEGORY_IN_USE, CATEGORY_NOT_FOUND } from "../services/categoryService";
 import type { CategorySummary } from "../types/category";
 import { EMPTY_CATEGORY_DRAFT, type CategoryDraft } from "../utils/categoryForm";
+import {
+  DEFAULT_DISCOVERY,
+  discoverCategories,
+  matchesFilter,
+  matchesSearch,
+  type CategoryDiscovery,
+} from "../utils/categoryDiscovery";
 import { formatReportingMonth, monthSpendingTotal } from "../utils/categorySummary";
 import { categoryCardIds } from "../utils/categoryUsage";
 
 const LIST_HEADING_ID = "categories-list-heading";
 const CREATE_BUTTON_ID = "categories-create-button";
+const SEARCH_ID = "category-search";
 const NOT_FOUND_MESSAGE = "This category no longer exists. The list has been refreshed.";
 
 type Workflow =
@@ -41,12 +51,22 @@ function CategoriesPage() {
   const [workflow, setWorkflow] = useState<Workflow>({ kind: "none" });
   const [pageError, setPageError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  // Search, filter, and sort for the cards only (never the summary or spending table).
+  const [discovery, setDiscovery] = useState<CategoryDiscovery>(DEFAULT_DISCOVERY);
+  // The category just worked on stays visible until the toolbar next changes, so a rename
+  // or a cancel never makes the card (and its focus target) vanish.
+  const [recentId, setRecentId] = useState<number | null>(null);
   // Element to focus once the list has re-rendered, with a fallback if it is gone.
   const pendingFocus = useRef<{ id: string; fallback: string } | null>(null);
 
   const monthLabel = summary ? formatReportingMonth(summary.month, summary.year) : "";
   const monthName = monthLabel.split(" ")[0];
   const rows = summary?.categories ?? [];
+  const workflowId = workflow.kind === "edit" || workflow.kind === "delete" ? workflow.id : null;
+  const visible = discoverCategories(rows, discovery, [workflowId, recentId]);
+  const keptVisible = visible.find((row) => !matchesSearch(row, discovery.query) || !matchesFilter(row, discovery.filter));
+  const keptVisibleNote = keptVisible
+    && `“${keptVisible.name}” is shown because you’re working on it, though it doesn’t match the current search or filter.`;
 
   useEffect(() => {
     const target = pendingFocus.current;
@@ -62,9 +82,20 @@ function CategoriesPage() {
     pendingFocus.current = { id, fallback };
   }
 
-  function close(focusId: string): void {
+  function close(focusId: string, categoryId?: number): void {
     setWorkflow({ kind: "none" });
+    if (categoryId !== undefined) setRecentId(categoryId);
     focusAfterRender(focusId);
+  }
+
+  function changeDiscovery(next: CategoryDiscovery): void {
+    setDiscovery(next);
+    setRecentId(null);
+  }
+
+  function clearDiscovery(): void {
+    changeDiscovery(DEFAULT_DISCOVERY);
+    focusAfterRender(SEARCH_ID); // The Clear button disappears, so keep focus nearby.
   }
 
   /** A category changed elsewhere: refresh both lists and explain. */
@@ -81,6 +112,7 @@ function CategoriesPage() {
     setWorkflow({ kind: "none" });
     setPageError("");
     setStatusMessage(`Created “${created.name}”.`);
+    setRecentId(created.id);
     focusAfterRender(categoryCardIds(created.id).heading);
     await reload();
   }
@@ -95,6 +127,7 @@ function CategoriesPage() {
       setWorkflow({ kind: "none" });
       setPageError("");
       setStatusMessage(`Saved “${updated.name}”.`);
+      setRecentId(category.id);
       focusAfterRender(categoryCardIds(category.id).edit);
       await reload();
     } catch (caught) {
@@ -109,9 +142,10 @@ function CategoriesPage() {
   }
 
   async function handleDelete(category: CategorySummary): Promise<void> {
-    // Decide where focus goes before the card disappears: next card, previous, or the list.
-    const index = rows.findIndex((row) => row.id === category.id);
-    const neighbour = rows[index + 1] ?? rows[index - 1];
+    // Decide where focus goes before the card disappears: the next card as currently shown
+    // (searched, filtered, and sorted), else the previous one, else the list.
+    const index = visible.findIndex((row) => row.id === category.id);
+    const neighbour = visible[index + 1] ?? visible[index - 1];
     const ids = categoryCardIds(category.id);
 
     try {
@@ -125,6 +159,7 @@ function CategoriesPage() {
       if (caught instanceof ApiError && caught.code === CATEGORY_IN_USE) {
         // The usage changed after the page loaded; the server is authoritative.
         setWorkflow({ kind: "none" });
+        setRecentId(category.id);
         setPageError(
           `“${category.name}” is still used by transactions or budgets, so it can’t be deleted. `
           + "Change the category on those transactions and budgets, or delete them, then try again.",
@@ -137,6 +172,7 @@ function CategoriesPage() {
         handleGone(caught.message);
       } else {
         setWorkflow({ kind: "none" });
+        setRecentId(category.id);
         setPageError("Unable to delete the category. Please try again.");
         focusAfterRender(ids.delete);
       }
@@ -154,7 +190,7 @@ function CategoriesPage() {
           pendingLabel="Saving…"
           failureMessage="Unable to save the category. Please try again."
           onSubmit={(draft) => handleSave(category, draft)}
-          onCancel={() => close(ids.edit)}
+          onCancel={() => close(ids.edit, category.id)}
         />
       );
     }
@@ -163,7 +199,7 @@ function CategoriesPage() {
         <CategoryDeleteConfirm
           categoryName={category.name}
           onConfirm={() => handleDelete(category)}
-          onCancel={() => close(ids.delete)}
+          onCancel={() => close(ids.delete, category.id)}
         />
       );
     }
@@ -215,13 +251,15 @@ function CategoriesPage() {
 
       {summary && (
         <>
-          {rows.length > 0 && <CategorySummaryStrip rows={rows} monthLabel={monthLabel} />}
+          {rows.length > 0 && (
+            <>
+              <CategorySummaryStrip rows={rows} monthLabel={monthLabel} />
+              <CategorySpendingTable categories={rows} monthLabel={monthLabel} />
+            </>
+          )}
 
           <div className="categories-page__list-header">
-            <div>
-              <h2 id={LIST_HEADING_ID} tabIndex={-1}>All categories</h2>
-              <p>{rows.length} {rows.length === 1 ? "category" : "categories"}, A–Z</p>
-            </div>
+            <h2 id={LIST_HEADING_ID} tabIndex={-1}>All categories</h2>
             {workflow.kind !== "create" && (
               <button
                 id={CREATE_BUTTON_ID}
@@ -253,11 +291,29 @@ function CategoriesPage() {
             </div>
           )}
 
+          {rows.length > 0 && (
+            <CategoryDiscoveryToolbar
+              discovery={discovery}
+              onChange={changeDiscovery}
+              onClear={clearDiscovery}
+              shown={visible.length}
+              total={rows.length}
+              keptVisibleNote={keptVisibleNote || undefined}
+            />
+          )}
+
           {rows.length === 0 ? (
             <p className="empty-state">You don’t have any categories yet.</p>
+          ) : visible.length === 0 ? (
+            <div className="categories-page__no-results">
+              <p>No categories match your search and filter.</p>
+              <button type="button" className="button button--secondary" onClick={clearDiscovery}>
+                Show all categories
+              </button>
+            </div>
           ) : (
             <ul className="category-grid">
-              {rows.map((category) => (
+              {visible.map((category) => (
                 <li key={category.id}>
                   <CategoryCard
                     category={category}
