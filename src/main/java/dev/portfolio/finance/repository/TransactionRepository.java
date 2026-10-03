@@ -15,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 import dev.portfolio.finance.entity.Transaction;
 import dev.portfolio.finance.entity.TransactionType;
 import dev.portfolio.finance.repository.projection.CategorySpendingProjection;
+import dev.portfolio.finance.repository.projection.CategoryTransactionUsageProjection;
 
 public interface TransactionRepository
         extends JpaRepository<Transaction, Long>,
@@ -104,6 +105,32 @@ public interface TransactionRepository
     List<CategorySpendingProjection> findSpendingByCategory(
             @Param("userId") Long userId,
             @Param("type") TransactionType type,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
+
+    /**
+     * Usage per category in one grouped query: counts include income, spending sums only
+     * {@code expense}. Categories without transactions are absent; callers treat them as zero.
+     */
+    @Query("""
+            SELECT
+                t.category.id AS categoryId,
+                COUNT(t) AS transactionCount,
+                MAX(t.transactionDate) AS lastTransactionDate,
+                COALESCE(SUM(CASE WHEN t.type = :expense THEN t.amount ELSE 0 END), 0) AS allTimeSpent,
+                COALESCE(SUM(CASE
+                    WHEN t.type = :expense
+                        AND t.transactionDate >= :startDate
+                        AND t.transactionDate <= :endDate
+                    THEN t.amount ELSE 0 END), 0) AS currentMonthSpent
+            FROM Transaction t
+            WHERE t.user.id = :userId
+            GROUP BY t.category.id
+            """)
+    List<CategoryTransactionUsageProjection> summarizeUsageByCategory(
+            @Param("userId") Long userId,
+            @Param("expense") TransactionType expense,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate
     );

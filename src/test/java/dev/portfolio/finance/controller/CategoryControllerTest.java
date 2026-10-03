@@ -28,6 +28,14 @@ import dev.portfolio.finance.exception.category.CategoryNotFoundException;
 import dev.portfolio.finance.exception.category.DuplicateCategoryException;
 import dev.portfolio.finance.exception.category.InvalidCategoryNameException;
 import dev.portfolio.finance.service.CategoryService;
+import dev.portfolio.finance.service.CategorySummaryService;
+import dev.portfolio.finance.dto.category.CategorySummaryListResponse;
+import dev.portfolio.finance.dto.category.CategorySummaryResponse;
+import dev.portfolio.finance.dto.category.CurrentMonthBudgetResponse;
+import dev.portfolio.finance.entity.BudgetStatus;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
 import dev.portfolio.finance.dto.category.CategoryResponse;
 import dev.portfolio.finance.dto.category.UpdateCategoryRequest;
 
@@ -40,6 +48,9 @@ class CategoryControllerTest {
     @Mock
     private CategoryService categoryService;
 
+    @Mock
+    private CategorySummaryService categorySummaryService;
+
     private MockMvc mockMvc;
 
     private TestingAuthenticationToken authentication;
@@ -51,7 +62,8 @@ class CategoryControllerTest {
     void setUp() {
         CategoryController controller =
                 new CategoryController(
-                        categoryService
+                        categoryService,
+                        categorySummaryService
                 );
 
         mockMvc =
@@ -568,4 +580,40 @@ void shouldUpdateCategoryWhenRequestIsValid()
         return "{\"name\": \"" + name + "\", \"budgetEnabled\": true"
                 + (iconKey == null ? "" : ", \"iconKey\": \"" + iconKey.replace("\"", "\\\"") + "\"") + "}";
     }
+
+@Test
+void shouldReturnTheCategorySummaryForTheAuthenticatedUser()
+        throws Exception {
+
+    when(categorySummaryService.getSummary(TEST_EMAIL)).thenReturn(new CategorySummaryListResponse(10, 2026, List.of(
+            new CategorySummaryResponse(7L, "Pet Care", "paw-print", false, true, 3, 1,
+                    LocalDate.of(2026, 10, 2), new BigDecimal("60.00"), new BigDecimal("140.00"),
+                    new CurrentMonthBudgetResponse(4L, new BigDecimal("100.00"), new BigDecimal("60.00"),
+                            new BigDecimal("40.00"), new BigDecimal("60.00"), BudgetStatus.CAUTION),
+                    false),
+            new CategorySummaryResponse(8L, "Unused", "tag", false, true, 0, 0,
+                    null, new BigDecimal("0.00"), new BigDecimal("0.00"), null, true))));
+
+    mockMvc.perform(get("/api/categories/summary").principal(authentication))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.month").value(10))
+            .andExpect(jsonPath("$.year").value(2026))
+            .andExpect(jsonPath("$.categories[0].id").value(7))
+            .andExpect(jsonPath("$.categories[0].iconKey").value("paw-print"))
+            .andExpect(jsonPath("$.categories[0].budgetEnabled").value(true))
+            .andExpect(jsonPath("$.categories[0].transactionCount").value(3))
+            .andExpect(jsonPath("$.categories[0].budgetCount").value(1))
+            .andExpect(jsonPath("$.categories[0].lastTransactionDate").value("2026-10-02"))
+            .andExpect(jsonPath("$.categories[0].currentMonthSpent").value(60.00))
+            .andExpect(jsonPath("$.categories[0].allTimeSpent").value(140.00))
+            .andExpect(jsonPath("$.categories[0].currentMonthBudget.budgetId").value(4))
+            .andExpect(jsonPath("$.categories[0].currentMonthBudget.status").value("CAUTION"))
+            .andExpect(jsonPath("$.categories[0].canDelete").value(false))
+            .andExpect(jsonPath("$.categories[1].lastTransactionDate").isEmpty())
+            .andExpect(jsonPath("$.categories[1].currentMonthBudget").isEmpty())
+            .andExpect(jsonPath("$.categories[1].canDelete").value(true));
+
+    verify(categorySummaryService).getSummary(TEST_EMAIL);
+    verify(categoryService, never()).getCategoryById(any(), any());
+}
 }
