@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { categoryCardIds, deleteBlockedReason } from "./categoryUsage";
+import { categoryCardIds, deleteBlockedReason, monthActivity } from "./categoryUsage";
 
 describe("deleteBlockedReason", () => {
   it.each([
@@ -28,5 +28,15 @@ describe("categoryCardIds", () => {
       delete: "category-7-delete",
       deleteReason: "category-7-delete-reason",
     });
+  });
+});
+
+describe("monthActivity", () => {
+  it.each([
+    [0, "0 transactions in October"],
+    [1, "1 transaction in October"],
+    [2, "2 transactions in October"],
+  ])("describes %i this month", (count, text) => {
+    expect(monthActivity(count, "October")).toBe(text);
   });
 });

@@ -122,7 +122,8 @@ describe("CategoriesPage", () => {
     const progress = within(groceries).getByRole("progressbar", { name: "Groceries budget used" });
     expect(progress).toHaveAttribute("aria-valuenow", "75");
     expect(progress).toHaveAttribute("aria-valuetext", "75.0% used");
-    expect(activity("Groceries")).toHaveTextContent("6 transactions · 2 budgets · Last used Oct 12, 2026");
+    // This month's count (4), not the all-time 6, and no budget count.
+    expect(activity("Groceries")).toHaveTextContent(/^4 transactions in October · Last used Oct 12, 2026$/);
     expect(within(groceries).getByText("Last used Oct 12, 2026")).toHaveClass("category-card__last-used");
   });
 
@@ -168,14 +169,45 @@ describe("CategoriesPage", () => {
     expect(within(card("Savings")).getByText("On Track")).toBeInTheDocument();
   });
 
-  it("describes unused categories and singular counts", async () => {
-    vi.mocked(getCategorySummary).mockResolvedValue(summaryList([unusedRow, summaryRow({
-      id: 31, name: "Gifts", transactionCount: 1, budgetCount: 1, lastTransactionDate: "2026-09-30",
-    })]));
+  it("describes this month's activity: singular, plural, zero, and never used", async () => {
+    vi.mocked(getCategorySummary).mockResolvedValue(summaryList([unusedRow,
+      summaryRow({ id: 31, name: "Gifts", transactionCount: 1, currentMonthTransactionCount: 1,
+        lastTransactionDate: "2026-10-03" }),
+      summaryRow({ id: 32, name: "Coffee", transactionCount: 9, currentMonthTransactionCount: 2,
+        lastTransactionDate: "2026-10-03" }),
+      // Busy in the past, quiet this month: zero now, with its real last-used date.
+      summaryRow({ id: 33, name: "Holidays", transactionCount: 5, currentMonthTransactionCount: 0,
+        budgetCount: 2, canDelete: false, lastTransactionDate: "2026-09-30" }),
+    ]));
     await renderPage();
 
     expect(activity("Hobbies")).toHaveTextContent(/^Not used yet$/);
-    expect(activity("Gifts")).toHaveTextContent("1 transaction · 1 budget · Last used Sep 30, 2026");
+    expect(activity("Gifts")).toHaveTextContent(/^1 transaction in October · Last used Oct 3, 2026$/);
+    expect(activity("Coffee")).toHaveTextContent(/^2 transactions in October · Last used Oct 3, 2026$/);
+    expect(activity("Holidays")).toHaveTextContent(/^0 transactions in October · Last used Sep 30, 2026$/);
+    expect(screen.queryByText(/budgets? ·|· \d+ budgets?/)).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/null|Invalid Date/);
+  });
+
+  it("names the server's reporting month in the activity line, not the browser's", async () => {
+    vi.mocked(getCategorySummary).mockResolvedValue(summaryList([groceriesRow], 3, 2025));
+    await renderPage();
+
+    expect(activity("Groceries")).toHaveTextContent(/^4 transactions in March · /);
+  });
+
+  it("keeps a quiet but historically used category undeletable, with its all-time reason", async () => {
+    vi.mocked(getCategorySummary).mockResolvedValue(summaryList([summaryRow({
+      id: 33, name: "Holidays", transactionCount: 5, currentMonthTransactionCount: 0,
+      budgetCount: 2, canDelete: false, lastTransactionDate: "2026-09-30",
+    })]));
+    const user = await renderPage();
+    await user.click(actionsTrigger("Holidays"));
+
+    const remove = screen.getByRole("button", { name: "Delete Holidays" });
+    expect(remove).toHaveAttribute("aria-disabled", "true");
+    expect(remove).toHaveAccessibleDescription(
+      "Used by 5 transactions and 2 budgets. Change or remove those first to delete this category.");
   });
 
   it("uses the account's date format", async () => {

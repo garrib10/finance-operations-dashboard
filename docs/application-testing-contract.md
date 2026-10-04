@@ -300,7 +300,7 @@ server's reporting month (issue #100). No new `data-testid` values are added.
 | Card figures | "Spent in {Month}", "Share of spending" (only when the month has spending) |
 | Budget progress | `role="progressbar"` named "{Category} budget used", `aria-valuenow` 0–100, `aria-valuetext` "{n}% used"; status text such as "Warning" |
 | No budget | "No budget for {Month}", shown only for categories that take budgets |
-| Activity | "{n} transactions · {m} budgets · Last used {date}" or "Not used yet" |
+| Activity | "{n} transaction(s) in {Month} · Last used {date}" (this month's count, income and expense) or "Not used yet" |
 | Spending table | `table` named "Spending in {Month Year}" with column headers Category, Spent, Share and a row header per category with spending; "No spending recorded for {Month Year}." when empty; rounding note "Percentages are rounded, so they may not add up to exactly 100%." |
 | Toolbar | search "Search categories", selects "Filter categories" (All categories, Custom, Built-in, Unused, No budget this month) and "Sort categories" (Name, This month’s spending, Most used); `role="status"` "Showing {n} of {total} categories"; button "Clear category filters" when not at the defaults |
 | No matches | "No categories match your search and filter." with button "Show all categories" |

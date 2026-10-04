@@ -62,8 +62,10 @@ export interface CategorySummary {
   iconKey: CategoryIconKey;
   builtIn: boolean;
   budgetEnabled: boolean;
-  /** Income and expense transactions, any month. */
+  /** Income and expense transactions, any month. Decides deletion with budgetCount. */
   transactionCount: number;
+  /** Income and expense transactions in the response's reporting month only. */
+  currentMonthTransactionCount: number;
   /** Budgets in any month or year. */
   budgetCount: number;
   /** ISO date, or null when the category has never been used. */

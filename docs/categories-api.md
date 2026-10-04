@@ -110,6 +110,7 @@ Read-only; it takes no parameters and never accepts a user or category ID.
       "builtIn": false,
       "budgetEnabled": true,
       "transactionCount": 5,
+      "currentMonthTransactionCount": 2,
       "budgetCount": 3,
       "lastTransactionDate": "2026-10-20",
       "currentMonthSpent": 60.00,
@@ -131,8 +132,9 @@ Read-only; it takes no parameters and never accepts a user or category ID.
       "builtIn": true,
       "budgetEnabled": false,
       "transactionCount": 2,
+      "currentMonthTransactionCount": 0,
       "budgetCount": 0,
-      "lastTransactionDate": "2026-10-01",
+      "lastTransactionDate": "2026-09-30",
       "currentMonthSpent": 0.00,
       "allTimeSpent": 0.00,
       "currentMonthBudget": null,
@@ -145,6 +147,7 @@ Read-only; it takes no parameters and never accepts a user or category ID.
       "builtIn": false,
       "budgetEnabled": true,
       "transactionCount": 0,
+      "currentMonthTransactionCount": 0,
       "budgetCount": 0,
       "lastTransactionDate": null,
       "currentMonthSpent": 0.00,
@@ -156,16 +159,17 @@ Read-only; it takes no parameters and never accepts a user or category ID.
 }
 ```
 
-The rows show a used custom category with this month's budget, a built-in income
-category (income is counted in `transactionCount` but never as spending, and built-ins
-can never be deleted), and a never-used custom category (`null` date and budget,
-deletable).
+The rows show a used custom category with this month's budget and activity, a built-in
+income category used before but not this month (`currentMonthTransactionCount` is `0`;
+income counts as a transaction but never as spending, and built-ins can never be deleted),
+and a never-used custom category (`null` date and budget, deletable).
 
 | Field | Meaning |
 | --- | --- |
 | `month`, `year` | The server's reporting month: the whole calendar month containing today in the server's default time zone, the same month the dashboard uses. |
 | `categories` | Every category the user owns, ordered by name, then ID. Empty only if the user has no categories. |
-| `transactionCount` | All of the category's transactions, income and expense, in any month. |
+| `transactionCount` | All of the category's transactions, income and expense, in any month. With `budgetCount` it decides `canDelete`. |
+| `currentMonthTransactionCount` | The category's transactions, income and expense, in the reporting month given by the top-level `month` and `year` (inclusive of the 1st and last day, including future-dated ones). Always present, `0` when none. It is for display only and never affects `canDelete`; spending still counts expenses only. |
 | `budgetCount` | The category's budgets in any month or year. |
 | `lastTransactionDate` | The latest transaction date (`yyyy-MM-dd`), including future-dated ones; `null` when never used. |
 | `currentMonthSpent`, `allTimeSpent` | Sums of **expense** transactions only, in the reporting month and in total. Income never counts as spending. Always present, two decimal places (`0.00` when none). |
@@ -178,7 +182,9 @@ arithmetic. Unauthenticated requests receive `401`.
 **Queries.** The summary runs a fixed five statements however many categories exist: the
 user, the categories, one grouped transaction aggregate (counts, latest date, and both
 expense sums by conditional aggregation), one grouped budget count, and the reporting
-month's budgets. Transactions and budgets are aggregated separately rather than joined
+month's budgets. The transaction aggregate computes both counts, the latest date, and both
+expense sums in that one grouped statement (`COUNT(CASE …)` for this month's count), so
+adding `currentMonthTransactionCount` added no query. Transactions and budgets are aggregated separately rather than joined
 together, so no count or sum is multiplied. `CategorySummaryQueryCountTest` asserts the
 same statement count for 2 and 12 categories.
 

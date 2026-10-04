@@ -6,7 +6,7 @@ import type { CategorySummary } from "../types/category";
 import { clampProgressPercentage, formatBudgetStatus } from "../utils/budgetStatus";
 import { formatShare, spendingShare } from "../utils/categorySummary";
 import { ADD_TRANSACTION_PARAM, CATEGORY_PARAM } from "../utils/categoryDeepLink";
-import { categoryCardIds, deleteBlockedReason } from "../utils/categoryUsage";
+import { categoryCardIds, deleteBlockedReason, monthActivity } from "../utils/categoryUsage";
 import { formatCurrency, formatDate } from "../utils/formatters";
 import { CategoryActionsMenu } from "./CategoryActionsMenu";
 import { CategoryIcon } from "./CategoryIcon";
@@ -30,9 +30,6 @@ interface CategoryCardProps {
 }
 
 
-function plural(count: number, word: string): string {
-  return `${count} ${word}${count === 1 ? "" : "s"}`;
-}
 
 /**
  * One category's month at a glance. A budget that exists is always shown; "No budget" is
@@ -52,7 +49,6 @@ export function CategoryCard({
   const ids = categoryCardIds(category.id);
   const headingId = ids.heading;
   const budget = category.currentMonthBudget;
-  const unused = category.transactionCount === 0 && category.budgetCount === 0;
 
   return (
     <article className="category-card" aria-labelledby={headingId}>
@@ -128,20 +124,17 @@ export function CategoryCard({
         )
       )}
 
+      {/* This month's activity; the all-time counts only decide whether Delete is available. */}
       <p className="category-card__usage">
-        {unused ? (
+        {category.lastTransactionDate === null ? (
           "Not used yet"
         ) : (
           <>
-            {plural(category.transactionCount, "transaction")} · {plural(category.budgetCount, "budget")}
-            {category.lastTransactionDate && (
-              <>
-                {" · "}
-                <span className="category-card__last-used">
-                  Last used {formatDate(category.lastTransactionDate, dateFormat)}
-                </span>
-              </>
-            )}
+            {monthActivity(category.currentMonthTransactionCount, monthName)}
+            {" · "}
+            <span className="category-card__last-used">
+              Last used {formatDate(category.lastTransactionDate, dateFormat)}
+            </span>
           </>
         )}
       </p>

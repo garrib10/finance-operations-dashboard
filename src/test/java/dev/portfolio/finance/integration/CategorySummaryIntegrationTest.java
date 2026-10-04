@@ -60,6 +60,9 @@ class CategorySummaryIntegrationTest {
         createCategory(owner, "Unused Hobby", "tag");
         transaction(owner, pets, "EXPENSE", "12.50", today);
         transaction(owner, pets, "INCOME", "3.00", today);
+        // Just outside the server's month on both sides: all time, but not this month.
+        transaction(owner, pets, "EXPENSE", "7.00", today.withDayOfMonth(1).minusDays(1));
+        transaction(owner, pets, "EXPENSE", "8.00", today.withDayOfMonth(1).plusMonths(1));
 
         JsonNode summary = summary(owner);
 
@@ -70,15 +73,19 @@ class CategorySummaryIntegrationTest {
         assertThat(petRow.get("iconKey").asString()).isEqualTo("paw-print");
         assertThat(petRow.get("builtIn").asBoolean()).isFalse();
         assertThat(petRow.get("budgetEnabled").asBoolean()).isTrue();
-        assertThat(petRow.get("transactionCount").asLong()).isEqualTo(2);
+        assertThat(petRow.get("transactionCount").asLong()).isEqualTo(4);
+        assertThat(petRow.get("currentMonthTransactionCount").isIntegralNumber()).isTrue();
+        assertThat(petRow.get("currentMonthTransactionCount").asLong()).isEqualTo(2);
         assertThat(petRow.get("budgetCount").asLong()).isZero();
-        assertThat(petRow.get("lastTransactionDate").asString()).isEqualTo(today.toString());
+        assertThat(petRow.get("lastTransactionDate").asString())
+                .isEqualTo(today.withDayOfMonth(1).plusMonths(1).toString());
         assertThat(petRow.get("currentMonthSpent").decimalValue()).isEqualByComparingTo("12.50");
-        assertThat(petRow.get("allTimeSpent").decimalValue()).isEqualByComparingTo("12.50");
+        assertThat(petRow.get("allTimeSpent").decimalValue()).isEqualByComparingTo("27.50");
         assertThat(petRow.get("currentMonthBudget").isNull()).isTrue();
         assertThat(petRow.get("canDelete").asBoolean()).isFalse();
 
         JsonNode unused = row(summary, "Unused Hobby");
+        assertThat(unused.get("currentMonthTransactionCount").asLong()).isZero();
         assertThat(unused.get("lastTransactionDate").isNull()).isTrue();
         assertThat(unused.get("canDelete").asBoolean()).isTrue();
 
@@ -116,6 +123,7 @@ class CategorySummaryIntegrationTest {
         JsonNode petRow = row(ownerSummary, "Pet Care");
         assertThat(petRow.get("id").asLong()).isEqualTo(ownerPets);
         assertThat(petRow.get("allTimeSpent").decimalValue()).isEqualByComparingTo("10.00");
+        assertThat(petRow.get("currentMonthTransactionCount").asLong()).isEqualTo(1); // Not the other user's.
         assertThat(petRow.get("budgetCount").asLong()).isZero();
     }
 

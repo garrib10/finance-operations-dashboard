@@ -92,6 +92,7 @@ public class CategorySummaryService {
             CurrentMonthBudgetProjection monthBudget
     ) {
         long transactionCount = usage == null ? 0 : usage.getTransactionCount();
+        long currentMonthTransactionCount = usage == null ? 0 : count(usage.getCurrentMonthTransactionCount());
         long budgets = budgetCount == null ? 0 : budgetCount.getBudgetCount();
         BigDecimal currentMonthSpent = usage == null ? ZERO : money(usage.getCurrentMonthSpent());
 
@@ -102,6 +103,7 @@ public class CategorySummaryService {
                 category.isBuiltIn(),
                 category.isBudgetEnabled(),
                 transactionCount,
+                currentMonthTransactionCount,
                 budgets,
                 usage == null ? null : usage.getLastTransactionDate(),
                 currentMonthSpent,
@@ -126,6 +128,11 @@ public class CategorySummaryService {
                 metrics.percentageUsed(),
                 metrics.status()
         );
+    }
+
+    /** COUNT never returns null for a group; guarded anyway so the public field is never null. */
+    private static long count(Long value) {
+        return value == null ? 0 : value;
     }
 
     /** Never null (COALESCE sums, NOT NULL limits); COALESCE(..., 0) can come back with scale 0. */

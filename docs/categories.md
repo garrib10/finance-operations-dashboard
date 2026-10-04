@@ -191,7 +191,12 @@ managed. It shows each category's usage for the server's reporting month (see th
 - **Spending distribution** (below), then **All categories**: the toolbar and one card per
   category with its icon, name, a "Built-in" or "Custom" text badge, this month's spending
   and share, budget progress and status (or "No budget for {Month}" when it takes budgets),
-  usage counts, and the last-used date.
+  and this month's activity (issue #102): "1 transaction in October" / "2 transactions in
+  October" (income and expense, the server's month) followed by "· Last used {date}", or
+  "Not used yet" when the category has never had a transaction. The all-time transaction
+  and budget counts no longer appear on the card; they still decide whether Delete is
+  available, so a category that is quiet this month but was used before stays protected
+  and its Delete reason still quotes the all-time counts.
 
 The page offers:
 

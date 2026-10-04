@@ -47,6 +47,8 @@ class CategorySummaryMySqlIT extends MySqlIntegrationTestBase {
 
         CategorySummaryResponse petRow = row(email, pets.getId());
         assertThat(petRow.transactionCount()).isEqualTo(4);
+        // COUNT(CASE …) on MySQL: today's two expenses and the income, not last month's expense.
+        assertThat(petRow.currentMonthTransactionCount()).isEqualTo(3);
         assertThat(petRow.budgetCount()).isEqualTo(2);
         assertThat(petRow.lastTransactionDate()).isEqualTo(today);
         // Exact decimal arithmetic: 0.10 + 0.20 is 0.30, never a binary floating-point approximation.
@@ -56,6 +58,7 @@ class CategorySummaryMySqlIT extends MySqlIntegrationTestBase {
         assertThat(petRow.currentMonthBudget().status()).isEqualTo(BudgetStatus.WARNING);
 
         CategorySummaryResponse unusedRow = row(email, unused.getId());
+        assertThat(unusedRow.currentMonthTransactionCount()).isZero();
         assertThat(unusedRow.currentMonthSpent()).isEqualTo(new BigDecimal("0.00"));
         assertThat(unusedRow.allTimeSpent()).isEqualTo(new BigDecimal("0.00"));
         assertThat(unusedRow.canDelete()).isTrue();
