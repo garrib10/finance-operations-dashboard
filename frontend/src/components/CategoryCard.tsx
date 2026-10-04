@@ -59,8 +59,12 @@ export function CategoryCard({
         <span className="category-card__icon">
           <CategoryIcon iconKey={category.iconKey} className="category-card__icon-svg" />
         </span>
-        <h3 id={headingId} className="category-card__name" tabIndex={-1}>{category.name}</h3>
-        <span className="category-badge">{category.builtIn ? "Built-in" : "Custom"}</span>
+        {/* Name and badge wrap together, so a narrow card moves the badge under the name
+            instead of squeezing the name to a letter per line. */}
+        <div className="category-card__title">
+          <h3 id={headingId} className="category-card__name" tabIndex={-1}>{category.name}</h3>
+          <span className="category-badge">{category.builtIn ? "Built-in" : "Custom"}</span>
+        </div>
         {/* Built-ins cannot be changed, so they get no actions; hidden during a workflow,
             which shows its own controls in the card. */}
         {!category.builtIn && !workflow && (

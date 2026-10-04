@@ -14,7 +14,7 @@ vi.mock("../services/categoryService", async (importOriginal) => ({
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../context/AuthContext";
 import { CategoryProvider } from "../context/CategoryProvider";
 import { ApiError } from "../services/api";
@@ -31,6 +31,7 @@ import {
   summaryRow,
   unusedRow,
 } from "../test/categorySummaryFixtures";
+import { CATEGORIES_OTHERS_EXPANDED_KEY } from "../utils/categoriesSectionPreference";
 import CategoriesPage from "./CategoriesPage";
 
 const allRows = [groceriesRow, salaryRow, petCareRow, unusedRow];
@@ -65,6 +66,9 @@ const cardNames = () => screen.queryAllByRole("article").map((article) => within
 describe("CategoriesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Most tests are about workflows, not sections, so they start with "Other categories"
+    // open (the user's saved choice); the "sections" tests start from the default instead.
+    window.localStorage.setItem(CATEGORIES_OTHERS_EXPANDED_KEY, "true");
     vi.mocked(useAuth).mockReturnValue(accountContext());
     vi.mocked(getCategorySummary).mockResolvedValue(summaryList(allRows));
     vi.mocked(categoryService.getCategories).mockResolvedValue(sampleCategories);
@@ -222,10 +226,10 @@ describe("CategoriesPage", () => {
     expect(within(card("Pet Care")).getByText(/Last used 2026-10-02/)).toBeInTheDocument();
   });
 
-  it("lists every category by name by default, whatever order the API returns", async () => {
+  it("lists active categories first, each section by name by default, whatever order the API returns", async () => {
     await renderPage();
 
-    expect(cardNames()).toEqual(["Groceries", "Hobbies", "Income", "Pet Care"]);
+    expect(cardNames()).toEqual(["Groceries", "Pet Care", "Hobbies", "Income"]);
     expect(screen.getByText("Showing 4 of 4 categories")).toHaveAttribute("role", "status");
   });
 
@@ -344,7 +348,7 @@ describe("CategoriesPage", () => {
       ["Built-in", ["Groceries", "Income"]],
       ["Unused", ["Hobbies"]],
       ["No budget this month", ["Hobbies", "Income"]],
-      ["All categories", ["Groceries", "Hobbies", "Income", "Pet Care"]],
+      ["All categories", ["Groceries", "Pet Care", "Hobbies", "Income"]],
     ])("filters to %s", async (option, expected) => {
       const user = await renderPage();
       await user.selectOptions(screen.getByLabelText("Filter categories"), screen.getByRole("option", { name: option }));
@@ -356,7 +360,7 @@ describe("CategoriesPage", () => {
     it.each([
       ["This month’s spending", ["Groceries", "Pet Care", "Hobbies", "Income"]],
       ["Most used", ["Groceries", "Pet Care", "Income", "Hobbies"]],
-      ["Name", ["Groceries", "Hobbies", "Income", "Pet Care"]],
+      ["Name", ["Groceries", "Pet Care", "Hobbies", "Income"]],
     ])("sorts by %s", async (option, expected) => {
       const user = await renderPage();
       await user.selectOptions(screen.getByLabelText("Sort categories"), screen.getByRole("option", { name: option }));
@@ -390,7 +394,7 @@ describe("CategoriesPage", () => {
 
       expect(search()).toHaveValue("");
       expect(screen.getByLabelText("Sort categories")).toHaveValue("name");
-      expect(cardNames()).toEqual(["Groceries", "Hobbies", "Income", "Pet Care"]);
+      expect(cardNames()).toEqual(["Groceries", "Pet Care", "Hobbies", "Income"]);
       expect(screen.queryByRole("button", { name: "Clear category filters" })).not.toBeInTheDocument();
       await waitFor(() => expect(search()).toHaveFocus());
     });
@@ -583,6 +587,223 @@ describe("CategoriesPage", () => {
       expect(await screen.findByText(/latest category summary could not be loaded/)).toBeInTheDocument();
       expect(noBudgetCount()).toHaveTextContent(/^1$/);
       expect(warning("Dining")).toHaveTextContent("$1.00 spent in October with no budget.");
+    });
+  });
+
+  describe("sections", () => {
+    // Groceries and Pet Care are active (spending or a budget this month); Hobbies and
+    // Income are not. These tests start from the default: "Other categories" closed.
+    const KEY = CATEGORIES_OTHERS_EXPANDED_KEY;
+    const activeSection = () => screen.getByRole("region", { name: "Active this month" });
+    const otherSection = () => screen.getByRole("region", { name: /^Other categories · \d+$/ });
+    const namesIn = (section: HTMLElement) =>
+      within(section).queryAllByRole("article").map((article) => within(article).getByRole("heading").textContent);
+    const toggle = () => screen.queryByRole("button", { name: /(Show|Hide) other categories/ });
+
+    beforeEach(() => {
+      window.localStorage.removeItem(KEY);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("shows Active this month first, then a closed Other categories, each category once", async () => {
+      await renderPage();
+
+      const regions = screen.getAllByRole("region").filter((region) => /categories-(active|other)-heading/.test(region.getAttribute("aria-labelledby") ?? ""));
+      expect(regions).toEqual([activeSection(), otherSection()]);
+      expect(namesIn(activeSection())).toEqual(["Groceries", "Pet Care"]);
+      expect(within(otherSection()).getByRole("heading", { level: 2 })).toHaveTextContent("Other categories · 2");
+      expect(namesIn(otherSection())).toEqual([]); // Closed: not rendered, so not focusable.
+      expect(toggle()).toHaveAccessibleName("Show other categories");
+      expect(toggle()).toHaveAttribute("aria-expanded", "false");
+      expect(toggle()).toHaveAttribute("aria-controls", "categories-other-list");
+      expect(document.getElementById("categories-other-list")).not.toBeVisible();
+      expect(screen.getByText("Showing 2 of 4 categories")).toBeInTheDocument();
+    });
+
+    it("opens and closes with the toggle, saving only the user's choice", async () => {
+      const user = await renderPage();
+      await user.click(toggle()!);
+
+      expect(toggle()).toHaveAccessibleName("Hide other categories");
+      expect(toggle()).toHaveAttribute("aria-expanded", "true");
+      expect(namesIn(otherSection())).toEqual(["Hobbies", "Income"]);
+      expect(window.localStorage.getItem(KEY)).toBe("true");
+      // No category appears twice anywhere on the page.
+      expect(cardNames()).toEqual(["Groceries", "Pet Care", "Hobbies", "Income"]);
+
+      await user.click(toggle()!);
+      expect(namesIn(otherSection())).toEqual([]);
+      expect(window.localStorage.getItem(KEY)).toBe("false");
+    });
+
+    it.each([["true", true], ["false", false], ["yes", false]])("restores a saved %j as %s", async (stored, open) => {
+      window.localStorage.setItem(KEY, stored);
+      await renderPage();
+
+      expect(toggle()).toHaveAttribute("aria-expanded", String(open));
+    });
+
+    it("works without storage: unreadable means closed, and the toggle still works", async () => {
+      vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked"); });
+      vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+      const user = await renderPage();
+
+      expect(toggle()).toHaveAttribute("aria-expanded", "false");
+      await user.click(toggle()!);
+      expect(namesIn(otherSection())).toEqual(["Hobbies", "Income"]);
+    });
+
+    it("opens Other categories when nothing is active, without saving that", async () => {
+      vi.mocked(getCategorySummary).mockResolvedValue(summaryList([salaryRow, unusedRow], 9, 2026));
+      await renderPage();
+
+      expect(within(activeSection()).getByText("Nothing has spending or a budget in September yet.")).toBeInTheDocument();
+      expect(namesIn(otherSection())).toEqual(["Hobbies", "Income"]);
+      expect(toggle()).toBeNull(); // Nothing to hide.
+      expect(window.localStorage.getItem(KEY)).toBeNull();
+    });
+
+    it("keeps the account-level empty state when there are no categories at all", async () => {
+      vi.mocked(getCategorySummary).mockResolvedValue(summaryList([]));
+      renderWithProviders();
+
+      expect(await screen.findByText("You don’t have any categories yet.")).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Active this month" })).not.toBeInTheDocument();
+    });
+
+    it("opens while creating and shows the new category there, focused, without saving", async () => {
+      const created = summaryRow({ id: 60, name: "Gifts", iconKey: "gift" });
+      vi.mocked(getCategorySummary)
+        .mockResolvedValueOnce(summaryList(allRows))
+        .mockResolvedValueOnce(summaryList([created, ...allRows]));
+      vi.mocked(categoryService.createCategory).mockResolvedValue(category({ id: 60, name: "Gifts", iconKey: "gift" }));
+      const user = await renderPage();
+
+      await user.click(screen.getByRole("button", { name: "Create category" }));
+      expect(namesIn(otherSection())).toEqual(["Hobbies", "Income"]);
+      expect(toggle()).toBeNull(); // Required open while the form is up.
+
+      await user.type(screen.getByLabelText("Category name"), "Gifts");
+      await user.click(within(screen.getByRole("form", { name: "Create category" })).getByRole("button", { name: "Create category" }));
+
+      await waitFor(() => expect(screen.getByRole("heading", { name: "Gifts" })).toHaveFocus());
+      expect(namesIn(otherSection())).toEqual(["Gifts", "Hobbies", "Income"]);
+      expect(namesIn(activeSection())).not.toContain("Gifts"); // Recent is not active.
+      expect(window.localStorage.getItem(KEY)).toBeNull();
+
+      // The user's own Hide still works afterwards.
+      await user.click(toggle()!);
+      expect(namesIn(otherSection())).toEqual([]);
+    });
+
+    it("keeps an Other card's edit form and delete confirmation on screen", async () => {
+      const user = await renderPage();
+      await user.click(toggle()!); // Open it to reach an Other card.
+
+      await chooseAction(user, "Hobbies", "Edit");
+      expect(within(otherSection()).getByRole("form", { name: "Edit Hobbies" })).toBeInTheDocument();
+      // While the form is up the section is required open, so there is no Hide to press.
+      expect(toggle()).toBeNull();
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+      await waitFor(() => expect(actionsTrigger("Hobbies")).toHaveFocus());
+
+      await chooseAction(user, "Hobbies", "Delete");
+      expect(within(otherSection()).getByRole("group", { name: /Delete “Hobbies”/ })).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Keep category" }));
+      await waitFor(() => expect(actionsTrigger("Hobbies")).toHaveFocus());
+    });
+
+    it("opens Other categories when a saved card moves there, so focus can follow it", async () => {
+      // Pet Care's budget and spending are gone by the time the summary reloads.
+      const quiet = { ...petCareRow, currentMonthSpent: 0, currentMonthBudget: null };
+      vi.mocked(getCategorySummary)
+        .mockResolvedValueOnce(summaryList(allRows))
+        .mockResolvedValueOnce(summaryList([groceriesRow, salaryRow, quiet, unusedRow]));
+      vi.mocked(categoryService.updateCategory).mockResolvedValue(category({ id: 7, name: "Pet Care" }));
+      const user = await renderPage();
+
+      await chooseAction(user, "Pet Care", "Edit");
+      await user.click(screen.getByRole("button", { name: "Save category" }));
+
+      await waitFor(() => expect(actionsTrigger("Pet Care")).toHaveFocus());
+      expect(namesIn(otherSection())).toContain("Pet Care");
+      expect(namesIn(activeSection())).toEqual(["Groceries"]);
+      expect(window.localStorage.getItem(KEY)).toBeNull();
+    });
+
+    it("focuses the next Other card after a delete, opening the section for it", async () => {
+      const created = summaryRow({ id: 60, name: "Gifts", iconKey: "gift" });
+      vi.mocked(getCategorySummary)
+        .mockResolvedValueOnce(summaryList(allRows))
+        .mockResolvedValueOnce(summaryList([created, ...allRows]))
+        .mockResolvedValueOnce(summaryList(allRows));
+      vi.mocked(categoryService.createCategory).mockResolvedValue(category({ id: 60, name: "Gifts", iconKey: "gift" }));
+      vi.mocked(categoryService.deleteCategory).mockResolvedValue(undefined);
+      const user = await renderPage();
+      await user.click(screen.getByRole("button", { name: "Create category" }));
+      await user.type(screen.getByLabelText("Category name"), "Gifts");
+      await user.click(within(screen.getByRole("form", { name: "Create category" })).getByRole("button", { name: "Create category" }));
+      await waitFor(() => expect(screen.getByRole("heading", { name: "Gifts" })).toHaveFocus());
+
+      await chooseAction(user, "Gifts", "Delete");
+      await user.click(screen.getByRole("button", { name: "Delete category" }));
+
+      await waitFor(() => expect(screen.getByRole("heading", { name: "Hobbies" })).toHaveFocus());
+      expect(namesIn(otherSection())).toEqual(["Hobbies", "Income"]);
+    });
+
+    it("keeps the sections when only the sort changes, sorting inside each", async () => {
+      const user = await renderPage();
+      await user.click(toggle()!);
+      await user.selectOptions(screen.getByLabelText("Sort categories"), "mostUsed");
+
+      expect(namesIn(activeSection())).toEqual(["Groceries", "Pet Care"]); // 6, then 3 transactions.
+      expect(namesIn(otherSection())).toEqual(["Income", "Hobbies"]); // 1, then 0.
+    });
+
+    it.each([
+      ["a search", async (user: User) => user.type(screen.getByLabelText("Search categories"), "o")],
+      ["a filter", async (user: User) => user.selectOptions(screen.getByLabelText("Filter categories"), "custom")],
+    ])("shows one flat list for %s, with every match visible, then returns to the sections", async (_kind, change) => {
+      const user = await renderPage(); // Other categories closed.
+      await change(user);
+
+      expect(screen.queryByRole("region", { name: "Active this month" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: /Other categories/ })).not.toBeInTheDocument();
+      expect(new Set(cardNames()).size).toBe(cardNames().length);
+      expect(cardNames()).toEqual(expect.arrayContaining(["Hobbies"])); // A closed-section match.
+      expect(window.localStorage.getItem(KEY)).toBeNull();
+
+      await user.click(screen.getByRole("button", { name: "Clear category filters" }));
+      expect(activeSection()).toBeInTheDocument();
+      expect(namesIn(otherSection())).toEqual([]); // Back to the saved (closed) choice.
+    });
+
+    it("keeps an edit in progress when a search switches to the flat list", async () => {
+      const user = await renderPage();
+      await user.click(toggle()!);
+      await chooseAction(user, "Hobbies", "Edit");
+      await user.type(screen.getByLabelText("Category name"), " club");
+      await user.type(screen.getByLabelText("Search categories"), "zzz");
+
+      expect(screen.getByRole("form", { name: "Edit Hobbies" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Category name")).toHaveValue("Hobbies club");
+    });
+
+    it("never changes the account-level figures when Other categories is closed", async () => {
+      const user = await renderPage();
+      const strip = screen.getByText("Categories", { selector: "dt" }).closest("dl")!;
+      const before = strip.textContent;
+      const table = within(screen.getByRole("table")).getAllByRole("rowheader").map((cell) => cell.textContent);
+
+      await user.click(toggle()!);
+      await user.click(toggle()!);
+      expect(strip.textContent).toBe(before);
+      expect(within(screen.getByRole("table")).getAllByRole("rowheader").map((cell) => cell.textContent)).toEqual(table);
+      expect(within(strip).getByText("4")).toBeInTheDocument(); // All four categories.
     });
   });
 
@@ -1048,7 +1269,7 @@ describe("CategoriesPage", () => {
         .mockResolvedValueOnce(summaryList([groceriesRow, salaryRow, petCareRow, renamed]));
       vi.mocked(categoryService.updateCategory).mockResolvedValue(category({ id: 9, name: "Zoo trips" }));
       const user = await renderPage();
-      expect(cardNames()[1]).toBe("Hobbies");
+      expect(cardNames()[2]).toBe("Hobbies"); // First of the other categories.
 
       await chooseAction(user, "Hobbies", "Edit");
       await user.clear(screen.getByLabelText("Category name"));

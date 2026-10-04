@@ -91,6 +91,31 @@ export function needsCurrentMonthBudget(category: CategorySummary): boolean {
     && category.budgetEnabled;
 }
 
+/**
+ * Active this month: spending this month, or a budget for this month. Transactions alone
+ * (income, or any month's count) and earlier budgets do not make a category active, and
+ * built-in and custom categories follow the same rule.
+ */
+export function isActiveThisMonth(category: CategorySummary): boolean {
+  return validSpend(category.currentMonthSpent) > 0 || category.currentMonthBudget !== null;
+}
+
+/**
+ * Splits categories into Active and Other, keeping their order (so an already-sorted list
+ * gives two sorted sections). Every category lands in exactly one; the input is untouched.
+ */
+export function partitionByActivity(categories: readonly CategorySummary[]): {
+  activeCategories: CategorySummary[];
+  otherCategories: CategorySummary[];
+} {
+  const activeCategories: CategorySummary[] = [];
+  const otherCategories: CategorySummary[] = [];
+  for (const category of categories) {
+    (isActiveThisMonth(category) ? activeCategories : otherCategories).push(category);
+  }
+  return { activeCategories, otherCategories };
+}
+
 /** How many categories need a budget this month; always over every category. */
 export function needsBudgetCount(rows: CategorySummary[]): number {
   return rows.filter(needsCurrentMonthBudget).length;

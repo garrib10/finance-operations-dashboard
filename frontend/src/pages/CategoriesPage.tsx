@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CategoryCard } from "../components/CategoryCard";
 import { CategoryDeleteConfirm } from "../components/CategoryDeleteConfirm";
@@ -21,14 +22,22 @@ import {
   discoverCategories,
   matchesFilter,
   matchesSearch,
+  normalizeSearch,
   type CategoryDiscovery,
 } from "../utils/categoryDiscovery";
-import { formatReportingMonth, monthSpendingTotal } from "../utils/categorySummary";
+import {
+  readCategoriesOthersExpanded,
+  saveCategoriesOthersExpanded,
+} from "../utils/categoriesSectionPreference";
+import { formatReportingMonth, monthSpendingTotal, partitionByActivity } from "../utils/categorySummary";
 import { categoryCardIds } from "../utils/categoryUsage";
 
 const LIST_HEADING_ID = "categories-list-heading";
 const CREATE_BUTTON_ID = "categories-create-button";
 const SEARCH_ID = "category-search";
+const ACTIVE_HEADING_ID = "categories-active-heading";
+const OTHER_HEADING_ID = "categories-other-heading";
+const OTHER_REGION_ID = "categories-other-list";
 const NOTICE_ID = "categories-page-notice";
 const NOT_FOUND_MESSAGE = "This category no longer exists. The list has been refreshed.";
 
@@ -80,6 +89,15 @@ function CategoriesPage() {
   // The category just worked on stays visible until the toolbar next changes, so a rename
   // or a cancel never makes the card (and its focus target) vanish.
   const [recentId, setRecentId] = useState<number | null>(null);
+  // The edit in progress, kept here so it survives the card being rebuilt when the page
+  // switches between sections and the flat search results.
+  const [editDraft, setEditDraft] = useState<CategoryDraft | null>(null);
+  // The user's own Show/Hide choice for "Other categories", saved per device.
+  const [othersSaved, setOthersSaved] = useState(readCategoriesOthersExpanded);
+  // A card that must stay on screen for focus (just created, saved, cancelled, or the next
+  // card after a delete). It opens "Other categories" without touching the saved choice,
+  // and the user's own Show/Hide press clears it.
+  const [revealId, setRevealId] = useState<number | null>(null);
   // Deleted on the server: hidden at once, even if the summary refresh then fails.
   const [removedIds, setRemovedIds] = useState<readonly number[]>([]);
   // Element to focus once the list has re-rendered, with a fallback if it is gone.
@@ -93,6 +111,19 @@ function CategoriesPage() {
   const keptVisible = visible.find((row) => !matchesSearch(row, discovery.query) || !matchesFilter(row, discovery.filter));
   const keptVisibleNote = keptVisible
     && `“${keptVisible.name}” is shown because you’re working on it, though it doesn’t match the current search or filter.`;
+
+  // Browsing (no search, all categories): Active this month, then Other categories, each in
+  // the chosen sort order and each category once. Searching or filtering shows one flat list.
+  const browsing = normalizeSearch(discovery.query) === "" && discovery.filter === "all";
+  const { activeCategories, otherCategories } = partitionByActivity(visible);
+  const inOthers = (id: number | null) => id !== null && otherCategories.some((row) => row.id === id);
+  // Reasons that must keep the section open (the toggle is hidden while they apply)...
+  const othersForced = activeCategories.length === 0 || workflow.kind === "create" || inOthers(workflowId);
+  // ...and the effective state: forced, the saved choice, or a card kept on screen for focus.
+  const othersOpen = othersForced || othersSaved || inOthers(revealId);
+  const shownCount = browsing ? activeCategories.length + (othersOpen ? otherCategories.length : 0) : visible.length;
+  // The order cards are rendered in, for choosing the next card after a delete.
+  const renderedOrder = browsing ? [...activeCategories, ...otherCategories] : visible;
 
   useEffect(() => {
     const target = pendingFocus.current;
@@ -108,15 +139,31 @@ function CategoriesPage() {
     pendingFocus.current = { id, fallback };
   }
 
+  /** Keeps a card on screen (and "Other categories" open if it is there) for focus. */
+  function keepOnScreen(categoryId: number): void {
+    setRecentId(categoryId);
+    setRevealId(categoryId);
+  }
+
   function close(focusId: string, categoryId?: number): void {
     setWorkflow({ kind: "none" });
-    if (categoryId !== undefined) setRecentId(categoryId);
+    if (categoryId !== undefined) keepOnScreen(categoryId);
     focusAfterRender(focusId);
   }
 
   function changeDiscovery(next: CategoryDiscovery): void {
     setDiscovery(next);
     setRecentId(null);
+    setRevealId(null);
+    setOpenActionsId(null);
+  }
+
+  /** The user's explicit Show/Hide: the only thing that saves the preference. */
+  function toggleOthers(): void {
+    const next = !othersOpen;
+    setOthersSaved(next);
+    saveCategoriesOthersExpanded(next);
+    setRevealId(null);
     setOpenActionsId(null);
   }
 
@@ -128,6 +175,7 @@ function CategoriesPage() {
   /** Starting a new operation replaces whatever an earlier one reported. */
   function startWorkflow(next: Workflow): void {
     setPageStatus(null);
+    setEditDraft(null);
     setOpenActionsId(null);
     setWorkflow(next);
   }
@@ -160,7 +208,7 @@ function CategoriesPage() {
   async function handleCreate(draft: CategoryDraft): Promise<void> {
     const created = await createCategory({ name: draft.name, budgetEnabled: true, iconKey: draft.iconKey });
     setWorkflow({ kind: "none" });
-    setRecentId(created.id);
+    keepOnScreen(created.id); // Usually an Other category: no spending or budget yet.
     focusAfterRender(categoryCardIds(created.id).heading);
     await reportAfterRefresh(created.name, "created");
   }
@@ -173,7 +221,7 @@ function CategoriesPage() {
         iconKey: draft.iconKey,
       });
       setWorkflow({ kind: "none" });
-      setRecentId(category.id);
+      keepOnScreen(category.id);
       focusAfterRender(categoryCardIds(category.id).actions);
       await reportAfterRefresh(updated.name, "updated");
     } catch (caught) {
@@ -188,10 +236,11 @@ function CategoriesPage() {
   }
 
   async function handleDelete(category: CategorySummary): Promise<void> {
-    // Decide where focus goes before the card disappears: the next card as currently shown
-    // (searched, filtered, and sorted), else the previous one, else the list.
-    const index = visible.findIndex((row) => row.id === category.id);
-    const neighbour = visible[index + 1] ?? visible[index - 1];
+    // Decide where focus goes before the card disappears: the next card in the rendered
+    // order (Active, then Other; or the searched/filtered list), else the previous one,
+    // else the list heading.
+    const index = renderedOrder.findIndex((row) => row.id === category.id);
+    const neighbour = renderedOrder[index + 1] ?? renderedOrder[index - 1];
     const ids = categoryCardIds(category.id);
 
     const name = category.name; // Captured before the card (and its data) go away.
@@ -200,6 +249,7 @@ function CategoriesPage() {
       await deleteCategory(category.id);
       setWorkflow({ kind: "none" });
       setRemovedIds((removed) => [...removed, category.id]);
+      if (neighbour) setRevealId(neighbour.id); // Opens "Other categories" if it is there.
       focusAfterRender(neighbour ? categoryCardIds(neighbour.id).heading : LIST_HEADING_ID);
       await reportAfterRefresh(name, "deleted");
     } catch (caught) {
@@ -207,7 +257,7 @@ function CategoriesPage() {
         // The usage changed after the page loaded; the server is authoritative. Nothing
         // was removed, and a retry cannot succeed, so the confirmation closes.
         setWorkflow({ kind: "none" });
-        setRecentId(category.id);
+        keepOnScreen(category.id);
         setPageStatus({
           type: "error",
           message: `“${name}” is still used by transactions or budgets, so it can’t be deleted. `
@@ -233,7 +283,8 @@ function CategoriesPage() {
       return (
         <CategoryForm
           label={`Edit ${category.name}`}
-          initial={{ name: category.name, iconKey: resolveIconKey(category.iconKey) }}
+          initial={editDraft ?? { name: category.name, iconKey: resolveIconKey(category.iconKey) }}
+          onDraftChange={setEditDraft}
           submitLabel="Save category"
           pendingLabel="Saving…"
           failureMessage="Unable to save the category. Please try again."
@@ -252,6 +303,31 @@ function CategoriesPage() {
       );
     }
     return undefined;
+  }
+
+  function renderGrid(categories: CategorySummary[]) {
+    return (
+      <ul className="category-grid">
+        {categories.map((category) => (
+          <li key={category.id}>
+            <CategoryCard
+              category={category}
+              monthTotal={monthSpendingTotal(rows)}
+              monthName={monthName}
+              dateFormat={dateFormat}
+              onEdit={() => startWorkflow({ kind: "edit", id: category.id })}
+              onDelete={() => startWorkflow({ kind: "delete", id: category.id })}
+              workflow={workflowFor(category)}
+              actionsOpen={openActionsId === category.id}
+              onActionsOpenChange={(open) => setOpenActionsId((current) => {
+                if (open) return category.id;
+                return current === category.id ? null : current;
+              })}
+            />
+          </li>
+        ))}
+      </ul>
+    );
   }
 
   return (
@@ -337,7 +413,7 @@ function CategoriesPage() {
               discovery={discovery}
               onChange={changeDiscovery}
               onClear={clearDiscovery}
-              shown={visible.length}
+              shown={shownCount}
               total={rows.length}
               keptVisibleNote={keptVisibleNote || undefined}
             />
@@ -352,27 +428,48 @@ function CategoriesPage() {
                 Show all categories
               </button>
             </div>
+          ) : browsing ? (
+            <>
+              <section className="categories-section" aria-labelledby={ACTIVE_HEADING_ID}>
+                <h2 id={ACTIVE_HEADING_ID}>Active this month</h2>
+                {activeCategories.length === 0 ? (
+                  <p className="empty-state">Nothing has spending or a budget in {monthName} yet.</p>
+                ) : (
+                  renderGrid(activeCategories)
+                )}
+              </section>
+
+              <section className="categories-section" aria-labelledby={OTHER_HEADING_ID}>
+                <div className="categories-section__header">
+                  <h2 id={OTHER_HEADING_ID}>Other categories · {otherCategories.length}</h2>
+                  {/* Hidden while something requires the section open, so it never lies. */}
+                  {otherCategories.length > 0 && !othersForced && (
+                    <button
+                      type="button"
+                      className="button button--secondary button--small categories-section__toggle"
+                      aria-expanded={othersOpen}
+                      aria-controls={OTHER_REGION_ID}
+                      onClick={toggleOthers}
+                    >
+                      {othersOpen ? "Hide other categories" : "Show other categories"}
+                      {othersOpen
+                        ? <ChevronUp aria-hidden="true" focusable="false" size={16} />
+                        : <ChevronDown aria-hidden="true" focusable="false" size={16} />}
+                    </button>
+                  )}
+                </div>
+                {otherCategories.length === 0 ? (
+                  <p className="empty-state">Every category has spending or a budget this month.</p>
+                ) : (
+                  // Closed: nothing inside is rendered, so no hidden card can take focus.
+                  <div id={OTHER_REGION_ID} hidden={!othersOpen}>
+                    {othersOpen && renderGrid(otherCategories)}
+                  </div>
+                )}
+              </section>
+            </>
           ) : (
-            <ul className="category-grid">
-              {visible.map((category) => (
-                <li key={category.id}>
-                  <CategoryCard
-                    category={category}
-                    monthTotal={monthSpendingTotal(rows)}
-                    monthName={monthName}
-                    dateFormat={dateFormat}
-                    onEdit={() => startWorkflow({ kind: "edit", id: category.id })}
-                    onDelete={() => startWorkflow({ kind: "delete", id: category.id })}
-                    workflow={workflowFor(category)}
-                    actionsOpen={openActionsId === category.id}
-                    onActionsOpenChange={(open) => setOpenActionsId((current) => {
-                      if (open) return category.id;
-                      return current === category.id ? null : current;
-                    })}
-                  />
-                </li>
-              ))}
-            </ul>
+            renderGrid(visible)
           )}
         </>
       )}

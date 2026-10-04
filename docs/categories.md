@@ -200,7 +200,8 @@ managed. It shows each category's usage for the server's reporting month (see th
   announcements), it has no dismiss button, and it never blocks adding transactions. It
   disappears once a refreshed summary shows a budget for the month; if a refresh fails, the
   last confirmed data stays, with the usual refresh warning.
-- **Spending distribution** (below), then **All categories**: the toolbar and one card per
+- **Spending distribution** (below), then **All categories**: the toolbar, then the cards in
+  two sections (see "Active and other categories" below), one card per
   category with its icon, name, a "Built-in" or "Custom" text badge, this month's spending
   and share, budget progress and status (or "No budget for {Month}" when it takes budgets),
   and this month's activity (issue #102): "1 transaction in October" / "2 transactions in
@@ -342,6 +343,36 @@ save, cancel, or refused delete it stays until the toolbar next changes, so focu
 return to it. A newly created category is likewise shown (and focused) until the next
 toolbar change. After a delete, focus moves to the next card in the current filtered and
 sorted order. After any change the refreshed data is searched, filtered, and sorted again.
+
+**Active and other categories** (issue #102). While browsing (no search, filter "All
+categories"), the cards are split into two sections, and **each category appears exactly
+once**:
+
+- **Active this month:** spending this month (`currentMonthSpent > 0`) or a budget for this
+  month. This month's transaction count alone (for example only income), earlier
+  transactions, earlier budgets, and `budgetEnabled` never make a category active; built-in
+  and custom categories follow the same rule. With none, it says "Nothing has spending or a
+  budget in {Month} yet."
+- **Other categories · {n}:** everything else, with `n` counting only these. It is **closed
+  by default**; "Show other categories" / "Hide other categories" (`aria-expanded`,
+  `aria-controls`) opens and closes it, and closed cards are not rendered, so nothing hidden
+  can take focus.
+- **Saved choice:** only pressing that button saves it, per device, in `localStorage` key
+  `fintrack:categories-others-expanded` (`"true"` or `"false"`; anything else, or unreadable
+  storage, means closed).
+- **Opened automatically, never saved:** when nothing is active; while the create form is
+  open; while an Other card is being edited or has its delete confirmation open; and to show
+  a card that focus is about to land on (a new category, a saved or cancelled one, one that
+  moved into Other after a refresh, or the next card after a delete). The button is hidden
+  while one of the first three applies; pressing Show/Hide ends the last one.
+- **Sorting** applies inside each section and keeps the sections.
+- **Searching or filtering** shows the single flat results list instead (every match visible
+  whatever the saved choice); clearing them returns to the sections and the saved choice.
+  An edit in progress keeps its typed values when the page switches between the two.
+- **Focus after a delete** moves to the next card in rendered order (Active, then Other),
+  else the previous one, else the list heading.
+- The summary strip, the No budget count, and the spending table always use every
+  category, whether Other categories is open or closed.
 
 **Category deep links.** `?category={id}` is read once the user's category list has
 loaded, and accepted only as a positive whole number that is one of the user's own

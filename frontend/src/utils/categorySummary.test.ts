@@ -4,6 +4,8 @@ import {
   compareByName,
   formatReportingMonth,
   formatShare,
+  isActiveThisMonth,
+  partitionByActivity,
   needsBudgetCount,
   needsCurrentMonthBudget,
   monthSpendingTotal,
@@ -158,5 +160,44 @@ describe("needsCurrentMonthBudget", () => {
     expect(needsBudgetCount([...qualifying, groceriesRow, salaryRow, unusedRow])).toBe(2);
     expect(needsBudgetCount([groceriesRow, salaryRow, unusedRow])).toBe(0);
     expect(needsBudgetCount([])).toBe(0);
+  });
+});
+
+describe("active this month", () => {
+  const row = (overrides: Partial<Parameters<typeof summaryRow>[0]>) => summaryRow({ id: 70, name: "Row", ...overrides });
+  const budget = groceriesRow.currentMonthBudget;
+
+  it.each([
+    ["spending this month", { currentMonthSpent: 5 }],
+    ["a budget this month", { currentMonthBudget: budget }],
+    ["both", { currentMonthSpent: 5, currentMonthBudget: budget }],
+    ["a built-in with spending", { builtIn: true, currentMonthSpent: 5 }],
+  ])("is active with %s", (_case, overrides) => {
+    expect(isActiveThisMonth(row(overrides))).toBe(true);
+  });
+
+  it.each([
+    ["nothing this month", {}],
+    ["a negative amount", { currentMonthSpent: -3 }],
+    ["only this month's income", { currentMonthTransactionCount: 3 }],
+    ["only earlier transactions", { transactionCount: 9, allTimeSpent: 400 }],
+    ["only earlier budgets", { budgetCount: 4 }],
+    ["a built-in with nothing this month", { builtIn: true }],
+    ["budgets switched off and no spending", { budgetEnabled: false }],
+  ])("is other with %s", (_case, overrides) => {
+    expect(isActiveThisMonth(row(overrides))).toBe(false);
+  });
+
+  it("puts every category in exactly one section, in order, without changing the input", () => {
+    const source = [groceriesRow, unusedRow, petCareRow, salaryRow];
+    const before = [...source];
+    const { activeCategories, otherCategories } = partitionByActivity(source);
+
+    expect(activeCategories).toEqual([groceriesRow, petCareRow]);
+    expect(otherCategories).toEqual([unusedRow, salaryRow]);
+    expect(activeCategories[0]).toBe(groceriesRow); // Same objects, not copies.
+    expect([...activeCategories, ...otherCategories]).toHaveLength(source.length);
+    expect(new Set([...activeCategories, ...otherCategories])).toEqual(new Set(source));
+    expect(source).toEqual(before);
   });
 });
