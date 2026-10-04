@@ -4,12 +4,13 @@ import { Link } from "react-router-dom";
 import type { DateFormatPreference } from "../types/account";
 import type { CategorySummary } from "../types/category";
 import { clampProgressPercentage, formatBudgetStatus } from "../utils/budgetStatus";
-import { formatShare, spendingShare } from "../utils/categorySummary";
+import { formatShare, needsCurrentMonthBudget, spendingShare } from "../utils/categorySummary";
 import { ADD_TRANSACTION_PARAM, CATEGORY_PARAM } from "../utils/categoryDeepLink";
 import { categoryCardIds, deleteBlockedReason, monthActivity } from "../utils/categoryUsage";
 import { formatCurrency, formatDate } from "../utils/formatters";
 import { CategoryActionsMenu } from "./CategoryActionsMenu";
 import { CategoryIcon } from "./CategoryIcon";
+import { InlineNotice } from "./InlineNotice";
 
 interface CategoryCardProps {
   category: CategorySummary;
@@ -49,6 +50,8 @@ export function CategoryCard({
   const ids = categoryCardIds(category.id);
   const headingId = ids.heading;
   const budget = category.currentMonthBudget;
+  // Spending but no budget this month: the warning carries the card's only Set budget link.
+  const needsBudget = needsCurrentMonthBudget(category);
 
   return (
     <article className="category-card" aria-labelledby={headingId}>
@@ -119,8 +122,24 @@ export function CategoryCard({
           </p>
         </div>
       ) : (
-        category.budgetEnabled && (
-          <p className="category-card__note">No budget for {monthName}</p>
+        needsBudget ? (
+          // Static advice, not an announcement: several cards may show it at once.
+          <div className="category-card__warning">
+            <InlineNotice variant="warning" live={false}>
+              {formatCurrency(category.currentMonthSpent)} spent in {monthName} with no budget.{" "}
+              <Link
+                className="category-card__warning-link"
+                to={`/budgets?${CATEGORY_PARAM}=${category.id}`}
+                aria-label={`Set budget for ${category.name}`}
+              >
+                Set budget
+              </Link>
+            </InlineNotice>
+          </div>
+        ) : (
+          category.budgetEnabled && (
+            <p className="category-card__note">No budget for {monthName}</p>
+          )
         )
       )}
 
@@ -160,7 +179,7 @@ export function CategoryCard({
             View transactions
           </Link>
         )}
-        {category.budgetEnabled && (
+        {category.budgetEnabled && !needsBudget && (
           <Link
             className="category-card__link"
             to={`/budgets?${CATEGORY_PARAM}=${category.id}`}

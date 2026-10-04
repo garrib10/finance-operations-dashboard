@@ -4,6 +4,8 @@ import {
   compareByName,
   formatReportingMonth,
   formatShare,
+  needsBudgetCount,
+  needsCurrentMonthBudget,
   monthSpendingTotal,
   overBudgetCount,
   shareBarWidth,
@@ -11,7 +13,6 @@ import {
   spendingShare,
   validSpend,
   topCategory,
-  withSpendingCount,
 } from "./categorySummary";
 
 describe("category summary helpers", () => {
@@ -56,9 +57,8 @@ describe("category summary helpers", () => {
     expect(topCategory([salaryRow, unusedRow])).toBeNull();
   });
 
-  it("counts categories over budget and with spending (income is not spending)", () => {
+  it("counts categories over budget", () => {
     expect(overBudgetCount(rows)).toBe(1);
-    expect(withSpendingCount(rows)).toBe(2);
   });
 
   it("formats the server's reporting month", () => {
@@ -117,5 +117,46 @@ describe("spending distribution", () => {
     spendingDistribution(source);
 
     expect(source.map((row) => row.id)).toEqual([9, 7, 1]);
+  });
+});
+
+describe("needsCurrentMonthBudget", () => {
+  const spending = (overrides: Partial<Parameters<typeof summaryRow>[0]> = {}) =>
+    summaryRow({ id: 50, name: "Gifts", currentMonthSpent: 25, ...overrides });
+
+  it("needs a budget for spending this month with no budget, in a category that takes budgets", () => {
+    expect(needsCurrentMonthBudget(spending())).toBe(true);
+  });
+
+  it("still needs one when only earlier months had budgets", () => {
+    expect(needsCurrentMonthBudget(spending({ budgetCount: 3 }))).toBe(true);
+  });
+
+  it.each([
+    ["no spending this month", { currentMonthSpent: 0 }],
+    ["a negative amount", { currentMonthSpent: -5 }],
+    ["an invalid amount", { currentMonthSpent: Number.NaN }],
+    ["a budget this month", { currentMonthBudget: groceriesRow.currentMonthBudget }],
+    ["budgets switched off", { budgetEnabled: false }],
+    ["income only this month", { currentMonthSpent: 0, currentMonthTransactionCount: 2 }],
+    ["spending only in earlier months", { currentMonthSpent: 0, allTimeSpent: 500, transactionCount: 9 }],
+  ])("does not for %s", (_case, overrides) => {
+    expect(needsCurrentMonthBudget(spending(overrides))).toBe(false);
+  });
+
+  it("does not change the category it checks", () => {
+    const row = spending();
+    const before = structuredClone(row);
+    needsCurrentMonthBudget(row);
+
+    expect(row).toEqual(before);
+  });
+
+  it("counts every qualifying category, and zero for none", () => {
+    const qualifying = [spending({ id: 51 }), spending({ id: 52, name: "Books" })];
+
+    expect(needsBudgetCount([...qualifying, groceriesRow, salaryRow, unusedRow])).toBe(2);
+    expect(needsBudgetCount([groceriesRow, salaryRow, unusedRow])).toBe(0);
+    expect(needsBudgetCount([])).toBe(0);
   });
 });

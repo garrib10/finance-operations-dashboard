@@ -97,7 +97,10 @@ describe("CategoriesPage", () => {
     expect(within(strip).getByText("Groceries")).toBeInTheDocument();
     expect(within(strip).getByText("$300.00 of $400.00")).toBeInTheDocument();
     expect(within(strip).getByText("of 2 budgets this month")).toBeInTheDocument();
-    expect(within(strip).getByText("categories in October 2026")).toBeInTheDocument();
+    // "No budget" replaces "With spending"; nothing here spends without a budget.
+    expect(within(strip).queryByText("With spending")).not.toBeInTheDocument();
+    expect(within(strip).getByText("No budget").nextElementSibling).toHaveTextContent(/^0$/);
+    expect(within(strip).getByText("categories spending in October 2026 without a budget")).toBeInTheDocument();
   });
 
   it("explains when nothing has been spent this month", async () => {
@@ -461,6 +464,125 @@ describe("CategoriesPage", () => {
       // Unfiltered, "Income" would follow "Hobbies"; with the Custom filter it is "Pet Care".
       await waitFor(() => expect(screen.getByRole("heading", { name: "Pet Care" })).toHaveFocus());
       expect(cardNames()).toEqual(["Pet Care"]);
+    });
+  });
+
+  describe("spending without a budget", () => {
+    // Books (custom) and Dining (built-in) spend with no budget this month; Tolls spends but
+    // takes no budgets; Side Gigs only had income; the default rows have budgets or no spending.
+    const books = summaryRow({ id: 20, name: "Books", iconKey: "graduation-cap", currentMonthSpent: 125.5,
+      transactionCount: 4, currentMonthTransactionCount: 2, budgetCount: 1, canDelete: false,
+      lastTransactionDate: "2026-10-05" });
+    const dining = summaryRow({ id: 21, name: "Dining", iconKey: "utensils", builtIn: true, canDelete: false,
+      currentMonthSpent: 1, transactionCount: 1, currentMonthTransactionCount: 1, lastTransactionDate: "2026-10-04" });
+    const tolls = summaryRow({ id: 22, name: "Tolls", budgetEnabled: false, currentMonthSpent: 40, canDelete: false,
+      transactionCount: 1, currentMonthTransactionCount: 1, lastTransactionDate: "2026-10-06" });
+    const sideGigs = summaryRow({ id: 23, name: "Side Gigs", currentMonthSpent: 0, canDelete: false,
+      transactionCount: 1, currentMonthTransactionCount: 1, lastTransactionDate: "2026-10-07" });
+    const rows = [...allRows, books, dining, tolls, sideGigs];
+    const noBudgetCount = () => screen.getByText("No budget", { selector: "dt" }).nextElementSibling;
+    const warning = (name: string) => within(card(name)).queryByText(/spent in \w+ with no budget\./);
+
+    beforeEach(() => {
+      vi.mocked(getCategorySummary).mockResolvedValue(summaryList(rows));
+    });
+
+    it("warns on a qualifying card, with the card's only Set budget link inside the warning", async () => {
+      await renderPage();
+
+      const text = warning("Books")!;
+      expect(text).toHaveTextContent("Warning: $125.50 spent in October with no budget. Set budget");
+      const links = within(card("Books")).getAllByRole("link", { name: "Set budget for Books" });
+      expect(links).toHaveLength(1);
+      expect(text).toContainElement(links[0]);
+      expect(links[0]).toHaveAttribute("href", "/budgets?category=20");
+      expect(links[0].querySelector("svg")).toBeNull(); // Plain text link inside the warning.
+      // The other links and the actions stay.
+      expect(within(card("Books")).getByRole("link", { name: "View transactions for Books" })).toBeInTheDocument();
+      expect(actionsTrigger("Books")).toBeInTheDocument();
+      expect(warning("Dining")).toHaveTextContent("$1.00 spent in October with no budget.");
+    });
+
+    it("keeps the warnings static, so several cards are not announced", async () => {
+      await renderPage();
+
+      for (const name of ["Books", "Dining"]) {
+        const notice = warning(name)!.closest<HTMLElement>(".inline-notice")!;
+        expect(notice).not.toHaveAttribute("role");
+        expect(notice).not.toHaveAttribute("aria-live");
+        expect(within(notice).getByText("Warning:")).toBeVisible(); // Not colour alone.
+        expect(notice.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+      }
+      expect(within(card("Books")).queryByRole("alert")).not.toBeInTheDocument();
+      expect(within(card("Books")).queryByRole("status")).not.toBeInTheDocument();
+    });
+
+    it("leaves other cards' budget actions as they were", async () => {
+      await renderPage();
+
+      // No spending: the ordinary Set budget link, no warning.
+      expect(warning("Hobbies")).toBeNull();
+      expect(within(card("Hobbies")).getByRole("link", { name: "Set budget for Hobbies" })).toBeInTheDocument();
+      // A budget this month: Edit budget, no warning, no Set budget.
+      expect(warning("Groceries")).toBeNull();
+      expect(within(card("Groceries")).getByRole("link", { name: "Edit budget for Groceries" })).toBeInTheDocument();
+      expect(within(card("Groceries")).queryByRole("link", { name: /Set budget/ })).not.toBeInTheDocument();
+      // Takes no budgets: no warning and no budget action.
+      expect(warning("Tolls")).toBeNull();
+      expect(within(card("Tolls")).queryByRole("link", { name: /budget/ })).not.toBeInTheDocument();
+      // Income only this month is not spending.
+      expect(warning("Side Gigs")).toBeNull();
+      expect(within(card("Side Gigs")).getByRole("link", { name: "Set budget for Side Gigs" })).toBeInTheDocument();
+    });
+
+    it("names the server's reporting month", async () => {
+      vi.mocked(getCategorySummary).mockResolvedValue(summaryList([books], 3, 2025));
+      await renderPage();
+
+      expect(warning("Books")).toHaveTextContent("$125.50 spent in March with no budget.");
+    });
+
+    it("counts every qualifying category, whatever the search, filter, or sort shows", async () => {
+      const user = await renderPage();
+      expect(noBudgetCount()).toHaveTextContent(/^2$/);
+
+      await user.selectOptions(screen.getByLabelText("Filter categories"), "builtIn");
+      expect(screen.queryByRole("article", { name: "Books" })).not.toBeInTheDocument(); // Hidden but counted.
+      expect(noBudgetCount()).toHaveTextContent(/^2$/);
+
+      await user.selectOptions(screen.getByLabelText("Filter categories"), "all");
+      await user.type(screen.getByLabelText("Search categories"), "groc");
+      expect(noBudgetCount()).toHaveTextContent(/^2$/);
+
+      await user.selectOptions(screen.getByLabelText("Sort categories"), "monthSpending");
+      expect(noBudgetCount()).toHaveTextContent(/^2$/);
+      // The spending table still lists every category with spending.
+      expect(within(screen.getByRole("table")).getByRole("rowheader", { name: "Books" })).toBeInTheDocument();
+    });
+
+    it("follows a refreshed summary, and keeps the last data when a refresh fails", async () => {
+      const budgeted = { ...books, name: "Books", currentMonthBudget: groceriesRow.currentMonthBudget };
+      vi.mocked(getCategorySummary)
+        .mockResolvedValueOnce(summaryList(rows))
+        .mockResolvedValueOnce(summaryList([...allRows, budgeted, dining, tolls, sideGigs]))
+        .mockRejectedValueOnce(new Error("network"));
+      vi.mocked(categoryService.updateCategory).mockResolvedValue(category({ id: 20, name: "Books" }));
+      const user = await renderPage();
+      expect(noBudgetCount()).toHaveTextContent(/^2$/);
+
+      // A successful change reloads the summary: Books now has a budget (set elsewhere).
+      await chooseAction(user, "Books", "Edit");
+      await user.click(screen.getByRole("button", { name: "Save category" }));
+      await screen.findByText("“Books” was updated successfully.");
+      expect(noBudgetCount()).toHaveTextContent(/^1$/);
+      expect(warning("Books")).toBeNull();
+
+      // A later change whose refresh fails keeps the last confirmed figures and says so.
+      await chooseAction(user, "Books", "Edit");
+      await user.click(screen.getByRole("button", { name: "Save category" }));
+      expect(await screen.findByText(/latest category summary could not be loaded/)).toBeInTheDocument();
+      expect(noBudgetCount()).toHaveTextContent(/^1$/);
+      expect(warning("Dining")).toHaveTextContent("$1.00 spent in October with no budget.");
     });
   });
 

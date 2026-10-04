@@ -80,9 +80,20 @@ export function overBudgetCount(rows: CategorySummary[]): number {
   return rows.filter((row) => row.currentMonthBudget?.status === "OVER_BUDGET").length;
 }
 
-/** Categories with expense spending this month (income does not count as spending). */
-export function withSpendingCount(rows: CategorySummary[]): number {
-  return rows.filter((row) => row.currentMonthSpent > 0).length;
+/**
+ * Spending this month with no budget for this month, in a category that takes budgets.
+ * Spending is expenses only, so income alone never qualifies; budgets from other months do
+ * not count. One rule for both the card warning and the summary count.
+ */
+export function needsCurrentMonthBudget(category: CategorySummary): boolean {
+  return validSpend(category.currentMonthSpent) > 0
+    && category.currentMonthBudget === null
+    && category.budgetEnabled;
+}
+
+/** How many categories need a budget this month; always over every category. */
+export function needsBudgetCount(rows: CategorySummary[]): number {
+  return rows.filter(needsCurrentMonthBudget).length;
 }
 
 export function formatReportingMonth(month: number, year: number): string {

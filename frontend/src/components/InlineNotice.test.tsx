@@ -61,6 +61,16 @@ describe("InlineNotice", () => {
     expect(notice).toHaveTextContent(long);
   });
 
+  it("can render as static content with no live region, keeping its visible label", () => {
+    const { container } = render(<InlineNotice variant="warning" live={false}>Spent with no budget.</InlineNotice>);
+    const notice = container.firstElementChild!;
+
+    expect(notice).not.toHaveAttribute("role");
+    expect(notice).not.toHaveAttribute("aria-live");
+    expect(notice).toHaveTextContent("Warning: Spent with no budget.");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   it("is not focusable without an ID", () => {
     render(<InlineNotice variant="info">Note.</InlineNotice>);
 

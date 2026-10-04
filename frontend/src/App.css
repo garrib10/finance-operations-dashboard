@@ -2159,6 +2159,34 @@
   outline-offset: 2px;
 }
 
+/* Card warning: spending this month with no budget. The InlineNotice warning colours,
+   tightened for a card: an even border (no accent bar) and a plain inline link, which as
+   part of a sentence needs no 44px box (WCAG target-size exception for inline links). */
+.category-card__warning .inline-notice {
+  margin: 0;
+  padding: 0.7rem 0.75rem;
+  font-size: 0.9rem;
+  border-left-width: 1px;
+  border-left-color: var(--color-warning-border);
+}
+
+.category-card__warning-link {
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.category-card__warning-link:hover {
+  color: var(--color-primary-dark);
+}
+
+.category-card__warning-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
 /* "More actions": the header (full card width) is the positioning context, so the panel
    sits just below it, however many lines the name wraps to, and never exceeds the card. */
 .category-card__header {

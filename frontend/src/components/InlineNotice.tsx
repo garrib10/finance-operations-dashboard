@@ -19,6 +19,11 @@ interface InlineNoticeProps {
   onDismiss?: () => void;
   /** Lets the page move focus here (for example after a failure with no field to fix). */
   id?: string;
+  /**
+   * False renders static content with no live-region role, for advice that is simply part
+   * of the page (such as a card's warning) and should not be announced as an update.
+   */
+  live?: boolean;
 }
 
 /**
@@ -27,11 +32,11 @@ interface InlineNoticeProps {
  * colour alone; the icon is decorative. Success confirmations use StatusBanner instead,
  * which floats and closes itself.
  */
-export function InlineNotice({ variant, children, action, onDismiss, id }: InlineNoticeProps) {
+export function InlineNotice({ variant, children, action, onDismiss, id, live = true }: InlineNoticeProps) {
   const { label, role, Icon } = VARIANTS[variant];
 
   return (
-    <div id={id} tabIndex={id ? -1 : undefined} className={`inline-notice inline-notice--${variant}`} role={role}>
+    <div id={id} tabIndex={id ? -1 : undefined} className={`inline-notice inline-notice--${variant}`} role={live ? role : undefined}>
       <Icon className="inline-notice__icon" aria-hidden="true" focusable="false" size={20} />
       <p className="inline-notice__message">
         <strong className="inline-notice__label">{label}:</strong> {children}

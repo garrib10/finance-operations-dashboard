@@ -295,7 +295,8 @@ server's reporting month (issue #100). No new `data-testid` values are added.
 | Element | Selector |
 | --- | --- |
 | Page | `h1` "Categories"; loading `role="status"` "Loading categories…"; failure `role="alert"` with button "Try again" |
-| Summary strip | `dl` with terms "Categories", "Top this month", "Over budget", "With spending" |
+| Summary strip | `dl` with terms "Categories", "Top this month", "Over budget", "No budget" (detail "categories spending in {Month Year} without a budget"; counts every category, unaffected by the toolbar) |
+| No-budget warning | in a qualifying card (spending this month, no budget this month, takes budgets): "Warning: {amount} spent in {Month} with no budget." with the link "Set budget for {name}" (`/budgets?category={id}`), the card's only Set budget link; no `role`/live region and no dismiss button |
 | Category card | `article` named by the category (for example "Pet Care"), badge "Built-in" or "Custom" |
 | Card figures | "Spent in {Month}", "Share of spending" (only when the month has spending) |
 | Budget progress | `role="progressbar"` named "{Category} budget used", `aria-valuenow` 0–100, `aria-valuetext` "{n}% used"; status text such as "Warning" |

@@ -187,7 +187,19 @@ managed. It shows each category's usage for the server's reporting month (see th
 [summary endpoint](categories-api.md#get-apicategoriessummary)). Top to bottom:
 
 - **Summary strip:** total categories (custom and built-in), this month's top category,
-  categories over budget, and categories with spending, always from every category.
+  categories over budget, and **No budget** ("categories spending in {Month Year} without
+  a budget", issue #102, replacing "With spending"), always from every category in the
+  response, never the searched, filtered, or sorted cards.
+- **Spending without a budget** (issue #102): a category needs a budget when
+  `currentMonthSpent > 0`, `currentMonthBudget` is null, and `budgetEnabled` is true.
+  Spending is expenses only, so income alone never qualifies; budgets from other months do
+  not count; a category that takes no budgets never qualifies. Its card shows a static
+  "Warning: {amount} spent in {Month} with no budget." with the card's only "Set budget for
+  {name}" link inside it (the ordinary Set budget link is removed from the link row). It is
+  advice, not an announcement (no `role` or live region, so many cards never trigger many
+  announcements), it has no dismiss button, and it never blocks adding transactions. It
+  disappears once a refreshed summary shows a budget for the month; if a refresh fails, the
+  last confirmed data stays, with the usual refresh warning.
 - **Spending distribution** (below), then **All categories**: the toolbar and one card per
   category with its icon, name, a "Built-in" or "Custom" text badge, this month's spending
   and share, budget progress and status (or "No budget for {Month}" when it takes budgets),
@@ -231,7 +243,8 @@ The page offers:
   to the history table. A category with no transactions shows "Add transaction" instead,
   which opens `/transactions?addCategory={id}` with the new-transaction form focused and the
   category chosen (an invalid `addCategory` is removed silently). Categories that take
-  budgets also get "Set budget" or "Edit budget" (`/budgets?category={id}`). Categories that
+  budgets also get "Set budget" or "Edit budget" (`/budgets?category={id}`); for a category
+  spending without a budget, Set budget is inside the warning instead. Categories that
   do not take budgets get no budget action, even if a budget exists.
 - **After a change:** the shared category list (used by every dropdown) updates first,
   then the usage summary reloads. A failed refresh never undoes or misreports a change
