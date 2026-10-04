@@ -2,6 +2,7 @@ vi.mock("./AuthContext", () => ({ useAuth: vi.fn() }));
 vi.mock("../services/categoryService", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../services/categoryService")>()),
   getCategories: vi.fn(),
+  createCategory: vi.fn(),
   updateCategory: vi.fn(),
   deleteCategory: vi.fn(),
 }));
@@ -114,6 +115,53 @@ describe("CategoryProvider", () => {
     });
     expect(screen.getByTestId("names")).toHaveTextContent("Gym,Groceries,Pets");
     expect(categoryService.getCategories).toHaveBeenCalledTimes(2);
+  });
+
+  it("creates a category and shares it with every view, then refreshes", async () => {
+    render(<CategoryProvider><Probe /><Probe /></CategoryProvider>);
+    await waitFor(() => expect(screen.getAllByTestId("status")[0]).toHaveTextContent("ready"));
+    const created = category({ id: 51, name: "Hobbies", iconKey: "gamepad-2" });
+    vi.mocked(categoryService.createCategory).mockResolvedValue(created);
+    vi.mocked(categoryService.getCategories).mockResolvedValueOnce([groceries, created, petCare]);
+
+    await act(async () => {
+      expect(await latest.createCategory({ name: "Hobbies", budgetEnabled: true, iconKey: "gamepad-2" }))
+        .toBe(created);
+    });
+
+    expect(categoryService.createCategory).toHaveBeenCalledWith({ name: "Hobbies", budgetEnabled: true, iconKey: "gamepad-2" });
+    expect(screen.getAllByTestId("names")[1]).toHaveTextContent("Groceries,Hobbies,Pet Care");
+    expect(categoryService.getCategories).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a created or renamed category even when the follow-up refresh fails", async () => {
+    render(<CategoryProvider><Probe /></CategoryProvider>);
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("ready"));
+    const created = category({ id: 51, name: "Hobbies" });
+    vi.mocked(categoryService.createCategory).mockResolvedValue(created);
+    vi.mocked(categoryService.updateCategory).mockResolvedValue({ ...petCare, name: "Pets" });
+    vi.mocked(categoryService.getCategories).mockRejectedValue(new Error("network"));
+
+    await act(async () => {
+      await latest.createCategory({ name: "Hobbies", budgetEnabled: true });
+      await latest.updateCategory(petCare.id, { name: "Pets", budgetEnabled: true });
+    });
+
+    expect(screen.getByTestId("names")).toHaveTextContent("Groceries,Pets,Hobbies");
+    expect(screen.getByTestId("refresh-error")).not.toBeEmptyDOMElement();
+  });
+
+  it("does not add a category when creating it fails", async () => {
+    render(<CategoryProvider><Probe /></CategoryProvider>);
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("ready"));
+    vi.mocked(categoryService.createCategory).mockRejectedValue(new Error("duplicate"));
+
+    await act(async () => {
+      await expect(latest.createCategory({ name: "Groceries", budgetEnabled: true })).rejects.toThrow("duplicate");
+    });
+
+    expect(screen.getByTestId("names")).toHaveTextContent("Groceries,Pet Care");
+    expect(categoryService.getCategories).toHaveBeenCalledTimes(1);
   });
 
   it("removes a deleted category even when the follow-up refresh fails", async () => {

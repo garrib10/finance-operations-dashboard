@@ -1,4 +1,4 @@
-import { ArrowLeftRight, LayoutDashboard, PiggyBank, type LucideIcon } from "lucide-react";
+import { ArrowLeftRight, LayoutDashboard, PiggyBank, Tags, type LucideIcon } from "lucide-react";
 
 /** Above this width the sidebar is shown; at 1100px and below, the drawer. Matches App.css. */
 export const DESKTOP_NAV_QUERY = "(width > 1100px)";
@@ -20,4 +20,5 @@ export const PRIMARY_NAV: readonly NavItem[] = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard, end: true },
   { label: "Transactions", path: "/transactions", icon: ArrowLeftRight },
   { label: "Budgets", path: "/budgets", icon: PiggyBank },
+  { label: "Categories", path: "/categories", icon: Tags },
 ];

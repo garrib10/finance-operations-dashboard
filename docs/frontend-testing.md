@@ -206,7 +206,8 @@ Automated coverage (`npm run test:coverage`):
 
 Manual check (desktop, 375 px, and 200% zoom): create a transaction with a new category and
 icon, confirm it appears in the budget form and both filters, rename and re-icon it from
-"Manage categories", try deleting it while in use (refused), then delete an unused one.
+the Categories page (management moved there in issue #100), try deleting it while in use
+(refused), then delete an unused one.
 Icon grids should wrap, long names should wrap, and nothing should scroll horizontally.
 
 ### Issue #19 local manual verification (October 2, 2026)
@@ -244,7 +245,7 @@ Items not ticked have not been performed yet. Record evidence as described above
       state is clear without color, and focus is visible.
 - [ ] Duplicate recovery: the name error is announced with the field, and "Use existing
       category" selects it and keeps the other values.
-- [ ] Rename and re-icon from "Manage categories"; focus returns to the edit button.
+- [ ] Rename and re-icon on the Categories page; focus returns to the Edit button.
 - [ ] In-use delete refusal is announced; focus returns to the delete button.
 - [ ] Cancel edit and keep-category return focus to the button that opened them; a
       completed delete moves focus to the "Hide categories" toggle.
@@ -268,7 +269,8 @@ restoration screens use `PublicLayout` and never show the sidebar or drawer.
 | Above 1100px | Sticky sidebar, 240px expanded or 72px collapsed (icons only, tooltips on hover and keyboard focus). The collapse toggle sits beside the brand; when collapsed, hovering the "F" or focusing the toggle reveals the expand button. The width changes instantly. |
 | 1100px and below | Compact top bar (menu button, brand, account menu) and a native modal `<dialog>` drawer that slides in (no motion with reduced motion). Below 640px the account button shows only the avatar. |
 
-- **Destinations:** Dashboard (`/`, exact match), Transactions, Budgets, defined once in
+- **Destinations:** Dashboard (`/`, exact match), Transactions, Budgets, and Categories
+  (added by issue #100), defined once in
   `navigation.ts`. Profile and Account Settings stay in the account menu, which is in the
   top bar at every size. The current page has `aria-current="page"` and a visible bar.
 - **Collapse preference:** `localStorage` key `fintrack:sidebar-collapsed` (`"true"` or
@@ -284,7 +286,7 @@ restoration screens use `PublicLayout` and never show the sidebar or drawer.
 | Area | Tests |
 | --- | --- |
 | Public and signed-in layouts, one `main` and one `header`, skip link, restoration without sign-in links, logout removing the shell, Profile and Settings through the account menu | `App.test.tsx`, `PublicLayout.test.tsx`, `ProtectedRoute.test.tsx` |
-| Only the three destinations, current page for each route, query strings and trailing slashes, Dashboard exact match, decorative icons and tooltips | `PrimaryNav.test.tsx` |
+| Only the four destinations (Categories since issue #100), current page for each route, query strings and trailing slashes, Dashboard exact match, decorative icons and tooltips | `PrimaryNav.test.tsx` |
 | Collapse toggle name, state, focus, saving, storage failures, collapsed names and tooltips, page and account menu not remounted, Back and Forward moving the current-page marker | `AppLayout.test.tsx`, `sidebarPreference.test.ts` |
 | Drawer: menu button attributes, `showModal`, initial focus, every close path, focus return, scroll-lock cleanup, desktop resize, browser-initiated close, unmount, independence from the collapse preference | `AppLayout.test.tsx` |
 | Account menu behaviour, photo and initials fallback, logout | `AccountMenu.test.tsx`, `AuthProvider.account.test.tsx`, `AccountPhoto.test.tsx` |
@@ -329,3 +331,48 @@ table) was fixed during Phase 3 by using `minmax(0, …)` columns.
       open account menu (CSS added in Phase 4)
 - [ ] Budgets charts redraw once after collapsing or expanding the sidebar
 - [ ] Windows High Contrast or forced colours: current-page bar still visible
+
+## Issue #100 (v1.3.0) Categories page
+
+Behaviour is documented in [categories.md](categories.md#categories-page-issue-100) and
+the endpoint in [categories-api.md](categories-api.md#get-apicategoriessummary).
+
+### Automated coverage
+
+| Area | Tests |
+| --- | --- |
+| Summary endpoint: authentication, ownership, ordering, month boundaries, income versus spending, budget counts and metrics, dashboard parity, decimals, fixed query count, MySQL aggregation | `CategorySummaryServiceTest`, `CategoryControllerTest`, `CategorySummaryIntegrationTest`, `CategorySummaryQueryTest`, `CategorySummaryQueryCountTest`, `CategorySummaryMySqlIT` |
+| Route and navigation (sidebar, collapsed sidebar, drawer) | `App.test.tsx`, `PrimaryNav.test.tsx`, `AppLayout.test.tsx` |
+| Loading, load error and retry, empty, populated, summary strip, cards, budget states, links, server month | `CategoriesPage.test.tsx`, `useCategorySummary.test.ts` |
+| Create, edit, delete, delete pre-check, in-use and changed-elsewhere errors, refresh warnings, focus after every outcome, active-form protection | `CategoriesPage.test.tsx`, `CategoryForm.test.tsx`, `CategoryDeleteConfirm.test.tsx`, `CategoryProvider.test.tsx` |
+| Spending table, shares, rounding note, no-spending state | `CategorySpendingTable.test.tsx`, `categorySummary.test.ts` |
+| Search normalization, every filter and sort, ties, no mutation, result count, clear, filtered-empty state | `categoryDiscovery.test.ts`, `CategoriesPage.test.tsx` |
+| Notices (roles, labels, dismiss, actions) and page-level errors on Transactions, Budgets, and the Dashboard | `InlineNotice.test.tsx`, `TransactionPage.test.tsx`, `BudgetPage.test.tsx`, `DashboardPage.test.tsx` |
+| Deep links (`?category=`, `?addCategory=`), manage panels removed, inline creation kept | `TransactionPage.categories.test.tsx`, `BudgetPage.categories.test.tsx`, `categoryDeepLink.test.ts` |
+
+### Issue #100 manual verification (October 3, 2026)
+
+Performed by the maintainer in Chrome against the local backend (not staging):
+
+- Creating, renaming, re-iconing, and deleting custom categories, with the success banner
+  and updated summary figures; in-use Delete shown inactive with its reason.
+- Card links: "Set budget" and "Edit budget" opening the Budgets form preselected for the
+  month, "Add transaction" opening the form with the category and today's date, and
+  "View transactions" opening the filtered history.
+- Search, every filter, every sort, and Clear.
+- A duplicate name on edit shown once, beside the field, with the typed value kept.
+- With DevTools: a delete while offline (error, card and confirmation kept, retry
+  succeeding), a blocked summary refresh after an edit (warning, then "Try again"
+  clearing it), and a blocked initial load (error with "Try again", no stale data), the
+  last at 376px.
+
+### Issue #100 checks still outstanding
+
+- [ ] 768px, 1024px, and 1440px widths, and 200% zoom
+- [ ] Keyboard-only pass of the toolbar, cards, forms, confirmation, and notices
+- [ ] Screen reader pass (VoiceOver): result-count updates, error versus warning
+      announcements, spending-table headers
+- [ ] Reduced motion: the success banner appears without sliding
+- [ ] The in-use race: a transaction added in another tab before confirming a delete
+- [ ] The restyled page-level errors and refresh warnings on Transactions, Budgets, and
+      the Dashboard (changed in Phase 6, covered by tests only)

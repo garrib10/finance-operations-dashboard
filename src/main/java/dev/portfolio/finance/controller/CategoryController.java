@@ -12,8 +12,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import dev.portfolio.finance.dto.category.CategoryResponse;
+import dev.portfolio.finance.dto.category.CategorySummaryListResponse;
 import dev.portfolio.finance.dto.category.CreateCategoryRequest;
 import dev.portfolio.finance.service.CategoryService;
+import dev.portfolio.finance.service.CategorySummaryService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,11 +26,14 @@ import dev.portfolio.finance.dto.category.UpdateCategoryRequest;
 public class CategoryController {
 
     private final CategoryService categoryService;
+    private final CategorySummaryService categorySummaryService;
 
     public CategoryController(
-            CategoryService categoryService
+            CategoryService categoryService,
+            CategorySummaryService categorySummaryService
     ) {
         this.categoryService = categoryService;
+        this.categorySummaryService = categorySummaryService;
     }
 
     @PostMapping
@@ -57,6 +62,16 @@ public class CategoryController {
                 );
 
         return ResponseEntity.ok(response);
+    }
+
+    /** Usage of the signed-in user's categories for the server's reporting month. */
+    @GetMapping("/summary")
+    public ResponseEntity<CategorySummaryListResponse> getCategorySummary(
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(
+                categorySummaryService.getSummary(authentication.getName())
+        );
     }
 
     @GetMapping("/{id}")

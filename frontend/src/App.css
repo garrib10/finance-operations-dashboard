@@ -1360,20 +1360,75 @@
   min-width: 0;
 }
 
-.category-select__control {
-  display: flex;
+/* Field icons sit inside the control on the left, like a search box: the category's own
+   icon, and the Type, Amount, Description, Date and budget icons. */
+.category-select__control,
+.icon-field {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.category-select__control > svg,
+.icon-field > svg {
+  position: absolute;
+  top: 50%;
+  left: 0.85rem;
+  margin: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* Doubled class so this outranks page rules such as ".budget-form select". */
+.category-select__control.category-select__control > select,
+.icon-field.icon-field > input,
+.icon-field.icon-field > select {
+  width: 100%;
+  padding-left: 2.6rem;
+}
+
+/* An icon that waits for input (Amount, Description): no gap while the field is empty. */
+.icon-field.icon-field--empty > input {
+  padding-left: 0.75rem;
+}
+
+.field-icon {
+  color: var(--color-primary);
+}
+
+.category-icon--placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Budget form: Category + Monthly Limit, then Month + Year, then the buttons. The
+   category only spans the row while its new-category fields are open. */
+.budget-form .category-select:not(:has(.category-create)) {
+  grid-column: auto;
+  display: block;
+}
+
+.budget-form > div:last-child {
+  grid-column: 1 / -1;
+}
+
+.icon-label,
+.transaction-type-label {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
+  gap: 0.4rem;
+  white-space: nowrap;
 }
 
-.category-select__control .category-icon {
-  margin-top: 0;
+.transaction-type-icon {
+  flex-shrink: 0;
 }
 
-.category-select__control select {
-  flex: 1;
-  min-width: 0;
+.transaction-type-icon--income {
+  color: var(--color-success);
+}
+
+.transaction-type-icon--expense {
+  color: var(--color-danger);
 }
 
 .category-create {
@@ -1396,11 +1451,6 @@
   margin: 0;
   color: var(--color-text-muted);
   font-size: 0.875rem;
-}
-
-.form-warning {
-  margin: 1rem 0;
-  color: var(--color-warning);
 }
 
 .icon-picker-field {
@@ -1464,54 +1514,33 @@
   color: #ffffff;
 }
 
-.category-manager {
-  margin-top: 2rem;
-}
-
-.category-manager__header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.category-manager__panel {
-  margin-top: 1rem;
-}
-
-.category-manager__list {
-  display: grid;
-  gap: 0.5rem;
-  margin: 1rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.category-manager__item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background-color: var(--color-surface);
-}
-
-.category-manager__actions,
-.category-manager__confirm {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.category-manager__form {
+/* Category create and edit forms, and the inline delete confirmation (Categories page). */
+.category-form {
   display: grid;
   gap: 1rem;
   width: 100%;
+}
+
+.category-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.category-delete-confirm {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+}
+
+.app-main .category-delete-confirm__message {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .category-badge {
@@ -1533,11 +1562,6 @@
 
   .budget-period-filter {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .category-manager__item {
-    align-items: stretch;
-    flex-direction: column;
   }
 }
 
@@ -1604,6 +1628,97 @@
   background-color: var(--color-success-soft);
 }
 
+/* Persistent notices in the page flow: a visible label and icon carry the severity,
+   the colour only reinforces it. No animation, so nothing to reduce for motion. */
+.inline-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 1.5rem;
+  padding: 0.85rem 0.85rem 0.85rem 1rem;
+  color: var(--color-text);
+  background-color: var(--color-primary-soft);
+  border: 1px solid var(--color-info-border);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+}
+
+.inline-notice:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.inline-notice--warning {
+  background-color: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  border-left-color: var(--color-warning);
+}
+
+.inline-notice--error {
+  background-color: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+  border-left-color: var(--color-danger);
+}
+
+.inline-notice--info {
+  border-left-color: var(--color-primary);
+}
+
+.inline-notice__icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: var(--color-primary);
+}
+
+.inline-notice--warning .inline-notice__icon,
+.inline-notice--warning .inline-notice__label {
+  color: var(--color-warning);
+}
+
+.inline-notice--error .inline-notice__icon,
+.inline-notice--error .inline-notice__label {
+  color: var(--color-danger);
+}
+
+.inline-notice__message {
+  flex: 1 1 14rem;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.inline-notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.inline-notice__dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  color: var(--color-text-muted);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+
+.inline-notice__dismiss:hover {
+  color: var(--color-text);
+  background-color: rgb(15 23 42 / 0.06);
+}
+
+.inline-notice__dismiss:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 @keyframes status-banner-in {
   from {
     opacity: 0;
@@ -1624,4 +1739,411 @@
   .mobile-nav[open]::backdrop {
     animation: none;
   }
+}
+
+/* ---------------------------------------------------------------- Categories page (#100) */
+
+.category-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0 0 2rem;
+}
+
+.category-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 1.1rem 1.25rem;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.category-stat dt {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.category-stat dd {
+  margin: 0;
+}
+
+.category-stat__value {
+  color: var(--color-text);
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.category-stat__value--name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.category-stat__value--name .category-icon {
+  flex-shrink: 0;
+  margin-top: 0;
+}
+
+.category-stat__detail {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+/* Spending distribution: a plain table with an in-row bar that repeats the share. */
+.category-spending {
+  margin: 0 0 2rem;
+}
+
+.category-spending h2 {
+  margin: 0 0 0.35rem;
+}
+
+.app-main .category-spending__intro,
+.app-main .category-spending__note {
+  margin: 0 0 0.75rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.app-main .category-spending__note {
+  margin: 0.75rem 0 0;
+}
+
+.category-spending__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.category-spending__table th,
+.category-spending__table td {
+  padding: 0.6rem 0.5rem;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.category-spending__table thead th {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Category takes the room; Spent and Share keep a steady width. */
+.category-spending__table th:nth-child(2),
+.category-spending__table td:nth-child(2) {
+  width: 7.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.category-spending__table th:nth-child(3),
+.category-spending__table td:nth-child(3) {
+  width: 32%;
+}
+
+.category-spending__table tbody th {
+  font-weight: 600;
+}
+
+.category-spending__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.category-spending__name .category-icon {
+  margin-top: 0;
+}
+
+.category-spending__share {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+
+.category-spending__bar {
+  display: block;
+  height: 0.4rem;
+  margin-top: 0.3rem;
+  overflow: hidden;
+  background-color: var(--color-background);
+  border-radius: 999px;
+}
+
+.category-spending__bar > span {
+  display: block;
+  height: 100%;
+  background-color: var(--color-primary);
+  border-radius: inherit;
+}
+
+/* Search, filter, and sort for the category cards. */
+.category-toolbar {
+  margin: 0 0 1rem;
+}
+
+.category-toolbar__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.category-toolbar__controls .form-field {
+  flex: 1 1 11rem;
+  min-width: 0;
+}
+
+.category-toolbar__controls .category-toolbar__search {
+  flex-basis: 15rem;
+}
+
+.category-toolbar__controls select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.75rem;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.category-toolbar__controls select:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Phones: narrower fixed columns so long category names wrap instead of overflowing. */
+@media (max-width: 480px) {
+  .category-spending__table th,
+  .category-spending__table td {
+    padding: 0.55rem 0.3rem;
+  }
+
+  .category-spending__table th:nth-child(2),
+  .category-spending__table td:nth-child(2) {
+    width: 5.75rem;
+  }
+
+  .category-spending__table th:nth-child(3),
+  .category-spending__table td:nth-child(3) {
+    width: 4.75rem;
+  }
+}
+
+.app-main .category-toolbar__count {
+  margin: 0.75rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.app-main .category-toolbar__note {
+  margin: 0.25rem 0 0;
+}
+
+.categories-page__no-results {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 1.25rem;
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.app-main .categories-page__no-results p {
+  margin: 0;
+}
+
+.categories-page__list-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.categories-page__list-header h2 {
+  margin: 0;
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.category-grid > li {
+  display: flex;
+  min-width: 0;
+}
+
+.category-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+  padding: 1.25rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.category-card__header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.category-card__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+  border-radius: var(--radius-md);
+}
+
+.category-card__icon-svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.category-card__name {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.category-card .category-badge {
+  flex-shrink: 0;
+}
+
+.category-card__figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.category-card__figures div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.category-card__figures dt {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.category-card__figures dd {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.category-card__budget {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.category-card__budget-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-main .category-card__note,
+.app-main .category-card__usage {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+/* Keep "Last used <date>" together when the activity line wraps. */
+.category-card__last-used {
+  white-space: nowrap;
+}
+
+.app-main .category-card__usage {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 1100px) {
+  .category-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .category-summary-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.category-card__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.category-card__manage {
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* In-use Delete stays focusable (aria-disabled) so its reason is reachable. */
+.category-card [aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+/* Headings that receive focus after a change, so keyboard users can see where they are. */
+.category-card__name:focus-visible,
+#categories-list-heading:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+.categories-page__create {
+  margin-bottom: 1.5rem;
+}
+
+.categories-page__create h3 {
+  margin: 0;
 }

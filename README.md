@@ -41,13 +41,16 @@ The project demonstrates layered backend architecture, short-lived JWTs with rot
 - Custom categories with approved icons, created together with a transaction or budget in one
   database transaction and reusable everywhere; database-enforced per-user name uniqueness and
   ownership
+- Dedicated Categories page: usage insights, this month's spending distribution, search,
+  filters, and sorting, category management, and shortcuts into each category's
+  transactions and budget, backed by a fixed-query summary API
 - Responsive application shell: a collapsible desktop sidebar that remembers its state and
   an accessible mobile navigation drawer, with keyboard and reduced-motion support
 - Search, filtering, sorting, pagination, and financial analytics
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
-- **915 passing backend tests** (877 unit + 38 MySQL integration) with **98.82% instruction coverage** and **95.61% branch coverage**
-- **720 passing frontend tests** across **46 test files** with **99.52% statement, 98.5% branch, 99.54% function, and 100% line coverage**
+- **950 passing backend tests** (911 unit + 39 MySQL integration) with **98.86% instruction coverage** and **95.69% branch coverage**
+- **927 passing frontend tests** across **58 test files** with **99.58% statement, 98.84% branch, 99.81% function, and 100% line coverage**
 
 ---
 
@@ -164,6 +167,23 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 - Category icons beside the names on transactions, budgets, filters, and the dashboard; unknown icons fall
   back to a generic tag
 
+**Categories page** (`/categories`, in the sidebar and mobile drawer):
+
+- Summary strip: category counts, this month's top category, categories over budget, and
+  categories with spending
+- This month's spending distribution as an accessible table with share bars
+- A card per category with its icon, built-in or custom badge, spending and share, budget
+  progress and status, usage counts, and last-used date
+- Search (ignores case and surrounding spaces, Unicode-normalized), filters (Custom,
+  Built-in, Unused, No budget this month), and sorting (name, this month's spending, most
+  used); the summary always covers every category
+- Create, rename, re-icon, and delete custom categories on the page; Delete is disabled with
+  the reason when a category is in use
+- Shortcuts to the category's transactions (or to add its first one) and to set or edit its
+  budget
+- Status feedback: success confirmations, and persistent, labelled warnings and errors that
+  never rely on colour alone; field errors stay beside their inputs
+
 ### Budgets
 
 - Create, edit, and delete monthly category budgets
@@ -228,10 +248,10 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 
 | Test Suite        | Results                                                             |
 | ----------------- | ------------------------------------------------------------------- |
-| Backend           | **915 tests passing** (877 unit, 38 MySQL integration)              |
-| Backend Coverage  | **98.82% instruction coverage, 95.61% branch coverage**             |
-| Frontend          | **720 tests passing across 46 test files**                          |
-| Frontend Coverage | **99.52% statements, 98.5% branches, 99.54% functions, 100% lines** |
+| Backend           | **950 tests passing** (911 unit, 39 MySQL integration)              |
+| Backend Coverage  | **98.86% instruction coverage, 95.69% branch coverage**             |
+| Frontend          | **927 tests passing across 58 test files**                          |
+| Frontend Coverage | **99.58% statements, 98.84% branches, 99.81% functions, 100% lines** |
 
 For branch behavior, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
@@ -253,6 +273,8 @@ Coverage includes:
 - User ownership and cross-user data isolation
 - Transaction search, filtering, sorting, and pagination
 - Category normalization, built-in protection, icons, rename, and in-use deletion rules
+- The category usage summary: ownership, month boundaries, expense-only spending, budget
+  parity with the dashboard, and a fixed query count
 - Atomic category creation with transactions and budgets (rollback verified on the database)
 - Flyway V6 on a production-shaped MySQL schema, including preflight failures and recovery
 - Budget calculations, analytics, and status behavior
@@ -296,8 +318,11 @@ Coverage includes:
 - Profile-photo preview, validation, upload/replace/remove states, avatar fallback, and
   header synchronization
 - Preference-aware date rendering and all transaction request paths
-- Category selection, custom-category creation, icon picker, category management, category filters,
-  server field messages beside their inputs, icon fallback, and stale-session category state
+- Category selection, custom-category creation, icon picker, category filters, server field
+  messages beside their inputs, icon fallback, and stale-session category state
+- The Categories page: loading, error, and empty states; create, edit, and delete workflows
+  with focus management; search, filters, sorting, and the spending table; deep links; and
+  status notices
 - Responsive navigation: public versus signed-in layouts, current-page state, sidebar collapse
   and saved preference, every mobile-drawer close path, focus return, and scroll-lock cleanup
 
@@ -363,6 +388,7 @@ The health, registration, and login endpoints are public. All other endpoints re
 | Categories     | `GET`    | `/api/categories/{id}`        | Get a category                                  |
 | Categories     | `PUT`    | `/api/categories/{id}`        | Rename or re-icon a custom category             |
 | Categories     | `DELETE` | `/api/categories/{id}`        | Delete an unused custom category                |
+| Categories     | `GET`    | `/api/categories/summary`     | Per-category usage and spending summary         |
 | Budgets        | `POST`   | `/api/budgets`                | Create a monthly budget                         |
 | Budgets        | `GET`    | `/api/budgets`                | Get budgets for a selected period               |
 | Budgets        | `GET`    | `/api/budgets/{id}`           | Get a budget                                    |

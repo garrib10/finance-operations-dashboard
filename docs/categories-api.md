@@ -93,6 +93,95 @@ fixed.
 
 To delete a category that is in use, first move or delete its transactions and budgets.
 
+### `GET /api/categories/summary`
+
+Usage of every category the authenticated user owns, for the Categories page (issue #100).
+Read-only; it takes no parameters and never accepts a user or category ID.
+
+```json
+{
+  "month": 10,
+  "year": 2026,
+  "categories": [
+    {
+      "id": 42,
+      "name": "Pet Care",
+      "iconKey": "paw-print",
+      "builtIn": false,
+      "budgetEnabled": true,
+      "transactionCount": 5,
+      "budgetCount": 3,
+      "lastTransactionDate": "2026-10-20",
+      "currentMonthSpent": 60.00,
+      "allTimeSpent": 140.00,
+      "currentMonthBudget": {
+        "budgetId": 11,
+        "monthlyLimit": 80.00,
+        "amountSpent": 60.00,
+        "amountRemaining": 20.00,
+        "percentageUsed": 75.00,
+        "status": "WARNING"
+      },
+      "canDelete": false
+    },
+    {
+      "id": 3,
+      "name": "Income",
+      "iconKey": "circle-dollar-sign",
+      "builtIn": true,
+      "budgetEnabled": false,
+      "transactionCount": 2,
+      "budgetCount": 0,
+      "lastTransactionDate": "2026-10-01",
+      "currentMonthSpent": 0.00,
+      "allTimeSpent": 0.00,
+      "currentMonthBudget": null,
+      "canDelete": false
+    },
+    {
+      "id": 57,
+      "name": "Weekend Trips",
+      "iconKey": "plane",
+      "builtIn": false,
+      "budgetEnabled": true,
+      "transactionCount": 0,
+      "budgetCount": 0,
+      "lastTransactionDate": null,
+      "currentMonthSpent": 0.00,
+      "allTimeSpent": 0.00,
+      "currentMonthBudget": null,
+      "canDelete": true
+    }
+  ]
+}
+```
+
+The rows show a used custom category with this month's budget, a built-in income
+category (income is counted in `transactionCount` but never as spending, and built-ins
+can never be deleted), and a never-used custom category (`null` date and budget,
+deletable).
+
+| Field | Meaning |
+| --- | --- |
+| `month`, `year` | The server's reporting month: the whole calendar month containing today in the server's default time zone, the same month the dashboard uses. |
+| `categories` | Every category the user owns, ordered by name, then ID. Empty only if the user has no categories. |
+| `transactionCount` | All of the category's transactions, income and expense, in any month. |
+| `budgetCount` | The category's budgets in any month or year. |
+| `lastTransactionDate` | The latest transaction date (`yyyy-MM-dd`), including future-dated ones; `null` when never used. |
+| `currentMonthSpent`, `allTimeSpent` | Sums of **expense** transactions only, in the reporting month and in total. Income never counts as spending. Always present, two decimal places (`0.00` when none). |
+| `currentMonthBudget` | The category's budget for the reporting month, or `null`. `amountSpent` equals `currentMonthSpent`; `amountRemaining`, `percentageUsed`, and `status` use the same rules as budget analytics and the dashboard (`ON_TRACK` below 50%, `CAUTION` from 50%, `WARNING` from 75%, `OVER_BUDGET` from 100%). Reported whenever such a budget exists, regardless of `budgetEnabled`. |
+| `canDelete` | `true` only for a custom category with no transactions and no budgets. It reflects the moment of the request: `DELETE` still re-checks and returns `409 CATEGORY_IN_USE` if a reference was added since. |
+
+Money values are JSON numbers with two decimal places, computed with exact decimal
+arithmetic. Unauthenticated requests receive `401`.
+
+**Queries.** The summary runs a fixed five statements however many categories exist: the
+user, the categories, one grouped transaction aggregate (counts, latest date, and both
+expense sums by conditional aggregation), one grouped budget count, and the reporting
+month's budgets. Transactions and budgets are aggregated separately rather than joined
+together, so no count or sum is multiplied. `CategorySummaryQueryCountTest` asserts the
+same statement count for 2 and 12 categories.
+
 ## Categories in transactions and budgets
 
 `POST`/`PUT /api/transactions` and `POST`/`PUT /api/budgets` choose their category with
@@ -254,7 +343,16 @@ verified on MySQL 8.4 with real row locks (`CategoryMutationRaceMySqlIT`,
 
 ## Test coverage
 
-Run with `./mvnw clean verify` (MySQL tests need Docker). Category API tests: `CategoryControllerTest`, `CategoryServiceTest`, `CategoryApiIntegrationTest`, `CategoryMutationRaceMySqlIT`. Financial-write tests:
+Run with `./mvnw clean verify` (MySQL tests need Docker). Category API tests: `CategoryControllerTest`, `CategoryServiceTest`, `CategoryApiIntegrationTest`, `CategoryMutationRaceMySqlIT`.
+
+Summary tests: `CategorySummaryServiceTest` (merging, zeros, `canDelete`, budget metrics),
+`CategorySummaryQueryTest` (aggregate accuracy, month boundaries, income, ownership),
+`CategorySummaryQueryCountTest` (fixed statement count), `CategorySummaryIntegrationTest`
+(contract, `401`, user isolation with same-named categories, and parity with the dashboard's
+spending and budget metrics), `CategorySummaryMySqlIT` (exact decimals on MySQL), plus
+`BudgetMetricsTest` and `ReportingPeriodProviderTest` for the shared calculations.
+
+Financial-write tests:
 
 - **Atomic rollback:** `FinancialCategoryIntegrationTest` creates transactions and budgets
   with `newCategory`, then forces failures (invalid fields, an amount too large for the

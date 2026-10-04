@@ -135,6 +135,10 @@ describe("DashboardPage", () => {
     );
 
     expect(screen.getByText("Grocery Store")).toBeInTheDocument();
+    const row = screen.getByText("Grocery Store").closest("tr");
+    expect(row).toHaveTextContent("Expense");
+    expect(row?.querySelector(".transaction-type-icon--expense")).toBeInTheDocument();
+    expect(row?.querySelector(".lucide-calendar-days")).toBeNull();
 
     expect(screen.getAllByText("Groceries").length).toBeGreaterThan(0);
 
@@ -249,7 +253,7 @@ describe("DashboardPage", () => {
     render(<DashboardPage />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Unable to load dashboard data. Please try again.",
+      "Error: Unable to load dashboard data. Please try again.",
     );
   });
 

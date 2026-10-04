@@ -1,3 +1,5 @@
+import type { BudgetStatus } from "./budget";
+
 /**
  * Semantic icon key from the backend's approved catalog (for example "house" or "tag").
  * Typed as a string because the catalog can grow; an unknown stored key is returned as "tag".
@@ -42,3 +44,41 @@ export interface NewCategoryRequest {
 export type CategorySelection =
   | { categoryId: number; newCategory?: never }
   | { categoryId?: never; newCategory: NewCategoryRequest };
+
+/** The category's budget for the server's reporting month (same metrics as budget analytics). */
+export interface CurrentMonthBudget {
+  budgetId: number;
+  monthlyLimit: number;
+  amountSpent: number;
+  amountRemaining: number;
+  percentageUsed: number;
+  status: BudgetStatus;
+}
+
+/** One category's usage from GET /api/categories/summary. Spending counts expenses only. */
+export interface CategorySummary {
+  id: number;
+  name: string;
+  iconKey: CategoryIconKey;
+  builtIn: boolean;
+  budgetEnabled: boolean;
+  /** Income and expense transactions, any month. */
+  transactionCount: number;
+  /** Budgets in any month or year. */
+  budgetCount: number;
+  /** ISO date, or null when the category has never been used. */
+  lastTransactionDate: string | null;
+  currentMonthSpent: number;
+  allTimeSpent: number;
+  currentMonthBudget: CurrentMonthBudget | null;
+  /** Custom and unused right now; the API still re-checks on delete. */
+  canDelete: boolean;
+}
+
+export interface CategorySummaryList {
+  /** The server's reporting month (1–12) and year. */
+  month: number;
+  year: number;
+  /** Ordered by name, then ID. */
+  categories: CategorySummary[];
+}

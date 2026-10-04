@@ -25,17 +25,20 @@ public class DashboardService {
     private final TransactionRepository transactionRepository;
     private final BudgetRepository budgetRepository;
     private final BudgetService budgetService;
+    private final ReportingPeriodProvider reportingPeriodProvider;
 
     public DashboardService(
             UserRepository userRepository,
             TransactionRepository transactionRepository,
             BudgetRepository budgetRepository,
-            BudgetService budgetService
+            BudgetService budgetService,
+            ReportingPeriodProvider reportingPeriodProvider
     ) {
         this.userRepository = userRepository;
         this.transactionRepository = transactionRepository;
         this.budgetRepository = budgetRepository;
         this.budgetService = budgetService;
+        this.reportingPeriodProvider = reportingPeriodProvider;
     }
 
     @Transactional(readOnly = true)
@@ -61,13 +64,11 @@ public class DashboardService {
         BigDecimal currentBalance =
                 totalIncome.subtract(totalExpenses);
 
-        LocalDate today = LocalDate.now();
+        ReportingPeriod period = reportingPeriodProvider.currentMonth();
 
-        LocalDate startDate = today.withDayOfMonth(1);
+        LocalDate startDate = period.start();
 
-        LocalDate endDate = startDate.withDayOfMonth(
-                startDate.lengthOfMonth()
-        );
+        LocalDate endDate = period.end();
 
         BigDecimal monthlyIncome =
                 transactionRepository.sumAmountByUserTypeAndDateRange(
@@ -122,8 +123,8 @@ public class DashboardService {
                         )
                         .stream()
                         .filter(budget ->
-                                budget.getMonth() == today.getMonthValue()
-                                        && budget.getYear() == today.getYear()
+                                budget.getMonth() == period.month()
+                                        && budget.getYear() == period.year()
                         )
                         .map(budget -> {
                             BudgetAnalyticsResponse analytics =

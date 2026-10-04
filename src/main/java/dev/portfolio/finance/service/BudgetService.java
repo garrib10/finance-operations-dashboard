@@ -1,7 +1,6 @@
 package dev.portfolio.finance.service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
@@ -13,7 +12,6 @@ import dev.portfolio.finance.dto.budget.BudgetResponse;
 import dev.portfolio.finance.dto.budget.CreateBudgetRequest;
 import dev.portfolio.finance.dto.budget.UpdateBudgetRequest;
 import dev.portfolio.finance.entity.Budget;
-import dev.portfolio.finance.entity.BudgetStatus;
 import dev.portfolio.finance.entity.Category;
 import dev.portfolio.finance.entity.TransactionType;
 import dev.portfolio.finance.entity.User;
@@ -252,25 +250,8 @@ public class BudgetService {
                                 endDate
                         );
 
-        BigDecimal amountRemaining =
-                budget.getMonthlyLimit()
-                        .subtract(amountSpent);
-
-        BigDecimal percentageUsed =
-                amountSpent
-                        .divide(
-                                budget.getMonthlyLimit(),
-                                4,
-                                RoundingMode.HALF_UP
-                        )
-                        .multiply(BigDecimal.valueOf(100))
-                        .setScale(
-                                2,
-                                RoundingMode.HALF_UP
-                        );
-
-        BudgetStatus status =
-                determineBudgetStatus(percentageUsed);
+        BudgetMetrics metrics =
+                BudgetMetrics.calculate(budget.getMonthlyLimit(), amountSpent);
 
         return new BudgetAnalyticsResponse(
                 budget.getId(),
@@ -279,36 +260,12 @@ public class BudgetService {
                 budget.getCategory().getIcon().key(),
                 budget.getMonthlyLimit(),
                 amountSpent,
-                amountRemaining,
-                percentageUsed,
-                status,
+                metrics.amountRemaining(),
+                metrics.percentageUsed(),
+                metrics.status(),
                 budget.getMonth(),
                 budget.getYear()
         );
-    }
-
-    private BudgetStatus determineBudgetStatus(
-            BigDecimal percentageUsed
-    ) {
-        if (percentageUsed.compareTo(
-                BigDecimal.valueOf(100)
-        ) >= 0) {
-            return BudgetStatus.OVER_BUDGET;
-        }
-
-        if (percentageUsed.compareTo(
-                BigDecimal.valueOf(75)
-        ) >= 0) {
-            return BudgetStatus.WARNING;
-        }
-
-        if (percentageUsed.compareTo(
-                BigDecimal.valueOf(50)
-        ) >= 0) {
-            return BudgetStatus.CAUTION;
-        }
-
-        return BudgetStatus.ON_TRACK;
     }
 
     private BudgetResponse mapToResponse(

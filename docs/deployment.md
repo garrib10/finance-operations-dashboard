@@ -311,7 +311,7 @@ and evidence for each item. Nothing here was run locally as part of the feature 
       (`newCategory.name`). `newCategory.iconKey` cannot be produced from the UI; check it
       with an API client sending an unknown icon (`400`, `fields["newCategory.iconKey"]`).
 - [ ] 20. Keyboard only: create a transaction and a budget with a new category, choose an
-      icon with arrow keys, rename and delete from **Manage categories**; focus returns
+      icon with arrow keys, rename and delete on the **Categories** page; focus returns
       sensibly after cancel, save, and delete.
 - [ ] 21. Phone width (about 375 px), tablet, and 200% browser zoom: no horizontal page
       scrolling, icon grid wraps, long names wrap, management controls reachable.

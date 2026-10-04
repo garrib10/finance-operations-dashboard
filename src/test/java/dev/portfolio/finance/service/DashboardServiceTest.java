@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import dev.portfolio.finance.dto.budget.BudgetAnalyticsResponse;
@@ -47,6 +48,10 @@ class DashboardServiceTest {
 
     @Mock
     private BudgetService budgetService;
+
+    // The real system-clock provider, so "this month" matches the LocalDate.now() test data.
+    @Spy
+    private ReportingPeriodProvider reportingPeriodProvider = new ReportingPeriodProvider();
 
     @InjectMocks
     private DashboardService dashboardService;

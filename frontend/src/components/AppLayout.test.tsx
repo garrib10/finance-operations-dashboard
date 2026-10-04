@@ -67,6 +67,9 @@ function renderShell(path = "/transactions") {
   );
 }
 
+// Full user-event flows are slow under coverage instrumentation and on a busy machine.
+vi.setConfig({ testTimeout: 20_000 });
+
 describe("AppLayout", () => {
   beforeEach(() => {
     vi.mocked(useAuth).mockReturnValue(accountContext());
@@ -208,8 +211,8 @@ describe("AppLayout", () => {
 
       const nav = screen.getByRole("navigation", { name: "Primary navigation" });
       expect(within(nav).getAllByRole("link").map((link) => link.getAttribute("href")))
-        .toEqual(["/", "/transactions", "/budgets"]);
-      for (const name of ["Dashboard", "Transactions", "Budgets"]) {
+        .toEqual(["/", "/transactions", "/budgets", "/categories"]);
+      for (const name of ["Dashboard", "Transactions", "Budgets", "Categories"]) {
         expect(within(nav).getByRole("link", { name })).toBeInTheDocument();
       }
       expect(within(nav).getByRole("link", { name: "Transactions" })).toHaveAttribute("aria-current", "page");
@@ -286,7 +289,7 @@ describe("AppLayout", () => {
       expect(isScrollLocked()).toBe(true);
       const nav = within(drawer()).getByRole("navigation", { name: "Primary navigation" });
       expect(within(nav).getAllByRole("link").map((link) => link.getAttribute("href")))
-        .toEqual(["/", "/transactions", "/budgets"]);
+        .toEqual(["/", "/transactions", "/budgets", "/categories"]);
       expect(within(nav).getByRole("link", { name: "Transactions" })).toHaveAttribute("aria-current", "page");
     });
 
@@ -397,7 +400,7 @@ describe("AppLayout", () => {
       // Collapsed styles are scoped to the sidebar, which never contains the drawer.
       expect(sidebar()).not.toContainElement(drawer());
       const nav = within(drawer()).getByRole("navigation", { name: "Primary navigation" });
-      for (const name of ["Dashboard", "Transactions", "Budgets"]) {
+      for (const name of ["Dashboard", "Transactions", "Budgets", "Categories"]) {
         expect(within(nav).getByRole("link", { name })).toBeInTheDocument();
       }
     });

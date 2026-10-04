@@ -214,10 +214,11 @@ Usage above 100% remains visible and available through `aria-valuetext`, while t
   `newCategory.iconKey` messages appear beside their controls with `aria-invalid`; the
   first invalid control receives focus. Amounts above 9,999,999,999.99 or with more than
   two decimals are rejected (`400`).
-- **Management:** custom categories can be renamed, re-iconed, or deleted from "Manage
-  categories". Deleting a category used by any transaction or budget is refused with
-  "This category is used by transactions or budgets and cannot be deleted." and the
-  category stays listed. That message (`role="alert"`) closes after 3 seconds. Built-in categories cannot be changed.
+- **Management:** custom categories are created, renamed, re-iconed, and deleted on the
+  Categories page (`/categories`, reached from the sidebar). Delete is inactive (`aria-disabled="true"`) with a visible reason for a
+  category in use; if the server still refuses a delete (`409`), a persistent
+  `role="alert"` explains it and the category stays listed. Built-in categories cannot be
+  changed.
 - **Filters:** the transaction filter is applied on the server and returns to page 1;
   Reset clears it. The budget filter narrows the loaded month in the browser and shows a
   distinct empty message when the month has budgets but none in that category.
@@ -265,7 +266,7 @@ keep working.
 
 | Element | Selector |
 | --- | --- |
-| Primary navigation | `nav` named "Primary navigation" with links "Dashboard" (`/`), "Transactions", and "Budgets" |
+| Primary navigation | `nav` named "Primary navigation" with links "Dashboard" (`/`), "Transactions", "Budgets", and "Categories" (`/categories`) |
 | Current page | the matching primary link has `aria-current="page"` |
 | Brand | link "FinTrack" (to `/`) |
 | Account menu | button "Open account menu for {name}" (`#account-menu-trigger`) in the page `header`; panel `#account-menu-panel` |
@@ -279,12 +280,42 @@ keep working.
 
 Above 1100px the primary navigation is a sidebar column that can be collapsed to
 icons. Collapsed links keep their names ("Dashboard", "Transactions", "Budgets"), so
-name-based locators work in both states; the choice is saved per browser in
+name-based locators work in both states (including "Categories"); the choice is saved per browser in
 `localStorage` under `fintrack:sidebar-collapsed` ("true" or "false"). At 1100px and
 below the sidebar is hidden: open the drawer with the menu button, then follow a link
 (the drawer closes on navigation, Escape, the close button, or a backdrop click). Below
 640px the account menu button shows only the avatar; its name is unchanged. Prefer role
 and name locators over layout position.
+
+### Categories page (v1.3.0)
+
+`/categories` is protected and lists every category the user owns with its usage for the
+server's reporting month (issue #100). No new `data-testid` values are added.
+
+| Element | Selector |
+| --- | --- |
+| Page | `h1` "Categories"; loading `role="status"` "Loading categories…"; failure `role="alert"` with button "Try again" |
+| Summary strip | `dl` with terms "Categories", "Top this month", "Over budget", "With spending" |
+| Category card | `article` named by the category (for example "Pet Care"), badge "Built-in" or "Custom" |
+| Card figures | "Spent in {Month}", "Share of spending" (only when the month has spending) |
+| Budget progress | `role="progressbar"` named "{Category} budget used", `aria-valuenow` 0–100, `aria-valuetext` "{n}% used"; status text such as "Warning" |
+| No budget | "No budget for {Month}", shown only for categories that take budgets |
+| Activity | "{n} transactions · {m} budgets · Last used {date}" or "Not used yet" |
+| Spending table | `table` named "Spending in {Month Year}" with column headers Category, Spent, Share and a row header per category with spending; "No spending recorded for {Month Year}." when empty; rounding note "Percentages are rounded, so they may not add up to exactly 100%." |
+| Toolbar | search "Search categories", selects "Filter categories" (All categories, Custom, Built-in, Unused, No budget this month) and "Sort categories" (Name, This month’s spending, Most used); `role="status"` "Showing {n} of {total} categories"; button "Clear category filters" when not at the defaults |
+| No matches | "No categories match your search and filter." with button "Show all categories" |
+| Create | button "Create category" opens a form named "Create category" (fields "Category name" and the "Icon" radiogroup; submit "Create category", "Cancel") |
+| Edit | button "Edit {name}" (custom only) opens a form named "Edit {name}" with "Save category" and "Cancel" |
+| Delete | button "Delete {name}" (custom only); `aria-disabled="true"` plus a reason "Used by …" when in use; confirmation group "Delete “{name}”? This cannot be undone." with "Delete category" and "Keep category" |
+| Card links | "View transactions for {name}" (`/transactions?category={id}`), or "Add a transaction for {name}" (`/transactions?addCategory={id}`) when the category has no transactions; "Set budget for {name}" or "Edit budget for {name}" (`/budgets?category={id}`, only for categories that take budgets) |
+| Messages | success banner "“{name}” was created/updated/deleted successfully." (after the summary refresh); refresh warning `role="status"` starting "Warning: “{name}” was updated, but the latest category summary could not be loaded." with "Try again"; errors `role="alert"` starting "Error:" with "Dismiss error"; initial load failure "Error: Unable to load categories. Please try again." with "Try again" |
+| Inline notice | `InlineNotice`: visible label "Error:" (`role="alert"`), "Warning:" or "Note:" (`role="status"`); optional action button and "Dismiss error" / "Dismiss warning" / "Dismiss note" |
+
+Cards are ordered by name, then ID, unless another sort is chosen; the toolbar affects the
+cards only, never the summary strip or spending table. Transactions and Budgets accept `?category={id}`: a
+category the user owns is applied (Transactions filters; Budgets opens that month's
+budget for editing or preselects it for a new one); any other value is removed from the
+URL without a request.
 
 ### Category controls (v1.3.0)
 
@@ -303,8 +334,8 @@ IDs, labels, and accessible names.
 | Budget fields | `#budget-monthly-limit`, `#budget-month`, `#budget-year` (labels unchanged) |
 | Field errors | `#transaction-category-error` / `#budget-category-error` (selection), `#…-category-new-name-error`, `#…-category-icon-error`, `#transaction-amount-error`, `#budget-monthly-limit-error` |
 | Duplicate recovery | button "Use existing category “{name}”" under the name error |
-| Category management | button "Manage categories"; per-row "Edit {name}" / "Delete {name}"; confirm "Delete category" / "Keep category"; edit form named "Edit {name}" with "Save category" |
-| Confirmation banner | `#status-banner-stack [role="status"]`: "Transaction added./updated./deleted.", "Budget created./updated./deleted.", "Saved “{name}”.", "Deleted “{name}”."; close button "Dismiss message" |
+| Category management | on the Categories page only (see above); Transactions and Budgets have no management panel or "Manage categories" link |
+| Confirmation banner | `#status-banner-stack [role="status"]`: "Transaction added./updated./deleted.", "Budget created./updated./deleted.", "“{name}” was created/updated/deleted successfully."; close button "Dismiss message" |
 
 Existing category options use the numeric category ID as their value. Built-in categories
 show a "Built-in" badge and no edit or delete buttons. Category icons are decorative

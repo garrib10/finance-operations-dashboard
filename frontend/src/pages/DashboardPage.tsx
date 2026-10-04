@@ -1,3 +1,5 @@
+import { InlineNotice } from "../components/InlineNotice";
+import { TransactionTypeLabel } from "../components/TransactionTypeIcon";
 import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
 import { ApiError } from "../services/api";
@@ -5,29 +7,7 @@ import { getDashboard } from "../services/dashboardService";
 import type { DashboardResponse } from "../types/dashboard";
 import { formatCurrency, formatDate } from "../utils/formatters";
 import { CategoryLabel } from "../components/CategoryIcon";
-
-function formatBudgetStatus(status: string): string {
-  switch (status) {
-    case "ON_TRACK":
-      return "On Track";
-
-    case "CAUTION":
-      return "Caution";
-
-    case "WARNING":
-      return "Warning";
-
-    case "OVER_BUDGET":
-      return "Over Budget";
-
-    default:
-      return status;
-  }
-}
-
-function clampProgressPercentage(percentage: number): number {
-  return Math.min(Math.max(percentage, 0), 100);
-}
+import { clampProgressPercentage, formatBudgetStatus } from "../utils/budgetStatus";
 
 function DashboardPage() {
   const { user } = useAuth();
@@ -73,9 +53,7 @@ function DashboardPage() {
       <section className="page">
         <h1>Dashboard</h1>
 
-        <p className="form-error" role="alert">
-          {errorMessage}
-        </p>
+        <InlineNotice variant="error">{errorMessage}</InlineNotice>
       </section>
     );
   }
@@ -190,7 +168,7 @@ function DashboardPage() {
                         <CategoryLabel name={transaction.categoryName} iconKey={transaction.categoryIconKey} />
                       </td>
 
-                      <td>{transaction.type}</td>
+                      <td><TransactionTypeLabel type={transaction.type} /></td>
 
                       <td>{formatDate(transaction.transactionDate, user?.preferences?.dateFormat)}</td>
 

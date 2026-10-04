@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { SubmitEvent as ReactSubmitEvent } from "react";
 import {
   Bar,
@@ -22,7 +23,9 @@ import {
 import { CATEGORY_DUPLICATE, CATEGORY_NOT_FOUND } from "../services/categoryService";
 import { useCategories } from "../context/CategoryContext";
 import { CategoryIcon, CategoryLabel } from "../components/CategoryIcon";
-import { CategoryManager, type CategoryChange } from "../components/CategoryManager";
+import { CalendarDays, CalendarRange, Tags, Wallet } from "lucide-react";
+import { IconField } from "../components/IconField";
+import { InlineNotice } from "../components/InlineNotice";
 import { CategoryRefreshNotice } from "../components/CategoryRefreshNotice";
 import { StatusBanner } from "../components/StatusBanner";
 import { CategorySelect } from "../components/CategorySelect";
@@ -39,16 +42,17 @@ import {
   withoutFieldError,
   type CategoryDraft,
 } from "../utils/categoryForm";
+import { CATEGORY_PARAM, categoryLinkKey, resolveCategoryLink } from "../utils/categoryDeepLink";
 import type {
   BudgetAnalyticsResponse,
   BudgetResponse,
-  BudgetStatus,
   CreateBudgetRequest,
   UpdateBudgetRequest,
 } from "../types/budget";
 
 import type { CategoryResponse } from "../types/category";
 import { formatCurrency } from "../utils/formatters";
+import { formatBudgetStatus } from "../utils/budgetStatus";
 
 interface BudgetFormState {
   /** A category ID, CREATE_CATEGORY_VALUE, or "" when nothing is chosen. */
@@ -100,22 +104,6 @@ function formatBudgetMonth(month: number, year: number): string {
     month: "long",
     year: "numeric",
   }).format(new Date(year, month - 1, 1));
-}
-
-function formatBudgetStatus(status: BudgetStatus): string {
-  switch (status) {
-    case "ON_TRACK":
-      return "On Track";
-
-    case "CAUTION":
-      return "Caution";
-
-    case "WARNING":
-      return "Warning";
-
-    case "OVER_BUDGET":
-      return "Over Budget";
-  }
 }
 
 function BudgetPage() {
@@ -275,6 +263,52 @@ function BudgetPage() {
       formErrorRef.current?.focus();
     }
   }, [failureAttempt]);
+
+  // ?category={id} from the Categories page: edit that category's budget for the
+  // displayed month if it has one, otherwise start a new budget with it preselected.
+  // Resolved against the user's own categories; invalid links are dropped silently.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const categoryLink = resolveCategoryLink(searchParams.get(CATEGORY_PARAM), categoryStatus, categories);
+  const linkKey = categoryLinkKey(categoryLink);
+  // The link handled last, so reloads and re-renders never reopen the form.
+  const handledLinkKey = useRef<string | null>(null);
+
+  const applyCategoryLink = useEffectEvent(() => {
+    const removeParam = () => setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.delete(CATEGORY_PARAM);
+      return next;
+    }, { replace: true });
+
+    if (categoryLink.kind === "invalid") {
+      removeParam();
+      return;
+    }
+    if (categoryLink.kind !== "valid") return;
+
+    const existing = budgets.find((budget) => String(budget.categoryId) === categoryLink.id
+      && budget.month === Number(viewMonth) && budget.year === Number(viewYear));
+
+    if (existing) {
+      handleEditBudget(existing); // The existing edit flow scrolls to and focuses the form.
+    } else if (categoryLink.category.budgetEnabled) {
+      setEditingBudgetId(null);
+      setForm((current) => ({ ...current, categoryId: categoryLink.id, month: viewMonth, year: viewYear }));
+      formHeadingRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      formHeadingRef.current?.focus({ preventScroll: true });
+    } else {
+      removeParam(); // This category does not take budgets, so there is nothing to start.
+    }
+  });
+
+  useEffect(() => {
+    if (isLoading || linkKey === "pending" || linkKey === "none" || handledLinkKey.current === linkKey) {
+      if (linkKey === "none") handledLinkKey.current = null;
+      return;
+    }
+    handledLinkKey.current = linkKey;
+    applyCategoryLink();
+  }, [isLoading, linkKey]);
 
   useEffect(() => {
     if (editingBudgetId === null) {
@@ -480,23 +514,6 @@ function BudgetPage() {
     }
   }
 
-  /** Renames show up on the cards; a deleted category leaves the form and filter. */
-  async function handleCategoryManaged(change: CategoryChange): Promise<void> {
-    if (change.type === "deleted") {
-      const id = String(change.categoryId);
-      if (form.categoryId === id) setForm((current) => ({ ...current, categoryId: "" }));
-      if (viewCategoryId === id) setViewCategoryId("");
-    }
-
-    try {
-      await loadBudgetData();
-    } catch {
-      setRefreshWarning(
-        "The category was updated, but the budget list could not be refreshed. Reload the page to see the latest data.",
-      );
-    }
-  }
-
   async function handleDeleteBudget(budget: BudgetResponse): Promise<void> {
     const confirmed = window.confirm(
       `Delete the ${budget.categoryName} budget?`,
@@ -546,14 +563,10 @@ function BudgetPage() {
         <p>Manage monthly spending limits and track budgets by category.</p>
       </div>
 
-      {errorMessage && <p role="alert">{errorMessage}</p>}
+      {errorMessage && <InlineNotice variant="error">{errorMessage}</InlineNotice>}
 
       {/* A refresh warning also confirms the save, so it replaces the banner and stays. */}
-      {refreshWarning && (
-        <p className="form-error" role="status">
-          {refreshWarning}
-        </p>
-      )}
+      {refreshWarning && <InlineNotice variant="warning">{refreshWarning}</InlineNotice>}
 
       <StatusBanner message={refreshWarning ? "" : saveMessage} onDismiss={() => setSaveMessage("")} />
 
@@ -599,17 +612,19 @@ function BudgetPage() {
           <div className="form-field">
             <label htmlFor="budget-monthly-limit">Monthly Limit</label>
 
-            <input
-              id="budget-monthly-limit"
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={form.monthlyLimit}
-              aria-invalid={validationErrors.monthlyLimit ? true : undefined}
-              aria-describedby={validationErrors.monthlyLimit ? "budget-monthly-limit-error" : undefined}
-              onChange={(event) => updateField("monthlyLimit", event.target.value)}
-              placeholder="500.00"
-            />
+            <IconField icon={Wallet}>
+              <input
+                id="budget-monthly-limit"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={form.monthlyLimit}
+                aria-invalid={validationErrors.monthlyLimit ? true : undefined}
+                aria-describedby={validationErrors.monthlyLimit ? "budget-monthly-limit-error" : undefined}
+                onChange={(event) => updateField("monthlyLimit", event.target.value)}
+                placeholder="500.00"
+              />
+            </IconField>
 
             {validationErrors.monthlyLimit && (
               <p id="budget-monthly-limit-error" className="field-error">
@@ -621,19 +636,21 @@ function BudgetPage() {
           <div className="form-field">
             <label htmlFor="budget-month">Month</label>
 
-            <select
-              id="budget-month"
-              value={form.month}
-              aria-invalid={validationErrors.month ? true : undefined}
-              aria-describedby={validationErrors.month ? "budget-month-error" : undefined}
-              onChange={(event) => updateField("month", event.target.value)}
-            >
-              {monthOptions.map((month) => (
-                <option key={month.value} value={month.value}>
-                  {month.label}
-                </option>
-              ))}
-            </select>
+            <IconField icon={CalendarDays}>
+              <select
+                id="budget-month"
+                value={form.month}
+                aria-invalid={validationErrors.month ? true : undefined}
+                aria-describedby={validationErrors.month ? "budget-month-error" : undefined}
+                onChange={(event) => updateField("month", event.target.value)}
+              >
+                {monthOptions.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+            </IconField>
 
             {validationErrors.month && (
               <p id="budget-month-error" className="field-error">{validationErrors.month}</p>
@@ -643,15 +660,17 @@ function BudgetPage() {
           <div className="form-field">
             <label htmlFor="budget-year">Year</label>
 
-            <input
-              id="budget-year"
-              type="number"
-              min="2000"
-              value={form.year}
-              aria-invalid={validationErrors.year ? true : undefined}
-              aria-describedby={validationErrors.year ? "budget-year-error" : undefined}
-              onChange={(event) => updateField("year", event.target.value)}
-            />
+            <IconField icon={CalendarRange}>
+              <input
+                id="budget-year"
+                type="number"
+                min="2000"
+                value={form.year}
+                aria-invalid={validationErrors.year ? true : undefined}
+                aria-describedby={validationErrors.year ? "budget-year-error" : undefined}
+                onChange={(event) => updateField("year", event.target.value)}
+              />
+            </IconField>
 
             {validationErrors.year && (
               <p id="budget-year-error" className="field-error">{validationErrors.year}</p>
@@ -687,8 +706,6 @@ function BudgetPage() {
         )}
       </section>
 
-      <CategoryManager onChange={(change) => void handleCategoryManaged(change)} />
-
       <section className="budget-filter-section">
         <div>
           <h2>Budget Period</h2>
@@ -704,36 +721,43 @@ function BudgetPage() {
           <label className="form-field">
             <span>Month</span>
 
-            <select
-              value={viewMonth}
-              onChange={(event) => setViewMonth(event.target.value)}
-            >
-              {monthOptions.map((month) => (
-                <option key={month.value} value={month.value}>
-                  {month.label}
-                </option>
-              ))}
-            </select>
+            <IconField icon={CalendarDays}>
+              <select
+                value={viewMonth}
+                onChange={(event) => setViewMonth(event.target.value)}
+              >
+                {monthOptions.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+            </IconField>
           </label>
           <label className="form-field">
             <span>Year</span>
 
-            <select
-              value={viewYear}
-              onChange={(event) => setViewYear(event.target.value)}
-            >
-              {yearOptions.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
+            <IconField icon={CalendarRange}>
+              <select
+                value={viewYear}
+                onChange={(event) => setViewYear(event.target.value)}
+              >
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </IconField>
           </label>
           <div className="form-field">
             <label htmlFor="budget-filter-category">Filter by category</label>
 
             <div className="category-select__control">
-              {viewCategory && <CategoryIcon iconKey={viewCategory.iconKey} />}
+              {/* The chosen category's own icon; a generic one for "All categories". */}
+              {viewCategory
+                ? <CategoryIcon iconKey={viewCategory.iconKey} />
+                : <Tags className="category-icon category-icon--placeholder" aria-hidden="true" focusable="false" size={18} />}
 
               <select
                 id="budget-filter-category"

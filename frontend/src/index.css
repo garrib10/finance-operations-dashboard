@@ -28,7 +28,12 @@
   --color-success-border: #bbf7d0;
   --color-success-soft: #dcfce7;
   --color-warning: #b45309;
+  --color-warning-bg: #fffbeb;
+  --color-warning-border: #fde68a;
   --color-danger: #b91c1c;
+  --color-danger-bg: #fef2f2;
+  --color-danger-border: #fecaca;
+  --color-info-border: #bfdbfe;
 
   --radius-sm: 6px;
   --radius-md: 10px;

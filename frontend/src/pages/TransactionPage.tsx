@@ -1,5 +1,6 @@
 import { useAuth } from "../context/AuthContext";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { SubmitEvent as ReactSubmitEvent } from "react";
 import { ApiError } from "../services/api";
 import { CATEGORY_DUPLICATE, CATEGORY_NOT_FOUND } from "../services/categoryService";
@@ -11,7 +12,6 @@ import {
 } from "../services/transactionService";
 import { useCategories } from "../context/CategoryContext";
 import { CategoryIcon, CategoryLabel } from "../components/CategoryIcon";
-import { CategoryManager, type CategoryChange } from "../components/CategoryManager";
 import { CategoryRefreshNotice } from "../components/CategoryRefreshNotice";
 import { StatusBanner } from "../components/StatusBanner";
 import { CategorySelect } from "../components/CategorySelect";
@@ -38,7 +38,27 @@ import {
   withoutFieldError,
   type CategoryDraft,
 } from "../utils/categoryForm";
-import { formatCurrency, formatDate } from "../utils/formatters";
+import {
+  ADD_TRANSACTION_PARAM,
+  CATEGORY_PARAM,
+  categoryLinkKey,
+  resolveCategoryLink,
+} from "../utils/categoryDeepLink";
+import { formatCurrency, formatDate, toDateInputValue } from "../utils/formatters";
+import {
+  ArrowDownUp,
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  CalendarDays,
+  CalendarPlus,
+  DollarSign,
+  Search,
+  Tags,
+  type LucideIcon,
+} from "lucide-react";
+import { IconField, IconLabel } from "../components/IconField";
+import { InlineNotice } from "../components/InlineNotice";
+import { TransactionTypeIcon, TransactionTypeLabel } from "../components/TransactionTypeIcon";
 
 interface TransactionFormState {
   /** A category ID, CREATE_CATEGORY_VALUE, or "" when nothing is chosen. */
@@ -70,15 +90,25 @@ const TRANSACTION_FIELDS = [
   "transactionDate",
 ] as const;
 
+/** Sort By shows what it sorts on: a transaction's date, its amount, or when it was added. */
+const SORT_ICONS: Record<TransactionSortField, LucideIcon> = {
+  transactionDate: CalendarDays,
+  amount: DollarSign,
+  createdAt: CalendarPlus,
+};
+
 const NEW_CATEGORY_ERRORS = ["newCategory", "newCategory.name", "newCategory.iconKey"];
 
-const initialFormState: TransactionFormState = {
-  categoryId: "",
-  type: "EXPENSE",
-  amount: "",
-  description: "",
-  transactionDate: "",
-};
+/** A blank new transaction dated today; the date stays editable for older transactions. */
+function newTransactionForm(): TransactionFormState {
+  return {
+    categoryId: "",
+    type: "EXPENSE",
+    amount: "",
+    description: "",
+    transactionDate: toDateInputValue(new Date()),
+  };
+}
 
 const initialFilterState: TransactionFilterState = {
   search: "",
@@ -100,7 +130,7 @@ function TransactionPage() {
   const [transactionData, setTransactionData] =
     useState<PagedTransactionResponse | null>(null);
 
-  const [form, setForm] = useState<TransactionFormState>(initialFormState);
+  const [form, setForm] = useState<TransactionFormState>(newTransactionForm);
 
   const [categoryDraft, setCategoryDraft] = useState<CategoryDraft>(EMPTY_CATEGORY_DRAFT);
 
@@ -135,6 +165,7 @@ function TransactionPage() {
   const formRef = useRef<HTMLFormElement>(null);
   const formErrorRef = useRef<HTMLParagraphElement>(null);
   const formHeadingRef = useRef<HTMLHeadingElement>(null);
+  const historyHeadingRef = useRef<HTMLHeadingElement>(null);
   const editTriggerIdRef = useRef<number | null>(null);
   const pendingFocusTriggerIdRef = useRef<number | null>(null);
 
@@ -225,23 +256,66 @@ function TransactionPage() {
     if (sequence === requestSequence.current) setTransactionData(response);
   }
 
-  const filtersForSizeChange = useEffectEvent(() => buildFilters(0));
+  // ?category={id} from the Categories page. It is resolved against the user's own
+  // category list before the first request, so a valid link loads the filtered page once
+  // and an invalid one is never sent to the API.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const categoryLink = resolveCategoryLink(searchParams.get(CATEGORY_PARAM), categoryStatus, categories);
+  const linkKey = categoryLinkKey(categoryLink);
+  // The category filter a link applied, so leaving the link (browser Back) clears it again.
+  const linkedCategoryId = useRef<string | null>(null);
+  // Set when a category link has loaded; handled once the history table has rendered.
+  const scrollToHistory = useRef(false);
+
+  /** The filters for this load: page 0, with the link's category applied or removed. */
+  const filtersForLoad = useEffectEvent((): TransactionFilterState => {
+    if (categoryLink.kind === "valid") return { ...filters, categoryId: categoryLink.id };
+    if (linkedCategoryId.current !== null && filters.categoryId === linkedCategoryId.current) {
+      return { ...filters, categoryId: "" };
+    }
+    return filters;
+  });
+
+  const requestFor = useEffectEvent((source: TransactionFilterState) => buildFilters(0, source));
+
+  /** Drops only the invalid category parameter, keeping any others. */
+  const removeCategoryParam = useEffectEvent(() => {
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.delete(CATEGORY_PARAM);
+      return next;
+    }, { replace: true });
+  });
 
   useEffect(() => {
+    if (linkKey === "pending") return; // Wait for the category list: one request, not two.
+    if (linkKey === "invalid") {
+      removeCategoryParam(); // Runs again with no link and loads the unfiltered page.
+      return;
+    }
+
     let active = true;
     const sequence = ++requestSequence.current;
+    const source = filtersForLoad();
+    const linked = linkKey.startsWith("valid:") ? source.categoryId : null;
+
     async function loadTransactionPage(): Promise<void> {
       try {
         setIsLoading(true);
         setErrorMessage("");
 
         const transactionsResponse = await getTransactions({
-          ...filtersForSizeChange(),
+          ...requestFor(source),
           size: pageSize,
         });
 
         if (!active || sequence !== requestSequence.current) return;
         setTransactionData(transactionsResponse);
+        // Arriving from a link: take the user to the filtered history, not the form.
+        if (linked !== null && linkedCategoryId.current !== linked) scrollToHistory.current = true;
+        // Show the link's category in the filter (or clear it after leaving the link).
+        setFilters((current) => ({ ...current, categoryId: source.categoryId }));
+        linkedCategoryId.current = linked;
       } catch (error) {
         if (!active || sequence !== requestSequence.current) return;
         if (error instanceof ApiError) {
@@ -256,7 +330,48 @@ function TransactionPage() {
 
     void loadTransactionPage();
     return () => { active = false; };
-  }, [pageSize]);
+  }, [pageSize, linkKey]);
+
+  useEffect(() => {
+    if (!scrollToHistory.current || isLoading || !historyHeadingRef.current) return;
+    scrollToHistory.current = false;
+    historyHeadingRef.current.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    historyHeadingRef.current.focus({ preventScroll: true });
+  });
+
+  // ?addCategory={id} from the Categories page, for a category with no transactions yet:
+  // start a new transaction with it chosen. Invalid links are dropped silently.
+  const addLink = resolveCategoryLink(searchParams.get(ADD_TRANSACTION_PARAM), categoryStatus, categories);
+  const addLinkKey = categoryLinkKey(addLink);
+  // The link handled last, so reloads and re-renders never reset the form again.
+  const handledAddLinkKey = useRef<string | null>(null);
+  const formReady = transactionData !== null;
+
+  const applyAddLink = useEffectEvent(() => {
+    if (addLink.kind === "invalid") {
+      setSearchParams((params) => {
+        const next = new URLSearchParams(params);
+        next.delete(ADD_TRANSACTION_PARAM);
+        return next;
+      }, { replace: true });
+      return;
+    }
+    if (addLink.kind !== "valid") return;
+
+    resetForm();
+    setForm({ ...newTransactionForm(), categoryId: addLink.id });
+    formHeadingRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    formHeadingRef.current?.focus({ preventScroll: true });
+  });
+
+  useEffect(() => {
+    if (!formReady || addLinkKey === "pending" || addLinkKey === "none" || handledAddLinkKey.current === addLinkKey) {
+      if (addLinkKey === "none") handledAddLinkKey.current = null;
+      return;
+    }
+    handledAddLinkKey.current = addLinkKey;
+    applyAddLink();
+  }, [formReady, addLinkKey]);
 
   /**
    * A category deleted elsewhere can no longer be chosen or filtered on. Until the list
@@ -270,7 +385,7 @@ function TransactionPage() {
   const formCategoryId = availableCategoryId(form.categoryId);
 
   function resetForm(): void {
-    setForm(initialFormState);
+    setForm(newTransactionForm());
     setCategoryDraft(EMPTY_CATEGORY_DRAFT);
     setExistingMatch(undefined);
     setEditingTransactionId(null);
@@ -512,28 +627,6 @@ function TransactionPage() {
     }
   }
 
-  /** Renames show up in the list; a deleted category leaves the form and filter. */
-  async function handleCategoryManaged(change: CategoryChange): Promise<void> {
-    let nextFilters = filters;
-
-    if (change.type === "deleted") {
-      const id = String(change.categoryId);
-      if (form.categoryId === id) setForm((current) => ({ ...current, categoryId: "" }));
-      if (filters.categoryId === id) {
-        nextFilters = { ...filters, categoryId: "" };
-        setFilters(nextFilters);
-      }
-    }
-
-    try {
-      await loadTransactions(buildFilters(transactionData?.page ?? 0, nextFilters));
-    } catch {
-      setRefreshWarning(
-        "The category was updated, but the transaction list could not be refreshed. Reload the page to see the latest data.",
-      );
-    }
-  }
-
   const selectedFilterCategory = categories.find(
     (category) => String(category.id) === filters.categoryId,
   );
@@ -554,14 +647,10 @@ function TransactionPage() {
         <p>Manage your income and expenses.</p>
       </div>
 
-      {errorMessage && <p className="form-error">{errorMessage}</p>}
+      {errorMessage && <InlineNotice variant="error">{errorMessage}</InlineNotice>}
 
       {/* A refresh warning also confirms the save, so it replaces the banner and stays. */}
-      {refreshWarning && (
-        <p className="form-error" role="status">
-          {refreshWarning}
-        </p>
-      )}
+      {refreshWarning && <InlineNotice variant="warning">{refreshWarning}</InlineNotice>}
 
       <StatusBanner message={refreshWarning ? "" : saveMessage} onDismiss={() => setSaveMessage("")} />
 
@@ -617,19 +706,22 @@ function TransactionPage() {
           <div className="form-field">
             <label htmlFor="transaction-type">Type</label>
 
-            <select
-              id="transaction-type"
-              value={form.type}
-              aria-invalid={Boolean(validationErrors.type)}
-              aria-describedby={
-                validationErrors.type ? "transaction-type-error" : undefined
-              }
-              onChange={(event) => updateField("type", event.target.value as TransactionType)}
-            >
-              <option value="EXPENSE">Expense</option>
+            <div className="icon-field">
+              <TransactionTypeIcon type={form.type} />
+              <select
+                id="transaction-type"
+                value={form.type}
+                aria-invalid={Boolean(validationErrors.type)}
+                aria-describedby={
+                  validationErrors.type ? "transaction-type-error" : undefined
+                }
+                onChange={(event) => updateField("type", event.target.value as TransactionType)}
+              >
+                <option value="EXPENSE">Expense</option>
 
-              <option value="INCOME">Income</option>
-            </select>
+                <option value="INCOME">Income</option>
+              </select>
+            </div>
 
             {validationErrors.type && (
               <p id="transaction-type-error" className="field-error">
@@ -641,19 +733,21 @@ function TransactionPage() {
           <div className="form-field">
             <label htmlFor="transaction-amount">Amount</label>
 
-            <input
-              id="transaction-amount"
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={form.amount}
-              aria-invalid={Boolean(validationErrors.amount)}
-              aria-describedby={
-                validationErrors.amount ? "transaction-amount-error" : undefined
-              }
-              onChange={(event) => updateField("amount", event.target.value)}
-              required
-            />
+            <IconField icon={DollarSign} showIcon={form.amount !== ""}>
+              <input
+                id="transaction-amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={form.amount}
+                aria-invalid={Boolean(validationErrors.amount)}
+                aria-describedby={
+                  validationErrors.amount ? "transaction-amount-error" : undefined
+                }
+                onChange={(event) => updateField("amount", event.target.value)}
+                required
+              />
+            </IconField>
 
             {validationErrors.amount && (
               <p id="transaction-amount-error" className="field-error">
@@ -749,8 +843,6 @@ function TransactionPage() {
         </form>
       </section>
 
-      <CategoryManager onChange={(change) => void handleCategoryManaged(change)} />
-
       <section>
         <div>
           <h2>Filter Transactions</h2>
@@ -761,44 +853,53 @@ function TransactionPage() {
           <div className="form-field">
             <label htmlFor="transaction-search">Search</label>
 
-            <input
-              id="transaction-search"
-              type="search"
-              placeholder="Search description"
-              value={filters.search}
-              onChange={(event) =>
-                setFilters({
-                  ...filters,
-                  search: event.target.value,
-                })
-              }
-            />
+            <IconField icon={Search} showIcon={filters.search !== ""}>
+              <input
+                id="transaction-search"
+                type="search"
+                placeholder="Search description"
+                value={filters.search}
+                onChange={(event) =>
+                  setFilters({
+                    ...filters,
+                    search: event.target.value,
+                  })
+                }
+              />
+            </IconField>
           </div>
 
           <div className="form-field">
             <label htmlFor="filter-type">Type</label>
 
-            <select
-              id="filter-type"
-              value={filters.type}
-              onChange={(event) =>
-                setFilters({
-                  ...filters,
-                  type: event.target.value as "" | TransactionType,
-                })
-              }
-            >
-              <option value="">All</option>
-              <option value="INCOME">Income</option>
-              <option value="EXPENSE">Expense</option>
-            </select>
+            <div className="icon-field">
+              {filters.type
+                ? <TransactionTypeIcon type={filters.type} />
+                : <ArrowDownUp className="category-icon--placeholder" aria-hidden="true" focusable="false" size={18} />}
+              <select
+                id="filter-type"
+                value={filters.type}
+                onChange={(event) =>
+                  setFilters({
+                    ...filters,
+                    type: event.target.value as "" | TransactionType,
+                  })
+                }
+              >
+                <option value="">All</option>
+                <option value="INCOME">Income</option>
+                <option value="EXPENSE">Expense</option>
+              </select>
+            </div>
           </div>
 
           <div className="form-field">
             <label htmlFor="filter-category">Filter by category</label>
 
             <div className="category-select__control">
-              {selectedFilterCategory && <CategoryIcon iconKey={selectedFilterCategory.iconKey} />}
+              {selectedFilterCategory
+                ? <CategoryIcon iconKey={selectedFilterCategory.iconKey} />
+                : <Tags className="category-icon category-icon--placeholder" aria-hidden="true" focusable="false" size={18} />}
 
               <select
                 id="filter-category"
@@ -856,77 +957,85 @@ function TransactionPage() {
           <div className="form-field">
             <label htmlFor="filter-min-amount">Minimum Amount</label>
 
-            <input
-              id="filter-min-amount"
-              type="number"
-              min="0"
-              step="0.01"
-              value={filters.minAmount}
-              onChange={(event) =>
-                setFilters({
-                  ...filters,
-                  minAmount: event.target.value,
-                })
-              }
-            />
+            <IconField icon={DollarSign} showIcon={filters.minAmount !== ""}>
+              <input
+                id="filter-min-amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={filters.minAmount}
+                onChange={(event) =>
+                  setFilters({
+                    ...filters,
+                    minAmount: event.target.value,
+                  })
+                }
+              />
+            </IconField>
           </div>
 
           <div className="form-field">
             <label htmlFor="filter-max-amount">Maximum Amount</label>
 
-            <input
-              id="filter-max-amount"
-              type="number"
-              min="0"
-              step="0.01"
-              value={filters.maxAmount}
-              onChange={(event) =>
-                setFilters({
-                  ...filters,
-                  maxAmount: event.target.value,
-                })
-              }
-            />
+            <IconField icon={DollarSign} showIcon={filters.maxAmount !== ""}>
+              <input
+                id="filter-max-amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={filters.maxAmount}
+                onChange={(event) =>
+                  setFilters({
+                    ...filters,
+                    maxAmount: event.target.value,
+                  })
+                }
+              />
+            </IconField>
           </div>
 
           <div className="form-field">
             <label htmlFor="filter-sort-by">Sort By</label>
 
-            <select
-              id="filter-sort-by"
-              value={filters.sortBy}
-              onChange={(event) =>
-                setFilters({
-                  ...filters,
-                  sortBy: event.target.value as TransactionSortField,
-                })
-              }
-            >
-              <option value="transactionDate">Transaction Date</option>
+            <IconField icon={SORT_ICONS[filters.sortBy]}>
+              <select
+                id="filter-sort-by"
+                value={filters.sortBy}
+                onChange={(event) =>
+                  setFilters({
+                    ...filters,
+                    sortBy: event.target.value as TransactionSortField,
+                  })
+                }
+              >
+                <option value="transactionDate">Transaction Date</option>
 
-              <option value="amount">Amount</option>
+                <option value="amount">Amount</option>
 
-              <option value="createdAt">Created Date</option>
-            </select>
+                <option value="createdAt">Created Date</option>
+              </select>
+            </IconField>
           </div>
 
           <div className="form-field">
             <label htmlFor="filter-sort-direction">Direction</label>
 
-            <select
-              id="filter-sort-direction"
-              value={filters.sortDirection}
-              onChange={(event) =>
-                setFilters({
-                  ...filters,
-                  sortDirection: event.target.value as SortDirection,
-                })
-              }
-            >
-              <option value="desc">Descending</option>
+            <IconField icon={filters.sortDirection === "asc" ? ArrowUpNarrowWide : ArrowDownWideNarrow}>
+              <select
+                id="filter-sort-direction"
+                value={filters.sortDirection}
+                onChange={(event) =>
+                  setFilters({
+                    ...filters,
+                    sortDirection: event.target.value as SortDirection,
+                  })
+                }
+              >
+                <option value="desc">Descending</option>
 
-              <option value="asc">Ascending</option>
-            </select>
+                <option value="asc">Ascending</option>
+              </select>
+            </IconField>
           </div>
 
           <div>
@@ -949,7 +1058,7 @@ function TransactionPage() {
 
       <section>
         <div>
-          <h2>Transaction History</h2>
+          <h2 ref={historyHeadingRef} tabIndex={-1}>Transaction History</h2>
 
           <p>
             {transactionData
@@ -980,7 +1089,11 @@ function TransactionPage() {
                     key={transaction.id}
                     data-testid={`transaction-row-${transaction.id}`}
                   >
-                    <td>{formatDate(transaction.transactionDate, user?.preferences?.dateFormat)}</td>
+                    <td>
+                      <IconLabel icon={CalendarDays}>
+                        {formatDate(transaction.transactionDate, user?.preferences?.dateFormat)}
+                      </IconLabel>
+                    </td>
 
                     <td>{transaction.description}</td>
 
@@ -989,7 +1102,7 @@ function TransactionPage() {
                     </td>
 
                     <td>
-                      {transaction.type === "INCOME" ? "Income" : "Expense"}
+                      <TransactionTypeLabel type={transaction.type} />
                     </td>
 
                     <td>{formatCurrency(transaction.amount)}</td>
