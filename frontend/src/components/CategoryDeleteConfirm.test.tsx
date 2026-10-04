@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { deferred } from "../test/accountFixtures";
@@ -68,7 +68,9 @@ describe("CategoryDeleteConfirm", () => {
 
     // The page handles the failure itself and resolves, leaving the confirmation open.
     pending.resolve();
-    await screen.findByRole("button", { name: "Delete category" });
-    expect(screen.getByRole("button", { name: "Delete category" })).toHaveFocus();
+    // Focus is restored in an effect after the re-render, so wait for it rather than
+    // checking the moment the button text changes back.
+    const confirm = await screen.findByRole("button", { name: "Delete category" });
+    await waitFor(() => expect(confirm).toHaveFocus());
   });
 });

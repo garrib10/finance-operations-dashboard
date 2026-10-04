@@ -1453,11 +1453,6 @@
   font-size: 0.875rem;
 }
 
-.form-warning {
-  margin: 1rem 0;
-  color: var(--color-warning);
-}
-
 .icon-picker-field {
   display: grid;
   gap: 0.5rem;
@@ -2152,4 +2147,3 @@
 .categories-page__create h3 {
   margin: 0;
 }
-

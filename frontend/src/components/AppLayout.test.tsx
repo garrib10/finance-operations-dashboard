@@ -67,6 +67,9 @@ function renderShell(path = "/transactions") {
   );
 }
 
+// Full user-event flows are slow under coverage instrumentation and on a busy machine.
+vi.setConfig({ testTimeout: 20_000 });
+
 describe("AppLayout", () => {
   beforeEach(() => {
     vi.mocked(useAuth).mockReturnValue(accountContext());

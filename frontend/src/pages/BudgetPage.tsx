@@ -25,6 +25,7 @@ import { useCategories } from "../context/CategoryContext";
 import { CategoryIcon, CategoryLabel } from "../components/CategoryIcon";
 import { CalendarDays, CalendarRange, Tags, Wallet } from "lucide-react";
 import { IconField } from "../components/IconField";
+import { InlineNotice } from "../components/InlineNotice";
 import { CategoryRefreshNotice } from "../components/CategoryRefreshNotice";
 import { StatusBanner } from "../components/StatusBanner";
 import { CategorySelect } from "../components/CategorySelect";
@@ -562,14 +563,10 @@ function BudgetPage() {
         <p>Manage monthly spending limits and track budgets by category.</p>
       </div>
 
-      {errorMessage && <p role="alert">{errorMessage}</p>}
+      {errorMessage && <InlineNotice variant="error">{errorMessage}</InlineNotice>}
 
       {/* A refresh warning also confirms the save, so it replaces the banner and stays. */}
-      {refreshWarning && (
-        <p className="form-error" role="status">
-          {refreshWarning}
-        </p>
-      )}
+      {refreshWarning && <InlineNotice variant="warning">{refreshWarning}</InlineNotice>}
 
       <StatusBanner message={refreshWarning ? "" : saveMessage} onDismiss={() => setSaveMessage("")} />
 

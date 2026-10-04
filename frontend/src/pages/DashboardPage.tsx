@@ -1,3 +1,4 @@
+import { InlineNotice } from "../components/InlineNotice";
 import { TransactionTypeLabel } from "../components/TransactionTypeIcon";
 import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
@@ -52,9 +53,7 @@ function DashboardPage() {
       <section className="page">
         <h1>Dashboard</h1>
 
-        <p className="form-error" role="alert">
-          {errorMessage}
-        </p>
+        <InlineNotice variant="error">{errorMessage}</InlineNotice>
       </section>
     );
   }

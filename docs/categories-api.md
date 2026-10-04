@@ -123,10 +123,43 @@ Read-only; it takes no parameters and never accepts a user or category ID.
         "status": "WARNING"
       },
       "canDelete": false
+    },
+    {
+      "id": 3,
+      "name": "Income",
+      "iconKey": "circle-dollar-sign",
+      "builtIn": true,
+      "budgetEnabled": false,
+      "transactionCount": 2,
+      "budgetCount": 0,
+      "lastTransactionDate": "2026-10-01",
+      "currentMonthSpent": 0.00,
+      "allTimeSpent": 0.00,
+      "currentMonthBudget": null,
+      "canDelete": false
+    },
+    {
+      "id": 57,
+      "name": "Weekend Trips",
+      "iconKey": "plane",
+      "builtIn": false,
+      "budgetEnabled": true,
+      "transactionCount": 0,
+      "budgetCount": 0,
+      "lastTransactionDate": null,
+      "currentMonthSpent": 0.00,
+      "allTimeSpent": 0.00,
+      "currentMonthBudget": null,
+      "canDelete": true
     }
   ]
 }
 ```
+
+The rows show a used custom category with this month's budget, a built-in income
+category (income is counted in `transactionCount` but never as spending, and built-ins
+can never be deleted), and a never-used custom category (`null` date and budget,
+deletable).
 
 | Field | Meaning |
 | --- | --- |

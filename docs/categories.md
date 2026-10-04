@@ -184,7 +184,16 @@ both workflows. Financial and dashboard responses carry `categoryIconKey`. See t
 
 `/categories` (the "Categories" link in the sidebar and drawer) is where categories are
 managed. It shows each category's usage for the server's reporting month (see the
-[summary endpoint](categories-api.md#get-apicategoriessummary)) and offers:
+[summary endpoint](categories-api.md#get-apicategoriessummary)). Top to bottom:
+
+- **Summary strip:** total categories (custom and built-in), this month's top category,
+  categories over budget, and categories with spending, always from every category.
+- **Spending distribution** (below), then **All categories**: the toolbar and one card per
+  category with its icon, name, a "Built-in" or "Custom" text badge, this month's spending
+  and share, budget progress and status (or "No budget for {Month}" when it takes budgets),
+  usage counts, and the last-used date.
+
+The page offers:
 
 - **Create category:** name and icon (the same rules and approved icons as everywhere
   else). New categories are custom and take budgets. Focus moves to the new card.
@@ -317,6 +326,47 @@ user's ID behaves exactly like a missing one.
   with the category preselected for the displayed month (nothing is saved automatically).
   A category that does not take budgets is ignored.
 
+**Accessibility.** One `h1` ("Categories"), then `h2` sections (spending, All categories)
+and an `h3` per card. Every toolbar and form control has a visible label; icon-only
+buttons have names ("Dismiss error", "Dismiss message"); decorative icons and bars are
+`aria-hidden` and every value they show is also text. Built-in and custom are told apart
+by text, budget status by its label, and notice severity by "Error:", "Warning:", or
+"Note:", never by colour alone. Delete stays focusable when inactive so its reason can be
+reached. No positive `tabIndex` is used, focus never targets a removed card, and passive
+refreshes never move focus. The only animation (the success banner sliding in) is turned
+off for `prefers-reduced-motion`.
+
+**Responsive layout.** The summary strip goes from four columns to two (at 1100 px) and
+one (at 700 px); cards fill an auto-fit grid; the toolbar controls and notice buttons
+wrap; the spending table uses fixed column widths (narrower below 480 px) so long names
+wrap instead of scrolling. The page has no horizontal scrolling at 375 px. It is reached
+from the sidebar, the collapsed sidebar, and the mobile drawer.
+
+**Protections.** The summary only ever reads the signed-in user's data, takes no IDs,
+and runs a fixed number of queries however many categories exist (see the
+[summary endpoint](categories-api.md#get-apicategoriessummary)). Deep-link IDs are checked
+against the user's own categories before any request.
+
+**Decisions made during implementation.**
+
+- The "Manage categories" links originally planned for Transactions and Budgets were
+  removed at review; the Categories page is reached from the navigation.
+- Warnings and errors use the in-page `InlineNotice` instead of new `StatusBanner`
+  variants, so persistent messages sit next to the related content and do not float
+  over the page; `StatusBanner` remains the 3-second success confirmation. Page-level
+  errors and refresh warnings on Transactions, Budgets, and the Dashboard use the same
+  notice.
+
+**Test coverage.** Backend: service, controller, H2 integration (authentication,
+ownership, ordering, dashboard parity), repository (month boundaries, income versus
+spending, budget counts), query-count, and MySQL tests. Frontend: utility tests for
+search, filters, sorting, shares, and deep links; component tests for the spending table,
+notices, forms, and delete confirmation; page tests for every state, workflow, message,
+and focus rule above; navigation tests for the sidebar, collapsed sidebar, and drawer.
+Layout, zoom, and screen-reader announcements are verified manually (see
+[frontend testing](frontend-testing.md)).
+
 ## Not implemented yet
 
-- Responsive collapsible sidebar (tracked by a separate v1.3.0 issue).
+- Viewing the Categories page for an earlier month (the page always shows the server's
+  current reporting month).

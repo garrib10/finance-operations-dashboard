@@ -57,6 +57,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { IconField, IconLabel } from "../components/IconField";
+import { InlineNotice } from "../components/InlineNotice";
 import { TransactionTypeIcon, TransactionTypeLabel } from "../components/TransactionTypeIcon";
 
 interface TransactionFormState {
@@ -646,14 +647,10 @@ function TransactionPage() {
         <p>Manage your income and expenses.</p>
       </div>
 
-      {errorMessage && <p className="form-error">{errorMessage}</p>}
+      {errorMessage && <InlineNotice variant="error">{errorMessage}</InlineNotice>}
 
       {/* A refresh warning also confirms the save, so it replaces the banner and stays. */}
-      {refreshWarning && (
-        <p className="form-error" role="status">
-          {refreshWarning}
-        </p>
-      )}
+      {refreshWarning && <InlineNotice variant="warning">{refreshWarning}</InlineNotice>}
 
       <StatusBanner message={refreshWarning ? "" : saveMessage} onDismiss={() => setSaveMessage("")} />
 

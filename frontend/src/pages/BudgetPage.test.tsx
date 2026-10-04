@@ -534,8 +534,8 @@ describe("BudgetPage", () => {
     await user.type(screen.getByLabelText("Monthly Limit"), "200");
     await user.click(screen.getByRole("button", { name: "Create Budget" }));
 
-    expect(await screen.findByText(/Budget saved, but the budget list could not be refreshed\./))
-      .toHaveAttribute("role", "status");
+    expect((await screen.findByText(/Budget saved, but the budget list could not be refreshed\./)).closest("[role='status']"))
+      .toHaveTextContent(/^Warning: /);
     // The warning replaces the success banner rather than appearing beside it.
     expect(screen.queryByText(/^Budget (created|updated)\.$/)).not.toBeInTheDocument();
 
@@ -653,8 +653,8 @@ describe("BudgetPage", () => {
     await user.type(monthlyLimitInput, "600");
     await user.click(screen.getByRole("button", { name: "Update Budget" }));
 
-    expect(await screen.findByText(/Budget saved, but the budget list could not be refreshed\./))
-      .toHaveAttribute("role", "status");
+    expect((await screen.findByText(/Budget saved, but the budget list could not be refreshed\./)).closest("[role='status']"))
+      .toHaveTextContent(/^Warning: /);
     // The warning replaces the success banner rather than appearing beside it.
     expect(screen.queryByText(/^Budget (created|updated)\.$/)).not.toBeInTheDocument();
 

@@ -761,7 +761,7 @@ describe("CategoriesPage", () => {
       expect(screen.getAllByRole("alert")).toHaveLength(1); // In the form only, not also on the page.
       expect(screen.getByRole("form", { name: "Edit Pet Care" })).toBeInTheDocument();
       expect(screen.getByLabelText("Category name")).toHaveValue("Pets");
-      expect(alert).toHaveFocus();
+      await waitFor(() => expect(alert).toHaveFocus());
     });
 
     it("keeps server field errors beside their inputs, not in a page banner", async () => {
@@ -777,7 +777,7 @@ describe("CategoriesPage", () => {
       expect(name).toHaveAccessibleDescription("Category name must be 50 characters or fewer");
       expect(screen.getByRole("radiogroup", { name: "Icon" })).toHaveAccessibleDescription("Choose one of the approved icons");
       expect(name).toHaveValue("Gifts");
-      expect(name).toHaveFocus();
+      await waitFor(() => expect(name).toHaveFocus());
       expect(document.getElementById("categories-page-notice")).not.toBeInTheDocument();
     });
 

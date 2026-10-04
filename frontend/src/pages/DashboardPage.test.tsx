@@ -253,7 +253,7 @@ describe("DashboardPage", () => {
     render(<DashboardPage />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Unable to load dashboard data. Please try again.",
+      "Error: Unable to load dashboard data. Please try again.",
     );
   });
 

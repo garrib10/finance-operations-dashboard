@@ -497,7 +497,8 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
-    expect(await screen.findByText(message)).toBeInTheDocument();
+    // Announced as an error, with a visible label rather than colour alone.
+    expect(await screen.findByRole("alert")).toHaveTextContent(`Error: ${message}`);
   });
 
   it("preserves the create form and skips refresh when creation fails", async () => {
@@ -588,8 +589,8 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       }),
     );
 
-    expect(await screen.findByText(/Transaction saved, but the transaction list could not be refreshed\./))
-      .toHaveAttribute("role", "status");
+    expect((await screen.findByText(/Transaction saved, but the transaction list could not be refreshed\./)).closest("[role='status']"))
+      .toHaveTextContent(/^Warning: /);
     // The warning replaces the success banner rather than appearing beside it.
     expect(screen.queryByText(/^Transaction (added|updated)\.$/)).not.toBeInTheDocument();
 
@@ -626,8 +627,8 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       }),
     );
 
-    expect(await screen.findByText(/Transaction saved, but the transaction list could not be refreshed\./))
-      .toHaveAttribute("role", "status");
+    expect((await screen.findByText(/Transaction saved, but the transaction list could not be refreshed\./)).closest("[role='status']"))
+      .toHaveTextContent(/^Warning: /);
     // The warning replaces the success banner rather than appearing beside it.
     expect(screen.queryByText(/^Transaction (added|updated)\.$/)).not.toBeInTheDocument();
 
