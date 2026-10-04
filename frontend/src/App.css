@@ -2122,9 +2122,119 @@
   gap: 0.5rem;
 }
 
-.category-card__manage {
+/* Card links: transactions is the stronger, tinted action; budgets is quieter. */
+.category-card__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0.5rem 0.8rem;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.category-card__link:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.category-card__link--primary {
+  color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+  border-color: var(--color-info-border);
+}
+
+.category-card__link--primary:hover {
+  color: var(--color-primary-dark);
+}
+
+.category-card__link:focus-visible,
+.category-actions__trigger:focus-visible,
+.category-actions__item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* "More actions": the header (full card width) is the positioning context, so the panel
+   sits just below it, however many lines the name wraps to, and never exceeds the card. */
+.category-card__header {
+  position: relative;
+}
+
+.category-actions__trigger {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  color: var(--color-text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.category-actions__trigger:hover,
+.category-actions__trigger[aria-expanded="true"] {
+  color: var(--color-text);
+  background-color: var(--color-background);
+  border-color: var(--color-border);
+}
+
+.category-actions__panel {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  z-index: 5;
   display: grid;
+  gap: 0.25rem;
+  width: min(15rem, 100%);
+  padding: 0.4rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.category-actions__panel[hidden] {
+  display: none;
+}
+
+.category-actions__item {
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+
+.category-actions__item:hover:not([aria-disabled="true"]) {
+  background-color: var(--color-background);
+}
+
+.category-actions__item--danger {
+  color: var(--color-danger);
+}
+
+.app-main .category-actions__reason {
+  margin: 0;
+  padding: 0 0.75rem 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 
 /* In-use Delete stays focusable (aria-disabled) so its reason is reachable. */

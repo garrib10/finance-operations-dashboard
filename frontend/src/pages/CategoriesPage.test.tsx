@@ -52,6 +52,14 @@ vi.setConfig({ testTimeout: 20_000 });
 const card = (name: string) => screen.getByRole("article", { name });
 /** The card's activity line as one string (the date is wrapped to keep it together). */
 const activity = (name: string) => card(name).querySelector(".category-card__usage");
+type User = ReturnType<typeof userEvent.setup>;
+/** The card's "More actions for {name}" disclosure trigger. */
+const actionsTrigger = (name: string) => screen.getByRole("button", { name: `More actions for ${name}` });
+/** Opens a card's actions and chooses Edit or Delete, as a user would. */
+async function chooseAction(user: User, name: string, action: "Edit" | "Delete") {
+  await user.click(actionsTrigger(name));
+  await user.click(screen.getByRole("button", { name: `${action} ${name}` }));
+}
 const cardNames = () => screen.queryAllByRole("article").map((article) => within(article).getByRole("heading").textContent);
 
 describe("CategoriesPage", () => {
@@ -221,13 +229,18 @@ describe("CategoriesPage", () => {
     expect(within(card("Savings")).queryByRole("link", { name: /budget/ })).not.toBeInTheDocument();
   });
 
-  it("offers no edit or delete for built-in categories", async () => {
+  it("offers no actions for built-in categories, and one actions button for custom ones", async () => {
     await renderPage();
 
     for (const name of ["Groceries", "Income"]) {
+      // No disclosure at all (not a disabled one), but the links remain.
       expect(within(card(name)).queryByRole("button")).not.toBeInTheDocument();
+      expect(within(card(name)).getByRole("link", { name: `View transactions for ${name}` })).toBeInTheDocument();
     }
-    expect(within(card("Pet Care")).getByRole("button", { name: "Edit Pet Care" })).toBeInTheDocument();
+    expect(within(card("Pet Care")).getAllByRole("button")).toEqual([actionsTrigger("Pet Care")]);
+    // Edit and Delete live inside the closed disclosure, not on the card.
+    expect(screen.queryByRole("button", { name: "Edit Pet Care" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete Pet Care" })).not.toBeInTheDocument();
   });
 
   it("explains a load failure and retries", async () => {
@@ -349,7 +362,7 @@ describe("CategoriesPage", () => {
 
     it("keeps a category being edited visible, with an explanation, while the toolbar changes", async () => {
       const user = await renderPage();
-      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await chooseAction(user, "Pet Care", "Edit");
       await user.type(screen.getByLabelText("Category name"), "s");
       await user.type(search(), "groc");
 
@@ -360,7 +373,7 @@ describe("CategoriesPage", () => {
 
       // After Cancel it stays until the toolbar next changes, so focus has somewhere to go.
       await user.click(screen.getByRole("button", { name: "Cancel" }));
-      await waitFor(() => expect(screen.getByRole("button", { name: "Edit Pet Care" })).toHaveFocus());
+      await waitFor(() => expect(actionsTrigger("Pet Care")).toHaveFocus());
       await user.type(search(), "e");
       expect(cardNames()).toEqual(["Groceries"]);
       expect(screen.queryByText(/is shown because you’re working on it/)).not.toBeInTheDocument();
@@ -374,12 +387,12 @@ describe("CategoriesPage", () => {
       vi.mocked(categoryService.updateCategory).mockResolvedValue(category({ id: 7, name: "Animals" }));
       const user = await renderPage();
       await user.type(search(), "pet");
-      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await chooseAction(user, "Pet Care", "Edit");
       await user.clear(screen.getByLabelText("Category name"));
       await user.type(screen.getByLabelText("Category name"), "Animals");
       await user.click(screen.getByRole("button", { name: "Save category" }));
 
-      await waitFor(() => expect(screen.getByRole("button", { name: "Edit Animals" })).toHaveFocus());
+      await waitFor(() => expect(actionsTrigger("Animals")).toHaveFocus());
       expect(cardNames()).toEqual(["Animals"]);
     });
 
@@ -410,7 +423,7 @@ describe("CategoriesPage", () => {
       vi.mocked(categoryService.deleteCategory).mockResolvedValue(undefined);
       const user = await renderPage();
       await user.selectOptions(screen.getByLabelText("Filter categories"), "custom");
-      await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+      await chooseAction(user, "Hobbies", "Delete");
       await user.click(screen.getByRole("button", { name: "Delete category" }));
 
       // Unfiltered, "Income" would follow "Hobbies"; with the Custom filter it is "Pet Care".
@@ -419,9 +432,70 @@ describe("CategoriesPage", () => {
     });
   });
 
+  describe("card actions", () => {
+    it("keeps only one card's actions open at a time", async () => {
+      const user = await renderPage();
+      await user.click(actionsTrigger("Pet Care"));
+      await user.click(actionsTrigger("Hobbies"));
+
+      expect(actionsTrigger("Hobbies")).toHaveAttribute("aria-expanded", "true");
+      expect(actionsTrigger("Pet Care")).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it("closes the actions and opens the edit form in the card when Edit is chosen", async () => {
+      const user = await renderPage();
+      await chooseAction(user, "Pet Care", "Edit");
+
+      const form = within(card("Pet Care")).getByRole("form", { name: "Edit Pet Care" });
+      expect(within(form).getByLabelText("Category name")).toHaveValue("Pet Care");
+      // The trigger is hidden while the card shows its own workflow controls.
+      expect(screen.queryByRole("button", { name: "More actions for Pet Care" })).not.toBeInTheDocument();
+    });
+
+    it("closes open actions when another workflow starts", async () => {
+      const user = await renderPage();
+      await user.click(actionsTrigger("Hobbies"));
+      await user.click(screen.getByRole("button", { name: "Create category" }));
+
+      expect(actionsTrigger("Hobbies")).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it.each([
+      ["search", async (user: User) => user.type(screen.getByLabelText("Search categories"), "e")],
+      ["filter", async (user: User) => user.selectOptions(screen.getByLabelText("Filter categories"), "custom")],
+      ["sort", async (user: User) => user.selectOptions(screen.getByLabelText("Sort categories"), "mostUsed")],
+    ])("closes open actions when the %s changes", async (_control, change) => {
+      const user = await renderPage();
+      await user.click(actionsTrigger("Pet Care"));
+      await change(user);
+
+      expect(actionsTrigger("Pet Care")).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it("shows the transaction and budget actions as real links with decorative icons", async () => {
+      await renderPage();
+
+      const links = [
+        [card("Groceries"), "View transactions for Groceries", "View transactions", "/transactions?category=1"],
+        [card("Hobbies"), "Add a transaction for Hobbies", "Add transaction", "/transactions?addCategory=9"],
+        [card("Groceries"), "Edit budget for Groceries", "Edit budget", "/budgets?category=1"],
+        [card("Hobbies"), "Set budget for Hobbies", "Set budget", "/budgets?category=9"],
+      ] as const;
+      for (const [scope, name, text, href] of links) {
+        const link = within(scope).getByRole("link", { name });
+        expect(link).toHaveAttribute("href", href);
+        expect(link).toHaveTextContent(text);
+        expect(link.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+        expect(link.querySelector("button")).toBeNull();
+        expect(link.closest("button")).toBeNull();
+      }
+    });
+  });
+
   describe("deleting", () => {
     it("keeps Delete focusable but inactive for a category in use, and explains why", async () => {
       const user = await renderPage();
+      await user.click(actionsTrigger("Pet Care"));
       const remove = within(card("Pet Care")).getByRole("button", { name: "Delete Pet Care" });
 
       expect(remove).toHaveAttribute("aria-disabled", "true");
@@ -430,10 +504,14 @@ describe("CategoriesPage", () => {
       remove.focus();
       expect(remove).toHaveFocus();
 
+      // The reason is visible text in the panel, not a tooltip.
+      expect(screen.getByText(/Used by 3 transactions and 1 budget\./)).toBeVisible();
+
       await user.click(remove);
       await user.keyboard("{Enter}");
       await user.keyboard(" ");
 
+      expect(remove).toHaveFocus(); // Nothing happened, and the panel stayed open.
       expect(categoryService.deleteCategory).not.toHaveBeenCalled();
       expect(screen.queryByRole("group", { name: /Delete “Pet Care”/ })).not.toBeInTheDocument();
     });
@@ -445,7 +523,7 @@ describe("CategoriesPage", () => {
       vi.mocked(categoryService.deleteCategory).mockResolvedValue(undefined);
       const user = await renderPage();
 
-      await user.click(within(card("Hobbies")).getByRole("button", { name: "Delete Hobbies" }));
+      await chooseAction(user, "Hobbies", "Delete");
       const confirm = screen.getByRole("group", { name: "Delete “Hobbies”? This cannot be undone." });
       expect(within(confirm).getByRole("button", { name: "Delete category" })).toHaveFocus();
       await user.click(within(confirm).getByRole("button", { name: "Delete category" }));
@@ -464,7 +542,7 @@ describe("CategoriesPage", () => {
       vi.mocked(categoryService.deleteCategory).mockResolvedValue(undefined);
       const user = await renderPage();
 
-      await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+      await chooseAction(user, "Hobbies", "Delete");
       await user.click(screen.getByRole("button", { name: "Delete category" }));
 
       await waitFor(() => expect(screen.getByRole("heading", { name: "Pet Care" })).toHaveFocus());
@@ -477,7 +555,7 @@ describe("CategoriesPage", () => {
       vi.mocked(categoryService.deleteCategory).mockResolvedValue(undefined);
       const user = await renderPage();
 
-      await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+      await chooseAction(user, "Hobbies", "Delete");
       await user.click(screen.getByRole("button", { name: "Delete category" }));
 
       await waitFor(() => expect(screen.getByRole("heading", { name: "All categories" })).toHaveFocus());
@@ -486,10 +564,10 @@ describe("CategoriesPage", () => {
 
     it("keeps the category and returns focus when the delete is cancelled", async () => {
       const user = await renderPage();
-      await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+      await chooseAction(user, "Hobbies", "Delete");
       await user.click(screen.getByRole("button", { name: "Keep category" }));
 
-      await waitFor(() => expect(screen.getByRole("button", { name: "Delete Hobbies" })).toHaveFocus());
+      await waitFor(() => expect(actionsTrigger("Hobbies")).toHaveFocus());
       expect(categoryService.deleteCategory).not.toHaveBeenCalled();
     });
 
@@ -501,7 +579,7 @@ describe("CategoriesPage", () => {
         "This category is used by transactions or budgets and cannot be deleted.", 409, undefined, "CATEGORY_IN_USE"));
       const user = await renderPage();
 
-      await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+      await chooseAction(user, "Hobbies", "Delete");
       await user.click(screen.getByRole("button", { name: "Delete category" }));
 
       const alert = await screen.findByRole("alert");
@@ -509,10 +587,10 @@ describe("CategoriesPage", () => {
       expect(alert).toHaveTextContent("Change the category on those transactions and budgets, or delete them");
       expect(card("Hobbies")).toBeInTheDocument();
       // The refreshed summary now shows the real usage and blocks Delete.
-      await waitFor(() => expect(screen.getByRole("button", { name: "Delete Hobbies" }))
-        .toHaveAttribute("aria-disabled", "true"));
+      await waitFor(() => expect(actionsTrigger("Hobbies")).toHaveFocus());
+      await user.click(actionsTrigger("Hobbies"));
+      expect(screen.getByRole("button", { name: "Delete Hobbies" })).toHaveAttribute("aria-disabled", "true");
       expect(screen.getByText(/Used by 1 transaction\./)).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Delete Hobbies" })).toHaveFocus();
 
       // It stays until dismissed.
       await user.click(within(alert).getByRole("button", { name: "Dismiss error" }));
@@ -524,7 +602,7 @@ describe("CategoriesPage", () => {
         .mockRejectedValueOnce(new Error("network"))
         .mockResolvedValueOnce(undefined);
       const user = await renderPage();
-      await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+      await chooseAction(user, "Hobbies", "Delete");
       await user.click(screen.getByRole("button", { name: "Delete category" }));
 
       expect(await screen.findByRole("alert")).toHaveTextContent("Error: “Hobbies” was not deleted. Please try again.");
@@ -548,7 +626,7 @@ describe("CategoriesPage", () => {
     ])("explains and refreshes when the category changed elsewhere (%s)", async (failure, message) => {
       vi.mocked(categoryService.deleteCategory).mockRejectedValue(failure);
       const user = await renderPage();
-      await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+      await chooseAction(user, "Hobbies", "Delete");
       await user.click(screen.getByRole("button", { name: "Delete category" }));
 
       expect(await screen.findByRole("alert")).toHaveTextContent(message);
@@ -566,7 +644,7 @@ describe("CategoriesPage", () => {
       vi.mocked(categoryService.updateCategory).mockResolvedValue(category({ id: 7, name: "Pets", iconKey: "heart-pulse" }));
       const user = await renderPage();
 
-      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await chooseAction(user, "Pet Care", "Edit");
       const form = screen.getByRole("form", { name: "Edit Pet Care" });
       const name = within(form).getByLabelText("Category name");
       expect(name).toHaveValue("Pet Care");
@@ -579,17 +657,17 @@ describe("CategoriesPage", () => {
       expect(categoryService.updateCategory).toHaveBeenCalledExactlyOnceWith(7,
         { name: "Pets", budgetEnabled: true, iconKey: "heart-pulse" });
       expect(await screen.findByText("“Pets” was updated successfully.")).toHaveAttribute("role", "status");
-      await waitFor(() => expect(screen.getByRole("button", { name: "Edit Pets" })).toHaveFocus());
+      await waitFor(() => expect(actionsTrigger("Pets")).toHaveFocus());
       expect(getCategorySummary).toHaveBeenCalledTimes(2);
       expect(categoryService.getCategories).toHaveBeenCalledTimes(2);
     });
 
     it("cancels without saving and returns focus to Edit", async () => {
       const user = await renderPage();
-      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await chooseAction(user, "Pet Care", "Edit");
       await user.click(screen.getByRole("button", { name: "Cancel" }));
 
-      await waitFor(() => expect(screen.getByRole("button", { name: "Edit Pet Care" })).toHaveFocus());
+      await waitFor(() => expect(actionsTrigger("Pet Care")).toHaveFocus());
       expect(screen.queryByRole("form")).not.toBeInTheDocument();
       expect(categoryService.updateCategory).not.toHaveBeenCalled();
     });
@@ -598,7 +676,7 @@ describe("CategoriesPage", () => {
       vi.mocked(categoryService.updateCategory).mockRejectedValue(
         new ApiError("Category already exists", 409, undefined, "CATEGORY_DUPLICATE"));
       const user = await renderPage();
-      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await chooseAction(user, "Pet Care", "Edit");
       await user.clear(screen.getByLabelText("Category name"));
       await user.type(screen.getByLabelText("Category name"), "Groceries");
       await user.click(screen.getByRole("button", { name: "Save category" }));
@@ -612,7 +690,7 @@ describe("CategoriesPage", () => {
       vi.mocked(categoryService.updateCategory).mockRejectedValue(new ApiError(
         "Built-in categories cannot be changed or deleted.", 403, undefined, "CATEGORY_BUILT_IN"));
       const user = await renderPage();
-      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await chooseAction(user, "Pet Care", "Edit");
       await user.click(screen.getByRole("button", { name: "Save category" }));
 
       const alert = await screen.findByRole("alert");
@@ -626,7 +704,7 @@ describe("CategoriesPage", () => {
       vi.mocked(categoryService.updateCategory).mockRejectedValue(
         new ApiError("Category not found", 404, undefined, "CATEGORY_NOT_FOUND"));
       const user = await renderPage();
-      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await chooseAction(user, "Pet Care", "Edit");
       await user.click(screen.getByRole("button", { name: "Save category" }));
 
       expect(await screen.findByRole("alert")).toHaveTextContent("This category no longer exists.");
@@ -706,7 +784,7 @@ describe("CategoriesPage", () => {
         .mockReturnValueOnce(refresh.promise);
       vi.mocked(categoryService.updateCategory).mockResolvedValue(category({ id: 7, name: "Pet Care" }));
       const user = await renderPage();
-      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await chooseAction(user, "Pet Care", "Edit");
       await user.click(screen.getByRole("button", { name: "Save category" }));
 
       await waitFor(() => expect(getCategorySummary).toHaveBeenCalledTimes(2));
@@ -733,7 +811,7 @@ describe("CategoriesPage", () => {
         await user.type(screen.getByLabelText("Category name"), "Gifts");
         await user.click(within(screen.getByRole("form", { name: "Create category" })).getByRole("button", { name: "Create category" }));
       } else {
-        await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+        await chooseAction(user, "Hobbies", "Delete");
         await user.click(screen.getByRole("button", { name: "Delete category" }));
       }
 
@@ -751,7 +829,7 @@ describe("CategoriesPage", () => {
     it("keeps an edit open with its values and a single error when saving fails", async () => {
       vi.mocked(categoryService.updateCategory).mockRejectedValue(new Error("network"));
       const user = await renderPage();
-      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await chooseAction(user, "Pet Care", "Edit");
       await user.clear(screen.getByLabelText("Category name"));
       await user.type(screen.getByLabelText("Category name"), "Pets");
       await user.click(screen.getByRole("button", { name: "Save category" }));
@@ -784,11 +862,11 @@ describe("CategoriesPage", () => {
     it("replaces an old error when a new operation starts, and filters never bring it back", async () => {
       vi.mocked(categoryService.deleteCategory).mockRejectedValue(new Error("network"));
       const user = await renderPage();
-      await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+      await chooseAction(user, "Hobbies", "Delete");
       await user.click(screen.getByRole("button", { name: "Delete category" }));
       expect(await screen.findByRole("alert")).toBeInTheDocument();
 
-      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await chooseAction(user, "Pet Care", "Edit");
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
       await user.click(screen.getByRole("button", { name: "Cancel" }));
@@ -800,7 +878,7 @@ describe("CategoriesPage", () => {
     it("keeps a dismissed success message dismissed until the next change", async () => {
       vi.mocked(categoryService.updateCategory).mockResolvedValue(category({ id: 7, name: "Pet Care" }));
       const user = await renderPage();
-      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await chooseAction(user, "Pet Care", "Edit");
       await user.click(screen.getByRole("button", { name: "Save category" }));
       await screen.findByText("“Pet Care” was updated successfully.");
 
@@ -818,12 +896,12 @@ describe("CategoriesPage", () => {
       const user = await renderPage();
       expect(cardNames()[1]).toBe("Hobbies");
 
-      await user.click(screen.getByRole("button", { name: "Edit Hobbies" }));
+      await chooseAction(user, "Hobbies", "Edit");
       await user.clear(screen.getByLabelText("Category name"));
       await user.type(screen.getByLabelText("Category name"), "Zoo trips");
       await user.click(screen.getByRole("button", { name: "Save category" }));
 
-      await waitFor(() => expect(screen.getByRole("button", { name: "Edit Zoo trips" })).toHaveFocus());
+      await waitFor(() => expect(actionsTrigger("Zoo trips")).toHaveFocus());
       expect(cardNames().at(-1)).toBe("Zoo trips");
     });
 
@@ -833,7 +911,7 @@ describe("CategoriesPage", () => {
         .mockResolvedValueOnce(summaryList([]));
       vi.mocked(categoryService.deleteCategory).mockResolvedValue(undefined);
       const user = await renderPage();
-      await user.click(screen.getByRole("button", { name: "Delete Hobbies" }));
+      await chooseAction(user, "Hobbies", "Delete");
       await user.click(screen.getByRole("button", { name: "Delete category" }));
 
       await waitFor(() => expect(screen.getByRole("heading", { name: "All categories" })).toHaveFocus());
@@ -851,7 +929,7 @@ describe("CategoriesPage", () => {
       vi.mocked(categoryService.updateCategory).mockResolvedValue(category({ id: 7, name: "Pet Care" }));
       const user = await renderPage();
 
-      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await chooseAction(user, "Pet Care", "Edit");
       await user.click(screen.getByRole("button", { name: "Save category" }));
 
       const warning = await screen.findByText(/“Pet Care” was updated, but the latest category summary could not be loaded\./);
@@ -872,7 +950,7 @@ describe("CategoriesPage", () => {
       const user = await renderPage();
       vi.mocked(categoryService.getCategories).mockRejectedValueOnce(new Error("network"));
 
-      await user.click(screen.getByRole("button", { name: "Edit Pet Care" }));
+      await chooseAction(user, "Pet Care", "Edit");
       await user.click(screen.getByRole("button", { name: "Save category" }));
 
       expect(await screen.findByText(/Category options could not be refreshed. Your changes were saved./))

@@ -19,6 +19,8 @@ export function deleteBlockedReason(transactionCount: number, budgetCount: numbe
 export function categoryCardIds(id: number) {
   return {
     heading: `category-${id}-heading`,
+    actions: `category-${id}-actions`,
+    actionsPanel: `category-${id}-actions-panel`,
     edit: `category-${id}-edit`,
     delete: `category-${id}-delete`,
     deleteReason: `category-${id}-delete-reason`,

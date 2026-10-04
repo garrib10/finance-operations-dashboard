@@ -197,21 +197,32 @@ The page offers:
 
 - **Create category:** name and icon (the same rules and approved icons as everywhere
   else). New categories are custom and take budgets. Focus moves to the new card.
-- **Edit {name}** (custom only): rename, change the icon, or both. Focus returns to the
-  card's Edit button; Cancel discards the changes.
-- **Delete {name}** (custom only): an inline confirmation ("Delete category" / "Keep
-  category"). Afterwards focus moves to the next card, else the previous one, else the
-  list heading.
-- **Built-in categories** show no Edit or Delete; the API refuses those changes anyway.
+- **More actions for {name}** (custom only, issue #102): a "⋯" button in the card header
+  that shows "Edit {name}" and "Delete {name}". It is a disclosure (a button revealing
+  ordinary buttons), not an ARIA menu: opening leaves focus on the trigger and Tab moves
+  through the actions. It closes on the trigger, on Escape (focus returns to the trigger),
+  on a click outside, or when focus moves elsewhere on the page. Only one card's actions
+  are open at a time, and they close when a workflow starts or the search, filter, or
+  sort changes. The trigger is hidden while the card shows a form or confirmation.
+- **Edit {name}**: rename, change the icon, or both. Focus returns to the card's "More
+  actions" button after a save or Cancel; Cancel discards the changes.
+- **Delete {name}**: an inline confirmation ("Delete category" / "Keep category").
+  Afterwards focus moves to the next card, else the previous one, else the list heading;
+  "Keep category" returns focus to the "More actions" button.
+- **Built-in categories** have no "More actions" button at all (not a disabled one), so no
+  Edit or Delete; the API refuses those changes anyway.
 - **Delete eligibility:** Delete is active only when the summary's `canDelete` is true
-  (custom and unused). Otherwise it stays focusable with `aria-disabled="true"` and a
-  visible reason built from the counts, such as "Used by 12 transactions and 1 budget."
+  (custom and unused). Otherwise it stays focusable inside the "More actions" panel with
+  `aria-disabled="true"` and a visible reason built from the all-time counts, such as
+  "Used by 12 transactions and 1 budget." (not a tooltip); click, Enter, and Space do
+  nothing.
   That is only a pre-check: if a transaction or budget is added before the delete, the
   server's `409 CATEGORY_IN_USE` keeps the category, the usage is refreshed, and a
   persistent message explains that its transactions and budgets must be changed or
   deleted first. Historical budgets also count, so the budget link below does not always
   show what is blocking a delete.
-- **Links:** "View transactions" opens `/transactions?category={id}`, filtered and scrolled
+- **Links:** real links with a decorative icon and visible text; the transaction link is
+  the stronger, tinted one. "View transactions" opens `/transactions?category={id}`, filtered and scrolled
   to the history table. A category with no transactions shows "Add transaction" instead,
   which opens `/transactions?addCategory={id}` with the new-transaction form focused and the
   category chosen (an invalid `addCategory` is removed silently). Categories that take
@@ -252,12 +263,14 @@ The page offers:
   open for a retry; `409 CATEGORY_IN_USE` closes it with an explanation (a retry cannot
   succeed). A category changed elsewhere (`404`, or built-in `403`) closes the form or
   confirmation and refreshes both lists.
-- **Focus:** after create, the new card's heading; after edit, that card's Edit button
-  (found by category ID, so it works after the card moves); after delete, the next card
+- **Focus:** after create, the new card's heading; after an edit is saved or cancelled,
+  that card's "More actions" button (found by category ID, so it works after the card
+  moves); after delete, the next card
   in the current order, else the previous one, else the "All categories" heading. A form
   failure focuses the first invalid field, or the form's error message when no field is at
   fault; a page-level error with nothing to fix focuses the notice; an in-use refusal
-  focuses the card's Delete button; a failed delete keeps focus on "Delete category".
+  focuses the card's "More actions" button; a failed delete keeps the confirmation open
+  with focus on "Delete category" for a retry.
   Passive refreshes never move focus.
 - **Pending:** "Creating…", "Saving…", and "Deleting…" replace the button text and the
   buttons are disabled until the request finishes, so nothing is submitted twice.

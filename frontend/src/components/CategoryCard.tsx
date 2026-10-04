@@ -1,3 +1,4 @@
+import { ArrowLeftRight, PiggyBank, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { DateFormatPreference } from "../types/account";
@@ -7,6 +8,7 @@ import { formatShare, spendingShare } from "../utils/categorySummary";
 import { ADD_TRANSACTION_PARAM, CATEGORY_PARAM } from "../utils/categoryDeepLink";
 import { categoryCardIds, deleteBlockedReason } from "../utils/categoryUsage";
 import { formatCurrency, formatDate } from "../utils/formatters";
+import { CategoryActionsMenu } from "./CategoryActionsMenu";
 import { CategoryIcon } from "./CategoryIcon";
 
 interface CategoryCardProps {
@@ -22,6 +24,9 @@ interface CategoryCardProps {
   onDelete?: () => void;
   /** Shown in place of the management actions while editing or confirming a delete. */
   workflow?: ReactNode;
+  /** Whether this card's "More actions" disclosure is open (custom categories only). */
+  actionsOpen?: boolean;
+  onActionsOpenChange?: (open: boolean) => void;
 }
 
 
@@ -41,6 +46,8 @@ export function CategoryCard({
   onEdit,
   onDelete,
   workflow,
+  actionsOpen = false,
+  onActionsOpenChange,
 }: CategoryCardProps) {
   const ids = categoryCardIds(category.id);
   const headingId = ids.heading;
@@ -55,6 +62,20 @@ export function CategoryCard({
         </span>
         <h3 id={headingId} className="category-card__name" tabIndex={-1}>{category.name}</h3>
         <span className="category-badge">{category.builtIn ? "Built-in" : "Custom"}</span>
+        {/* Built-ins cannot be changed, so they get no actions; hidden during a workflow,
+            which shows its own controls in the card. */}
+        {!category.builtIn && !workflow && (
+          <CategoryActionsMenu
+            categoryId={category.id}
+            categoryName={category.name}
+            open={actionsOpen}
+            onOpenChange={(open) => onActionsOpenChange?.(open)}
+            onEdit={() => onEdit?.()}
+            onDelete={() => onDelete?.()}
+            deleteBlockedReason={category.canDelete ? null
+              : `${deleteBlockedReason(category.transactionCount, category.budgetCount)} Change or remove those first to delete this category.`}
+          />
+        )}
       </div>
 
       <dl className="category-card__figures">
@@ -129,77 +150,36 @@ export function CategoryCard({
         {/* Nothing to view yet, so offer to record the first transaction instead. */}
         {category.transactionCount === 0 ? (
           <Link
-            className="button button--secondary button--small"
+            className="category-card__link category-card__link--primary"
             to={`/transactions?${ADD_TRANSACTION_PARAM}=${category.id}`}
             aria-label={`Add a transaction for ${category.name}`}
           >
+            <Plus aria-hidden="true" focusable="false" size={16} />
             Add transaction
           </Link>
         ) : (
           <Link
-            className="button button--secondary button--small"
+            className="category-card__link category-card__link--primary"
             to={`/transactions?${CATEGORY_PARAM}=${category.id}`}
             aria-label={`View transactions for ${category.name}`}
           >
+            <ArrowLeftRight aria-hidden="true" focusable="false" size={16} />
             View transactions
           </Link>
         )}
         {category.budgetEnabled && (
           <Link
-            className="button button--secondary button--small"
-            to={`/budgets?category=${category.id}`}
+            className="category-card__link"
+            to={`/budgets?${CATEGORY_PARAM}=${category.id}`}
             aria-label={`${budget ? "Edit" : "Set"} budget for ${category.name}`}
           >
+            <PiggyBank aria-hidden="true" focusable="false" size={16} />
             {budget ? "Edit budget" : "Set budget"}
           </Link>
         )}
       </div>
 
-      {!category.builtIn && (workflow ?? (
-        <div className="category-card__manage">
-          <div className="category-card__links">
-            <button
-              id={ids.edit}
-              type="button"
-              className="button button--secondary button--small"
-              aria-label={`Edit ${category.name}`}
-              onClick={onEdit}
-            >
-              Edit
-            </button>
-            {category.canDelete ? (
-              <button
-                id={ids.delete}
-                type="button"
-                className="button button--secondary button--small"
-                aria-label={`Delete ${category.name}`}
-                onClick={onDelete}
-              >
-                Delete
-              </button>
-            ) : (
-              // Focusable (aria-disabled, not disabled) so keyboard users can find the reason.
-              <button
-                id={ids.delete}
-                type="button"
-                className="button button--secondary button--small"
-                aria-label={`Delete ${category.name}`}
-                aria-disabled="true"
-                aria-describedby={ids.deleteReason}
-                onClick={(event) => event.preventDefault()}
-              >
-                Delete
-              </button>
-            )}
-          </div>
-          {!category.canDelete && (
-            <p id={ids.deleteReason} className="category-card__note">
-              {deleteBlockedReason(category.transactionCount, category.budgetCount)} Change or remove
-              those first to delete this category.
-            </p>
-          )}
-        </div>
-      ))}
+      {workflow}
     </article>
   );
 }

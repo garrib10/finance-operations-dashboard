@@ -72,6 +72,8 @@ function CategoriesPage() {
   const dateFormat = user?.preferences?.dateFormat ?? "MEDIUM";
 
   const [workflow, setWorkflow] = useState<Workflow>({ kind: "none" });
+  // The one card whose "More actions" disclosure is open, by category ID.
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [pageStatus, setPageStatus] = useState<PageStatus | null>(null);
   // Search, filter, and sort for the cards only (never the summary or spending table).
   const [discovery, setDiscovery] = useState<CategoryDiscovery>(DEFAULT_DISCOVERY);
@@ -115,6 +117,7 @@ function CategoriesPage() {
   function changeDiscovery(next: CategoryDiscovery): void {
     setDiscovery(next);
     setRecentId(null);
+    setOpenActionsId(null);
   }
 
   function clearDiscovery(): void {
@@ -125,6 +128,7 @@ function CategoriesPage() {
   /** Starting a new operation replaces whatever an earlier one reported. */
   function startWorkflow(next: Workflow): void {
     setPageStatus(null);
+    setOpenActionsId(null);
     setWorkflow(next);
   }
 
@@ -170,7 +174,7 @@ function CategoriesPage() {
       });
       setWorkflow({ kind: "none" });
       setRecentId(category.id);
-      focusAfterRender(categoryCardIds(category.id).edit);
+      focusAfterRender(categoryCardIds(category.id).actions);
       await reportAfterRefresh(updated.name, "updated");
     } catch (caught) {
       if (caught instanceof ApiError && caught.code === CATEGORY_NOT_FOUND) {
@@ -209,7 +213,7 @@ function CategoriesPage() {
           message: `“${name}” is still used by transactions or budgets, so it can’t be deleted. `
             + "Change the category on those transactions and budgets, or delete them, then try again.",
         });
-        focusAfterRender(ids.delete);
+        focusAfterRender(ids.actions);
         void reload();
       } else if (caught instanceof ApiError && caught.code === CATEGORY_NOT_FOUND) {
         handleGone(NOT_FOUND_MESSAGE);
@@ -234,7 +238,7 @@ function CategoriesPage() {
           pendingLabel="Saving…"
           failureMessage="Unable to save the category. Please try again."
           onSubmit={(draft) => handleSave(category, draft)}
-          onCancel={() => close(ids.edit, category.id)}
+          onCancel={() => close(ids.actions, category.id)}
         />
       );
     }
@@ -243,7 +247,7 @@ function CategoriesPage() {
         <CategoryDeleteConfirm
           categoryName={category.name}
           onConfirm={() => handleDelete(category)}
-          onCancel={() => close(ids.delete, category.id)}
+          onCancel={() => close(ids.actions, category.id)}
         />
       );
     }
@@ -360,6 +364,11 @@ function CategoriesPage() {
                     onEdit={() => startWorkflow({ kind: "edit", id: category.id })}
                     onDelete={() => startWorkflow({ kind: "delete", id: category.id })}
                     workflow={workflowFor(category)}
+                    actionsOpen={openActionsId === category.id}
+                    onActionsOpenChange={(open) => setOpenActionsId((current) => {
+                      if (open) return category.id;
+                      return current === category.id ? null : current;
+                    })}
                   />
                 </li>
               ))}

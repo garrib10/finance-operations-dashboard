@@ -22,6 +22,8 @@ describe("categoryCardIds", () => {
   it("gives each card stable, distinct element IDs", () => {
     expect(categoryCardIds(7)).toEqual({
       heading: "category-7-heading",
+      actions: "category-7-actions",
+      actionsPanel: "category-7-actions-panel",
       edit: "category-7-edit",
       delete: "category-7-delete",
       deleteReason: "category-7-delete-reason",
