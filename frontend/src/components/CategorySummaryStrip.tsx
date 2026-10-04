@@ -3,7 +3,7 @@ import {
   monthSpendingTotal,
   overBudgetCount,
   topCategory,
-  withSpendingCount,
+  needsBudgetCount,
 } from "../utils/categorySummary";
 import { formatCurrency } from "../utils/formatters";
 import { CategoryIcon } from "./CategoryIcon";
@@ -55,10 +55,11 @@ export function CategorySummaryStrip({ rows, monthLabel }: CategorySummaryStripP
         </dd>
       </div>
 
+      {/* Every category, never the searched or filtered cards. */}
       <div className="category-stat">
-        <dt>With spending</dt>
-        <dd className="category-stat__value">{withSpendingCount(rows)}</dd>
-        <dd className="category-stat__detail">categories in {monthLabel}</dd>
+        <dt>No budget</dt>
+        <dd className="category-stat__value">{needsBudgetCount(rows)}</dd>
+        <dd className="category-stat__detail">categories spending in {monthLabel} without a budget</dd>
       </div>
     </dl>
   );

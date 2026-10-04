@@ -79,8 +79,14 @@ class CategorySummaryQueryCountTest {
         Statistics statistics = entityManager.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
         statistics.clear();
 
+        // Every row's figures, including this month's count, are read inside the measured
+        // window, so a lazy load for any of them would raise the statement count.
         assertThat(summaryService.getSummary(email).categories()).hasSize(expectedRows)
-                .allSatisfy(row -> assertThat(row.currentMonthBudget()).isNotNull());
+                .allSatisfy(row -> {
+                    assertThat(row.currentMonthBudget()).isNotNull();
+                    assertThat(row.currentMonthTransactionCount()).isEqualTo(1); // Today's expense only.
+                    assertThat(row.transactionCount()).isEqualTo(2);
+                });
 
         return statistics.getPrepareStatementCount();
     }

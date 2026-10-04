@@ -187,35 +187,65 @@ managed. It shows each category's usage for the server's reporting month (see th
 [summary endpoint](categories-api.md#get-apicategoriessummary)). Top to bottom:
 
 - **Summary strip:** total categories (custom and built-in), this month's top category,
-  categories over budget, and categories with spending, always from every category.
-- **Spending distribution** (below), then **All categories**: the toolbar and one card per
+  categories over budget, and **No budget** ("categories spending in {Month Year} without
+  a budget", issue #102, replacing "With spending"), always from every category in the
+  response, never the searched, filtered, or sorted cards.
+- **Spending without a budget** (issue #102): a category needs a budget when
+  `currentMonthSpent > 0`, `currentMonthBudget` is null, and `budgetEnabled` is true.
+  Spending is expenses only, so income alone never qualifies; budgets from other months do
+  not count; a category that takes no budgets never qualifies. Its card shows a static
+  "Warning: {amount} spent in {Month} with no budget." with the card's only "Set budget for
+  {name}" link inside it (the ordinary Set budget link is removed from the link row). It is
+  advice, not an announcement (no `role` or live region, so many cards never trigger many
+  announcements), it has no dismiss button, and it never blocks adding transactions. It
+  disappears once a refreshed summary shows a budget for the month; if a refresh fails, the
+  last confirmed data stays, with the usual refresh warning.
+- **Spending distribution** (below), then **All categories**: the toolbar, then the cards in
+  two sections (see "Active and other categories" below), one card per
   category with its icon, name, a "Built-in" or "Custom" text badge, this month's spending
   and share, budget progress and status (or "No budget for {Month}" when it takes budgets),
-  usage counts, and the last-used date.
+  and this month's activity (issue #102): "1 transaction in October" / "2 transactions in
+  October" (income and expense, the server's month) followed by "· Last used {date}", or
+  "Not used yet" when the category has never had a transaction. The all-time transaction
+  and budget counts no longer appear on the card; they still decide whether Delete is
+  available, so a category that is quiet this month but was used before stays protected
+  and its Delete reason still quotes the all-time counts.
 
 The page offers:
 
 - **Create category:** name and icon (the same rules and approved icons as everywhere
   else). New categories are custom and take budgets. Focus moves to the new card.
-- **Edit {name}** (custom only): rename, change the icon, or both. Focus returns to the
-  card's Edit button; Cancel discards the changes.
-- **Delete {name}** (custom only): an inline confirmation ("Delete category" / "Keep
-  category"). Afterwards focus moves to the next card, else the previous one, else the
-  list heading.
-- **Built-in categories** show no Edit or Delete; the API refuses those changes anyway.
+- **More actions for {name}** (custom only, issue #102): a "⋯" button in the card header
+  that shows "Edit {name}" and "Delete {name}". It is a disclosure (a button revealing
+  ordinary buttons), not an ARIA menu: opening leaves focus on the trigger and Tab moves
+  through the actions. It closes on the trigger, on Escape (focus returns to the trigger),
+  on a click outside, or when focus moves elsewhere on the page. Only one card's actions
+  are open at a time, and they close when a workflow starts or the search, filter, or
+  sort changes. The trigger is hidden while the card shows a form or confirmation.
+- **Edit {name}**: rename, change the icon, or both. Focus returns to the card's "More
+  actions" button after a save or Cancel; Cancel discards the changes.
+- **Delete {name}**: an inline confirmation ("Delete category" / "Keep category").
+  Afterwards focus moves to the next card, else the previous one, else the list heading;
+  "Keep category" returns focus to the "More actions" button.
+- **Built-in categories** have no "More actions" button at all (not a disabled one), so no
+  Edit or Delete; the API refuses those changes anyway.
 - **Delete eligibility:** Delete is active only when the summary's `canDelete` is true
-  (custom and unused). Otherwise it stays focusable with `aria-disabled="true"` and a
-  visible reason built from the counts, such as "Used by 12 transactions and 1 budget."
+  (custom and unused). Otherwise it stays focusable inside the "More actions" panel with
+  `aria-disabled="true"` and a visible reason built from the all-time counts, such as
+  "Used by 12 transactions and 1 budget." (not a tooltip); click, Enter, and Space do
+  nothing.
   That is only a pre-check: if a transaction or budget is added before the delete, the
   server's `409 CATEGORY_IN_USE` keeps the category, the usage is refreshed, and a
   persistent message explains that its transactions and budgets must be changed or
   deleted first. Historical budgets also count, so the budget link below does not always
   show what is blocking a delete.
-- **Links:** "View transactions" opens `/transactions?category={id}`, filtered and scrolled
+- **Links:** real links with a decorative icon and visible text; the transaction link is
+  the stronger, tinted one. "View transactions" opens `/transactions?category={id}`, filtered and scrolled
   to the history table. A category with no transactions shows "Add transaction" instead,
   which opens `/transactions?addCategory={id}` with the new-transaction form focused and the
   category chosen (an invalid `addCategory` is removed silently). Categories that take
-  budgets also get "Set budget" or "Edit budget" (`/budgets?category={id}`). Categories that
+  budgets also get "Set budget" or "Edit budget" (`/budgets?category={id}`); for a category
+  spending without a budget, Set budget is inside the warning instead. Categories that
   do not take budgets get no budget action, even if a budget exists.
 - **After a change:** the shared category list (used by every dropdown) updates first,
   then the usage summary reloads. A failed refresh never undoes or misreports a change
@@ -252,12 +282,14 @@ The page offers:
   open for a retry; `409 CATEGORY_IN_USE` closes it with an explanation (a retry cannot
   succeed). A category changed elsewhere (`404`, or built-in `403`) closes the form or
   confirmation and refreshes both lists.
-- **Focus:** after create, the new card's heading; after edit, that card's Edit button
-  (found by category ID, so it works after the card moves); after delete, the next card
+- **Focus:** after create, the new card's heading; after an edit is saved or cancelled,
+  that card's "More actions" button (found by category ID, so it works after the card
+  moves); after delete, the next card
   in the current order, else the previous one, else the "All categories" heading. A form
   failure focuses the first invalid field, or the form's error message when no field is at
   fault; a page-level error with nothing to fix focuses the notice; an in-use refusal
-  focuses the card's Delete button; a failed delete keeps focus on "Delete category".
+  focuses the card's "More actions" button; a failed delete keeps the confirmation open
+  with focus on "Delete category" for a retry.
   Passive refreshes never move focus.
 - **Pending:** "Creating…", "Saving…", and "Deleting…" replace the button text and the
   buttons are disabled until the request finishes, so nothing is submitted twice.
@@ -312,6 +344,36 @@ return to it. A newly created category is likewise shown (and focused) until the
 toolbar change. After a delete, focus moves to the next card in the current filtered and
 sorted order. After any change the refreshed data is searched, filtered, and sorted again.
 
+**Active and other categories** (issue #102). While browsing (no search, filter "All
+categories"), the cards are split into two sections, and **each category appears exactly
+once**:
+
+- **Active this month:** spending this month (`currentMonthSpent > 0`) or a budget for this
+  month. This month's transaction count alone (for example only income), earlier
+  transactions, earlier budgets, and `budgetEnabled` never make a category active; built-in
+  and custom categories follow the same rule. With none, it says "Nothing has spending or a
+  budget in {Month} yet."
+- **Other categories · {n}:** everything else, with `n` counting only these. It is **closed
+  by default**; "Show other categories" / "Hide other categories" (`aria-expanded`,
+  `aria-controls`) opens and closes it, and closed cards are not rendered, so nothing hidden
+  can take focus.
+- **Saved choice:** only pressing that button saves it, per device, in `localStorage` key
+  `fintrack:categories-others-expanded` (`"true"` or `"false"`; anything else, or unreadable
+  storage, means closed).
+- **Opened automatically, never saved:** when nothing is active; while the create form is
+  open; while an Other card is being edited or has its delete confirmation open; and to show
+  a card that focus is about to land on (a new category, a saved or cancelled one, one that
+  moved into Other after a refresh, or the next card after a delete). The button is hidden
+  while one of the first three applies; pressing Show/Hide ends the last one.
+- **Sorting** applies inside each section and keeps the sections.
+- **Searching or filtering** shows the single flat results list instead (every match visible
+  whatever the saved choice); clearing them returns to the sections and the saved choice.
+  An edit in progress keeps its typed values when the page switches between the two.
+- **Focus after a delete** moves to the next card in rendered order (Active, then Other),
+  else the previous one, else the list heading.
+- The summary strip, the No budget count, and the spending table always use every
+  category, whether Other categories is open or closed.
+
 **Category deep links.** `?category={id}` is read once the user's category list has
 loaded, and accepted only as a positive whole number that is one of the user's own
 categories (built-in or custom). Anything else (text, decimals, zero, negatives, unknown,
@@ -326,20 +388,26 @@ user's ID behaves exactly like a missing one.
   with the category preselected for the displayed month (nothing is saved automatically).
   A category that does not take budgets is ignored.
 
-**Accessibility.** One `h1` ("Categories"), then `h2` sections (spending, All categories)
-and an `h3` per card. Every toolbar and form control has a visible label; icon-only
+**Accessibility.** One `h1` ("Categories"), then `h2` sections (spending, All categories,
+Active this month, Other categories) and an `h3` per card. Card actions are a disclosure
+("More actions for {name}", `aria-expanded`/`aria-controls`), not an ARIA menu; the
+Other categories toggle is a native button with `aria-expanded`/`aria-controls`, and
+closed cards are not rendered. Card warnings are static text (no live region); page
+messages keep their status and alert roles. Every toolbar and form control has a visible label; icon-only
 buttons have names ("Dismiss error", "Dismiss message"); decorative icons and bars are
 `aria-hidden` and every value they show is also text. Built-in and custom are told apart
 by text, budget status by its label, and notice severity by "Error:", "Warning:", or
 "Note:", never by colour alone. Delete stays focusable when inactive so its reason can be
 reached. No positive `tabIndex` is used, focus never targets a removed card, and passive
 refreshes never move focus. The only animation (the success banner sliding in) is turned
-off for `prefers-reduced-motion`.
+off for `prefers-reduced-motion`; the sections and action panel appear without motion.
 
 **Responsive layout.** The summary strip goes from four columns to two (at 1100 px) and
 one (at 700 px); cards fill an auto-fit grid; the toolbar controls and notice buttons
-wrap; the spending table uses fixed column widths (narrower below 480 px) so long names
-wrap instead of scrolling. The page has no horizontal scrolling at 375 px. It is reached
+wrap; a card's name and badge wrap together (the badge drops under the name) and its two
+links share a row or each take the full width; the action panel stays inside its card;
+the spending table uses fixed column widths, and below 480 px sizes Spent and Share to
+their content so names wrap between words instead of scrolling. The page has no horizontal scrolling at 375 px. It is reached
 from the sidebar, the collapsed sidebar, and the mobile drawer.
 
 **Protections.** The summary only ever reads the signed-in user's data, takes no IDs,

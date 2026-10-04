@@ -49,8 +49,8 @@ class CategorySummaryServiceTest {
     private CategorySummaryService service;
     private User user;
 
-    record Usage(Long getCategoryId, Long getTransactionCount, LocalDate getLastTransactionDate,
-                 BigDecimal getAllTimeSpent, BigDecimal getCurrentMonthSpent)
+    record Usage(Long getCategoryId, Long getTransactionCount, Long getCurrentMonthTransactionCount,
+                 LocalDate getLastTransactionDate, BigDecimal getAllTimeSpent, BigDecimal getCurrentMonthSpent)
             implements CategoryTransactionUsageProjection {
     }
 
@@ -104,6 +104,7 @@ class CategorySummaryServiceTest {
         CategorySummaryResponse row = service.getSummary(EMAIL).categories().getFirst();
 
         assertThat(row.transactionCount()).isZero();
+        assertThat(row.currentMonthTransactionCount()).isZero();
         assertThat(row.budgetCount()).isZero();
         assertThat(row.lastTransactionDate()).isNull();
         assertThat(row.currentMonthSpent()).isEqualTo(new BigDecimal("0.00"));
@@ -116,13 +117,14 @@ class CategorySummaryServiceTest {
     @Test
     void mergesUsageAndBudgetMetricsByCategory() {
         stub(List.of(category(7, Category.custom(user, "Pet Care", true))),
-                List.of(new Usage(7L, 4L, LocalDate.of(2026, 10, 20), new BigDecimal("140"), new BigDecimal("60"))),
+                List.of(new Usage(7L, 4L, 2L, LocalDate.of(2026, 10, 20), new BigDecimal("140"), new BigDecimal("60"))),
                 List.of(new BudgetCount(7L, 3L)),
                 List.of(new MonthBudget(11L, 7L, new BigDecimal("80.00"))));
 
         CategorySummaryResponse row = service.getSummary(EMAIL).categories().getFirst();
 
         assertThat(row.transactionCount()).isEqualTo(4);
+        assertThat(row.currentMonthTransactionCount()).isEqualTo(2);
         assertThat(row.budgetCount()).isEqualTo(3);
         assertThat(row.lastTransactionDate()).isEqualTo(LocalDate.of(2026, 10, 20));
         assertThat(row.allTimeSpent()).isEqualTo(new BigDecimal("140.00"));
@@ -143,7 +145,7 @@ class CategorySummaryServiceTest {
                         category(2, Category.custom(user, "Budget Only", true)),
                         category(3, Category.custom(user, "Income Only", true)),
                         category(4, Category.custom(user, "Free", true))),
-                List.of(new Usage(3L, 1L, LocalDate.of(2026, 1, 5), BigDecimal.ZERO, BigDecimal.ZERO)),
+                List.of(new Usage(3L, 1L, 0L, LocalDate.of(2026, 1, 5), BigDecimal.ZERO, BigDecimal.ZERO)),
                 List.of(new BudgetCount(2L, 1L)),
                 List.of());
 
@@ -154,6 +156,33 @@ class CategorySummaryServiceTest {
         // Income counts as usage but is never spending.
         assertThat(rows.get(2).transactionCount()).isEqualTo(1);
         assertThat(rows.get(2).allTimeSpent()).isEqualTo(new BigDecimal("0.00"));
+    }
+
+    @Test
+    void keepsAHistoricallyUsedCategoryProtectedWhenItHasNoTransactionsThisMonth() {
+        // Used last year and budgeted in the past, but quiet this month: still undeletable,
+        // because delete eligibility uses the all-time counts.
+        stub(List.of(category(6, Category.custom(user, "Holidays", true))),
+                List.of(new Usage(6L, 5L, 0L, LocalDate.of(2025, 12, 24), new BigDecimal("300"), BigDecimal.ZERO)),
+                List.of(new BudgetCount(6L, 2L)),
+                List.of());
+
+        CategorySummaryResponse row = service.getSummary(EMAIL).categories().getFirst();
+
+        assertThat(row.currentMonthTransactionCount()).isZero();
+        assertThat(row.transactionCount()).isEqualTo(5);
+        assertThat(row.budgetCount()).isEqualTo(2);
+        assertThat(row.canDelete()).isFalse();
+    }
+
+    @Test
+    void mapsAMissingMonthCountToZero() {
+        // COUNT never returns null for a group, but the public field must never be null.
+        stub(List.of(category(8, Category.custom(user, "Odd", true))),
+                List.of(new Usage(8L, 1L, null, LocalDate.of(2026, 10, 2), BigDecimal.ZERO, BigDecimal.ZERO)),
+                List.of(), List.of());
+
+        assertThat(service.getSummary(EMAIL).categories().getFirst().currentMonthTransactionCount()).isZero();
     }
 
     @Test

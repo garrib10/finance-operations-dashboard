@@ -4,6 +4,10 @@ import {
   compareByName,
   formatReportingMonth,
   formatShare,
+  isActiveThisMonth,
+  partitionByActivity,
+  needsBudgetCount,
+  needsCurrentMonthBudget,
   monthSpendingTotal,
   overBudgetCount,
   shareBarWidth,
@@ -11,7 +15,6 @@ import {
   spendingShare,
   validSpend,
   topCategory,
-  withSpendingCount,
 } from "./categorySummary";
 
 describe("category summary helpers", () => {
@@ -56,9 +59,8 @@ describe("category summary helpers", () => {
     expect(topCategory([salaryRow, unusedRow])).toBeNull();
   });
 
-  it("counts categories over budget and with spending (income is not spending)", () => {
+  it("counts categories over budget", () => {
     expect(overBudgetCount(rows)).toBe(1);
-    expect(withSpendingCount(rows)).toBe(2);
   });
 
   it("formats the server's reporting month", () => {
@@ -117,5 +119,85 @@ describe("spending distribution", () => {
     spendingDistribution(source);
 
     expect(source.map((row) => row.id)).toEqual([9, 7, 1]);
+  });
+});
+
+describe("needsCurrentMonthBudget", () => {
+  const spending = (overrides: Partial<Parameters<typeof summaryRow>[0]> = {}) =>
+    summaryRow({ id: 50, name: "Gifts", currentMonthSpent: 25, ...overrides });
+
+  it("needs a budget for spending this month with no budget, in a category that takes budgets", () => {
+    expect(needsCurrentMonthBudget(spending())).toBe(true);
+  });
+
+  it("still needs one when only earlier months had budgets", () => {
+    expect(needsCurrentMonthBudget(spending({ budgetCount: 3 }))).toBe(true);
+  });
+
+  it.each([
+    ["no spending this month", { currentMonthSpent: 0 }],
+    ["a negative amount", { currentMonthSpent: -5 }],
+    ["an invalid amount", { currentMonthSpent: Number.NaN }],
+    ["a budget this month", { currentMonthBudget: groceriesRow.currentMonthBudget }],
+    ["budgets switched off", { budgetEnabled: false }],
+    ["income only this month", { currentMonthSpent: 0, currentMonthTransactionCount: 2 }],
+    ["spending only in earlier months", { currentMonthSpent: 0, allTimeSpent: 500, transactionCount: 9 }],
+  ])("does not for %s", (_case, overrides) => {
+    expect(needsCurrentMonthBudget(spending(overrides))).toBe(false);
+  });
+
+  it("does not change the category it checks", () => {
+    const row = spending();
+    const before = structuredClone(row);
+    needsCurrentMonthBudget(row);
+
+    expect(row).toEqual(before);
+  });
+
+  it("counts every qualifying category, and zero for none", () => {
+    const qualifying = [spending({ id: 51 }), spending({ id: 52, name: "Books" })];
+
+    expect(needsBudgetCount([...qualifying, groceriesRow, salaryRow, unusedRow])).toBe(2);
+    expect(needsBudgetCount([groceriesRow, salaryRow, unusedRow])).toBe(0);
+    expect(needsBudgetCount([])).toBe(0);
+  });
+});
+
+describe("active this month", () => {
+  const row = (overrides: Partial<Parameters<typeof summaryRow>[0]>) => summaryRow({ id: 70, name: "Row", ...overrides });
+  const budget = groceriesRow.currentMonthBudget;
+
+  it.each([
+    ["spending this month", { currentMonthSpent: 5 }],
+    ["a budget this month", { currentMonthBudget: budget }],
+    ["both", { currentMonthSpent: 5, currentMonthBudget: budget }],
+    ["a built-in with spending", { builtIn: true, currentMonthSpent: 5 }],
+  ])("is active with %s", (_case, overrides) => {
+    expect(isActiveThisMonth(row(overrides))).toBe(true);
+  });
+
+  it.each([
+    ["nothing this month", {}],
+    ["a negative amount", { currentMonthSpent: -3 }],
+    ["only this month's income", { currentMonthTransactionCount: 3 }],
+    ["only earlier transactions", { transactionCount: 9, allTimeSpent: 400 }],
+    ["only earlier budgets", { budgetCount: 4 }],
+    ["a built-in with nothing this month", { builtIn: true }],
+    ["budgets switched off and no spending", { budgetEnabled: false }],
+  ])("is other with %s", (_case, overrides) => {
+    expect(isActiveThisMonth(row(overrides))).toBe(false);
+  });
+
+  it("puts every category in exactly one section, in order, without changing the input", () => {
+    const source = [groceriesRow, unusedRow, petCareRow, salaryRow];
+    const before = [...source];
+    const { activeCategories, otherCategories } = partitionByActivity(source);
+
+    expect(activeCategories).toEqual([groceriesRow, petCareRow]);
+    expect(otherCategories).toEqual([unusedRow, salaryRow]);
+    expect(activeCategories[0]).toBe(groceriesRow); // Same objects, not copies.
+    expect([...activeCategories, ...otherCategories]).toHaveLength(source.length);
+    expect(new Set([...activeCategories, ...otherCategories])).toEqual(new Set(source));
+    expect(source).toEqual(before);
   });
 });

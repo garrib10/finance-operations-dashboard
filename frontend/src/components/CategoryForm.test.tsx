@@ -135,6 +135,16 @@ describe("CategoryForm", () => {
     pending.resolve();
   });
 
+  it("reports each draft change so a parent can restore it", async () => {
+    const onDraftChange = vi.fn();
+    const { user, name } = renderForm({ onDraftChange });
+    await user.type(name(), "s");
+    await user.click(screen.getByRole("radio", { name: "Gift" }));
+
+    expect(onDraftChange).toHaveBeenCalledWith({ name: "Pet Cares", iconKey: "paw-print" });
+    expect(onDraftChange).toHaveBeenLastCalledWith({ name: "Pet Cares", iconKey: "gift" });
+  });
+
   it("cancels without saving", async () => {
     const { user, props } = renderForm();
     await user.click(screen.getByRole("button", { name: "Cancel" }));

@@ -1924,21 +1924,34 @@
   outline-offset: 2px;
 }
 
-/* Phones: narrower fixed columns so long category names wrap instead of overflowing. */
+/* Phones: columns sized to their content, so Spent and Share take only what they need and
+   the name gets the rest; names wrap between words, never mid-word. */
 @media (max-width: 480px) {
+  .category-spending__table {
+    table-layout: auto;
+    font-size: 0.9rem;
+  }
+
   .category-spending__table th,
   .category-spending__table td {
     padding: 0.55rem 0.3rem;
   }
 
   .category-spending__table th:nth-child(2),
-  .category-spending__table td:nth-child(2) {
-    width: 5.75rem;
-  }
-
+  .category-spending__table td:nth-child(2),
   .category-spending__table th:nth-child(3),
   .category-spending__table td:nth-child(3) {
-    width: 4.75rem;
+    width: 1%;
+    white-space: nowrap;
+  }
+
+  .category-spending__name {
+    gap: 0.35rem;
+    overflow-wrap: break-word;
+  }
+
+  .category-spending__bar {
+    min-width: 3rem;
   }
 }
 
@@ -1978,6 +1991,41 @@
 
 .categories-page__list-header h2 {
   margin: 0;
+}
+
+/* Active this month, then Other categories (issue #102). Instant show/hide, no motion. */
+.categories-section + .categories-section {
+  margin-top: 2rem;
+}
+
+.categories-section__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.categories-section h2 {
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+  overflow-wrap: anywhere;
+}
+
+.categories-section__header h2 {
+  margin: 0;
+}
+
+.categories-section__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.categories-section__toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .category-grid {
@@ -2031,12 +2079,22 @@
   height: 1.25rem;
 }
 
-.category-card__name {
+.category-card__title {
+  display: flex;
   flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 0.6rem;
+  min-width: 0;
+}
+
+/* break-word (not anywhere) keeps whole words together, so the badge wraps first. */
+.category-card__name {
   min-width: 0;
   margin: 0;
   font-size: 1.05rem;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .category-card .category-badge {
@@ -2122,9 +2180,152 @@
   gap: 0.5rem;
 }
 
-.category-card__manage {
+/* Card links: transactions is the stronger, tinted action; budgets is quieter. */
+/* Both links share the row evenly; when they cannot fit side by side (narrow cards),
+   each takes the full width instead of leaving a ragged second line. */
+.category-card__link {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0.5rem 0.7rem;
+  white-space: nowrap;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.category-card__link:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.category-card__link--primary {
+  color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+  border-color: var(--color-info-border);
+}
+
+.category-card__link--primary:hover {
+  color: var(--color-primary-dark);
+}
+
+.category-card__link:focus-visible,
+.category-actions__trigger:focus-visible,
+.category-actions__item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Card warning: spending this month with no budget. The InlineNotice warning colours,
+   tightened for a card: an even border (no accent bar) and a plain inline link, which as
+   part of a sentence needs no 44px box (WCAG target-size exception for inline links). */
+.category-card__warning .inline-notice {
+  margin: 0;
+  padding: 0.7rem 0.75rem;
+  font-size: 0.9rem;
+  border-left-width: 1px;
+  border-left-color: var(--color-warning-border);
+}
+
+.category-card__warning-link {
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.category-card__warning-link:hover {
+  color: var(--color-primary-dark);
+}
+
+.category-card__warning-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* "More actions": the header (full card width) is the positioning context, so the panel
+   sits just below it, however many lines the name wraps to, and never exceeds the card. */
+.category-card__header {
+  position: relative;
+}
+
+.category-actions__trigger {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  color: var(--color-text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.category-actions__trigger:hover,
+.category-actions__trigger[aria-expanded="true"] {
+  color: var(--color-text);
+  background-color: var(--color-background);
+  border-color: var(--color-border);
+}
+
+.category-actions__panel {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  z-index: 5;
   display: grid;
+  gap: 0.25rem;
+  width: min(15rem, 100%);
+  padding: 0.4rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.category-actions__panel[hidden] {
+  display: none;
+}
+
+.category-actions__item {
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+
+.category-actions__item:hover:not([aria-disabled="true"]) {
+  background-color: var(--color-background);
+}
+
+.category-actions__item--danger {
+  color: var(--color-danger);
+}
+
+.app-main .category-actions__reason {
+  margin: 0;
+  padding: 0 0.75rem 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 
 /* In-use Delete stays focusable (aria-disabled) so its reason is reachable. */

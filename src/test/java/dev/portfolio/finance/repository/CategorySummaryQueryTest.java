@@ -91,6 +91,17 @@ class CategorySummaryQueryTest {
     }
 
     @Test
+    void countsTheReportingMonthsTransactionsOfBothTypesInclusiveOfBothEnds() {
+        // 1 Oct expense, 15 Oct income refund, 31 Oct (future-dated) expense; 30 Sep and
+        // 1 Nov are outside the month. Income counts as activity even though it is not spending.
+        CategoryTransactionUsageProjection petUsage = usage().get(pets.getId());
+
+        assertThat(petUsage.getCurrentMonthTransactionCount()).isEqualTo(3);
+        assertThat(petUsage.getTransactionCount()).isEqualTo(5); // All time stays separate.
+        assertThat(usage().get(salary.getId()).getCurrentMonthTransactionCount()).isEqualTo(1);
+    }
+
+    @Test
     void sumsTheReportingMonthInclusiveOfBothEnds() {
         // 20.50 (1 Oct) + 30.00 (31 Oct); 30 Sep, 1 Nov, and the income refund are excluded.
         assertThat(usage().get(pets.getId()).getCurrentMonthSpent()).isEqualByComparingTo("50.50");

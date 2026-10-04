@@ -487,7 +487,7 @@ describe("TransactionPage add-transaction link", () => {
     await renderAt(`/transactions?addCategory=${petCare.id}`);
 
     await waitFor(() => expect(screen.getByLabelText("Category")).toHaveValue(String(petCare.id)));
-    expect(screen.getByRole("heading", { name: "Add Transaction" })).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Add Transaction" })).toHaveFocus());
     expect(screen.getByLabelText("Date")).toHaveValue(toDateInputValue(new Date()));
     expect(screen.getByLabelText("Filter by category")).toHaveValue("");
     const requests = vi.mocked(transactionService.getTransactions).mock.calls;

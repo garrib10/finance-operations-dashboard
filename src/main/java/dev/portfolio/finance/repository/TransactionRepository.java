@@ -111,12 +111,18 @@ public interface TransactionRepository
 
     /**
      * Usage per category in one grouped query: counts include income, spending sums only
-     * {@code expense}. Categories without transactions are absent; callers treat them as zero.
+     * {@code expense}. Both month figures use the inclusive reporting-month range. Categories
+     * without transactions are absent; callers treat them as zero. COUNT(CASE …) ignores the
+     * NULLs from non-matching rows and returns a whole number on both H2 and MySQL.
      */
     @Query("""
             SELECT
                 t.category.id AS categoryId,
                 COUNT(t) AS transactionCount,
+                COUNT(CASE
+                    WHEN t.transactionDate >= :startDate
+                        AND t.transactionDate <= :endDate
+                    THEN 1 END) AS currentMonthTransactionCount,
                 MAX(t.transactionDate) AS lastTransactionDate,
                 COALESCE(SUM(CASE WHEN t.type = :expense THEN t.amount ELSE 0 END), 0) AS allTimeSpent,
                 COALESCE(SUM(CASE

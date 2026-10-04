@@ -7,6 +7,7 @@ export function summaryRow(overrides: Partial<CategorySummary> & Pick<CategorySu
     builtIn: false,
     budgetEnabled: true,
     transactionCount: 0,
+    currentMonthTransactionCount: 0,
     budgetCount: 0,
     lastTransactionDate: null,
     currentMonthSpent: 0,
@@ -19,7 +20,7 @@ export function summaryRow(overrides: Partial<CategorySummary> & Pick<CategorySu
 
 export const groceriesRow = summaryRow({
   id: 1, name: "Groceries", iconKey: "shopping-cart", builtIn: true, canDelete: false,
-  transactionCount: 6, budgetCount: 2, lastTransactionDate: "2026-10-12",
+  transactionCount: 6, currentMonthTransactionCount: 4, budgetCount: 2, lastTransactionDate: "2026-10-12",
   currentMonthSpent: 300, allTimeSpent: 900,
   currentMonthBudget: {
     budgetId: 10, monthlyLimit: 400, amountSpent: 300, amountRemaining: 100, percentageUsed: 75, status: "WARNING",
@@ -28,7 +29,7 @@ export const groceriesRow = summaryRow({
 
 export const petCareRow = summaryRow({
   id: 7, name: "Pet Care", iconKey: "paw-print", canDelete: false,
-  transactionCount: 3, budgetCount: 1, lastTransactionDate: "2026-10-02",
+  transactionCount: 3, currentMonthTransactionCount: 1, budgetCount: 1, lastTransactionDate: "2026-10-02",
   currentMonthSpent: 100, allTimeSpent: 140,
   currentMonthBudget: {
     budgetId: 11, monthlyLimit: 80, amountSpent: 100, amountRemaining: -20, percentageUsed: 125, status: "OVER_BUDGET",
@@ -37,7 +38,7 @@ export const petCareRow = summaryRow({
 
 export const salaryRow = summaryRow({
   id: 3, name: "Income", iconKey: "circle-dollar-sign", builtIn: true, budgetEnabled: false, canDelete: false,
-  transactionCount: 1, lastTransactionDate: "2026-10-01",
+  transactionCount: 1, currentMonthTransactionCount: 1, lastTransactionDate: "2026-10-01",
 });
 
 export const unusedRow = summaryRow({ id: 9, name: "Hobbies", iconKey: "gamepad-2" });

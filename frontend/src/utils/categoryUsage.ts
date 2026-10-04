@@ -15,10 +15,21 @@ export function deleteBlockedReason(transactionCount: number, budgetCount: numbe
   return parts.length > 0 ? `Used by ${parts.join(" and ")}.` : "Used by transactions or budgets.";
 }
 
+/**
+ * This month's activity for a card, for example "1 transaction in October". The count is
+ * the server's reporting month only; the all-time counts stay with the delete rules.
+ */
+export function monthActivity(currentMonthTransactionCount: number, monthName: string): string {
+  const noun = currentMonthTransactionCount === 1 ? "transaction" : "transactions";
+  return `${currentMonthTransactionCount} ${noun} in ${monthName}`;
+}
+
 /** Stable element IDs on a category card, so focus can move after the list re-renders. */
 export function categoryCardIds(id: number) {
   return {
     heading: `category-${id}-heading`,
+    actions: `category-${id}-actions`,
+    actionsPanel: `category-${id}-actions-panel`,
     edit: `category-${id}-edit`,
     delete: `category-${id}-delete`,
     deleteReason: `category-${id}-delete-reason`,

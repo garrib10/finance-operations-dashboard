@@ -295,19 +295,23 @@ server's reporting month (issue #100). No new `data-testid` values are added.
 | Element | Selector |
 | --- | --- |
 | Page | `h1` "Categories"; loading `role="status"` "Loading categories…"; failure `role="alert"` with button "Try again" |
-| Summary strip | `dl` with terms "Categories", "Top this month", "Over budget", "With spending" |
+| Summary strip | `dl` with terms "Categories", "Top this month", "Over budget", "No budget" (detail "categories spending in {Month Year} without a budget"; counts every category, unaffected by the toolbar) |
+| No-budget warning | in a qualifying card (spending this month, no budget this month, takes budgets): "Warning: {amount} spent in {Month} with no budget." with the link "Set budget for {name}" (`/budgets?category={id}`), the card's only Set budget link; no `role`/live region and no dismiss button |
 | Category card | `article` named by the category (for example "Pet Care"), badge "Built-in" or "Custom" |
 | Card figures | "Spent in {Month}", "Share of spending" (only when the month has spending) |
 | Budget progress | `role="progressbar"` named "{Category} budget used", `aria-valuenow` 0–100, `aria-valuetext` "{n}% used"; status text such as "Warning" |
 | No budget | "No budget for {Month}", shown only for categories that take budgets |
-| Activity | "{n} transactions · {m} budgets · Last used {date}" or "Not used yet" |
+| Activity | "{n} transaction(s) in {Month} · Last used {date}" (this month's count, income and expense) or "Not used yet" |
 | Spending table | `table` named "Spending in {Month Year}" with column headers Category, Spent, Share and a row header per category with spending; "No spending recorded for {Month Year}." when empty; rounding note "Percentages are rounded, so they may not add up to exactly 100%." |
 | Toolbar | search "Search categories", selects "Filter categories" (All categories, Custom, Built-in, Unused, No budget this month) and "Sort categories" (Name, This month’s spending, Most used); `role="status"` "Showing {n} of {total} categories"; button "Clear category filters" when not at the defaults |
 | No matches | "No categories match your search and filter." with button "Show all categories" |
+| Sections | while browsing (no search, filter "All categories"): `section` named "Active this month" (`h2`), then `section` named "Other categories · {n}" (`h2`); each category appears once. Empty Active: "Nothing has spending or a budget in {Month} yet." Searching or filtering replaces both with the single flat results list |
+| Other categories toggle | button "Show other categories" / "Hide other categories" with `aria-expanded` and `aria-controls="categories-other-list"`; closed by default; absent while the section must stay open (nothing active, create form open, an Other card's form or confirmation open). Saved per device in `localStorage` `fintrack:categories-others-expanded` |
 | Create | button "Create category" opens a form named "Create category" (fields "Category name" and the "Icon" radiogroup; submit "Create category", "Cancel") |
-| Edit | button "Edit {name}" (custom only) opens a form named "Edit {name}" with "Save category" and "Cancel" |
-| Delete | button "Delete {name}" (custom only); `aria-disabled="true"` plus a reason "Used by …" when in use; confirmation group "Delete “{name}”? This cannot be undone." with "Delete category" and "Keep category" |
-| Card links | "View transactions for {name}" (`/transactions?category={id}`), or "Add a transaction for {name}" (`/transactions?addCategory={id}`) when the category has no transactions; "Set budget for {name}" or "Edit budget for {name}" (`/budgets?category={id}`, only for categories that take budgets) |
+| Card actions | button "More actions for {name}" (custom cards only; `aria-expanded`, `aria-controls` → `#category-{id}-actions-panel`); not an ARIA menu, so no `menu`/`menuitem` roles. Built-in cards have no such button |
+| Edit | button "Edit {name}" inside the open actions panel; opens a form named "Edit {name}" with "Save category" and "Cancel"; focus then returns to "More actions for {name}" |
+| Delete | button "Delete {name}" inside the open actions panel; `aria-disabled="true"` plus a visible reason "Used by …" (its accessible description) when in use; confirmation group "Delete “{name}”? This cannot be undone." with "Delete category" and "Keep category" |
+| Card links | real links, each with a decorative icon and visible text: "View transactions for {name}" (`/transactions?category={id}`), or "Add a transaction for {name}" (`/transactions?addCategory={id}`) when the category has no transactions; "Set budget for {name}" or "Edit budget for {name}" (`/budgets?category={id}`, only for categories that take budgets) |
 | Messages | success banner "“{name}” was created/updated/deleted successfully." (after the summary refresh); refresh warning `role="status"` starting "Warning: “{name}” was updated, but the latest category summary could not be loaded." with "Try again"; errors `role="alert"` starting "Error:" with "Dismiss error"; initial load failure "Error: Unable to load categories. Please try again." with "Try again" |
 | Inline notice | `InlineNotice`: visible label "Error:" (`role="alert"`), "Warning:" or "Note:" (`role="status"`); optional action button and "Dismiss error" / "Dismiss warning" / "Dismiss note" |
 

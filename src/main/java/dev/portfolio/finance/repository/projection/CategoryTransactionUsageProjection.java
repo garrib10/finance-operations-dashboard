@@ -8,8 +8,11 @@ public interface CategoryTransactionUsageProjection {
 
     Long getCategoryId();
 
-    /** Income and expense transactions. */
+    /** Income and expense transactions, all time. */
     Long getTransactionCount();
+
+    /** Income and expense transactions in the reporting month (inclusive of both ends). */
+    Long getCurrentMonthTransactionCount();
 
     LocalDate getLastTransactionDate();
 

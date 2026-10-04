@@ -30,6 +30,11 @@ interface CategoryFormProps {
   onCancel: () => void;
   /** Focus the name field when the form opens (for the create form). */
   focusNameOnOpen?: boolean;
+  /**
+   * Reports every change, so a parent can keep the draft if the form is rebuilt (for
+   * example when the card moves between page sections) and reopen it with `initial`.
+   */
+  onDraftChange?: (draft: CategoryDraft) => void;
 }
 
 /** Name and icon fields for creating or editing a custom category. */
@@ -42,9 +47,15 @@ export function CategoryForm({
   onSubmit,
   onCancel,
   focusNameOnOpen = false,
+  onDraftChange,
 }: CategoryFormProps) {
   const baseId = useId();
-  const [draft, setDraft] = useState<CategoryDraft>(initial);
+  const [draft, setDraftState] = useState<CategoryDraft>(initial);
+
+  function setDraft(next: CategoryDraft): void {
+    setDraftState(next);
+    onDraftChange?.(next);
+  }
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [alert, setAlert] = useState("");
   const [pending, setPending] = useState(false);

@@ -376,3 +376,43 @@ Performed by the maintainer in Chrome against the local backend (not staging):
 - [ ] The in-use race: a transaction added in another tab before confirming a delete
 - [ ] The restyled page-level errors and refresh warnings on Transactions, Budgets, and
       the Dashboard (changed in Phase 6, covered by tests only)
+
+## Issue #102 (v1.3.0) Categories page refinements
+
+Behaviour is documented in [categories.md](categories.md#categories-page-issue-100) and the
+`currentMonthTransactionCount` field in [categories-api.md](categories-api.md#get-apicategoriessummary).
+
+### Automated coverage
+
+| Area | Tests |
+| --- | --- |
+| Current-month count: income and expense, month boundaries (1st, last day, future-dated, previous and next month excluded), user isolation, zero for unused, all-time delete eligibility unchanged, fixed query count, MySQL `COUNT(CASE …)` | `CategorySummaryQueryTest`, `CategorySummaryServiceTest`, `CategoryControllerTest`, `CategorySummaryIntegrationTest`, `CategorySummaryQueryCountTest`, `CategorySummaryMySqlIT` |
+| Card actions disclosure: names and attributes, open and close (trigger, Escape with focus return, outside click, focus leaving), one open at a time, unavailable Delete inert and explained, focus back on the trigger after edit and delete outcomes | `CategoryActionsMenu.test.tsx`, `CategoriesPage.test.tsx` |
+| Activity wording (singular, plural, zero, never used, server month), card links as real links with decorative icons | `categoryUsage.test.ts`, `CategoriesPage.test.tsx` |
+| No-budget rule, card warning (static, single Set budget link), "No budget" count over every category, refresh behaviour | `categorySummary.test.ts`, `InlineNotice.test.tsx`, `CategoriesPage.test.tsx` |
+| Active and Other: membership and partition, each category once, closed by default, toggle and saved preference (invalid and unavailable storage), automatic opening never saved, flat list for search and filter, sorting inside sections, empty Active state, edit draft kept across layout changes, focus after create, edit, and delete | `categorySummary.test.ts`, `categoriesSectionPreference.test.ts`, `CategoryForm.test.tsx`, `CategoriesPage.test.tsx` |
+| Page-wide: summary strip, table, and cards agree; heading order, named controls, no menu roles, no positive tab order, static card warnings | `CategoriesPage.test.tsx` |
+
+### Issue #102 manual verification (October 4, 2026)
+
+Performed by the maintainer in Chrome against the local backend (not staging):
+
+- The "⋯" disclosure: panel position, Escape, an unavailable Delete with its reason, focus
+  back on "⋯" after Cancel (keyboard), one open at a time, and the panel inside the card at
+  375 px.
+- Current-month activity on cards, including an income transaction raising the count but
+  not "Spent", and Delete's reason still quoting all-time counts.
+- The no-budget warning and its Set budget link, without the link icon or accent bar.
+- Active this month and Other categories: the sections, the Show/Hide toggle, and the
+  layout at 375 px and full desktop width, including the card header, card links, and the
+  spending table at 375 px.
+- Accessibility and responsive pass: 768 px, 1024 px, 200% zoom, and a screen reader pass
+  (VoiceOver) of the "More actions" disclosure, the Other categories toggle, and the card
+  warnings.
+
+### Issue #102 checks still outstanding
+
+- [ ] The saved Show/Hide choice surviving a page refresh, and creating a category while
+      Other categories is closed (opens, focuses the new card, choice not saved)
+- [ ] The README screenshots (`categories.png`, `categories-manage.png`,
+      `categories-mobile.png`), deferred to the final v1.3.0 release updates
