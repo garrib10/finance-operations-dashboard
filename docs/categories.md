@@ -388,20 +388,26 @@ user's ID behaves exactly like a missing one.
   with the category preselected for the displayed month (nothing is saved automatically).
   A category that does not take budgets is ignored.
 
-**Accessibility.** One `h1` ("Categories"), then `h2` sections (spending, All categories)
-and an `h3` per card. Every toolbar and form control has a visible label; icon-only
+**Accessibility.** One `h1` ("Categories"), then `h2` sections (spending, All categories,
+Active this month, Other categories) and an `h3` per card. Card actions are a disclosure
+("More actions for {name}", `aria-expanded`/`aria-controls`), not an ARIA menu; the
+Other categories toggle is a native button with `aria-expanded`/`aria-controls`, and
+closed cards are not rendered. Card warnings are static text (no live region); page
+messages keep their status and alert roles. Every toolbar and form control has a visible label; icon-only
 buttons have names ("Dismiss error", "Dismiss message"); decorative icons and bars are
 `aria-hidden` and every value they show is also text. Built-in and custom are told apart
 by text, budget status by its label, and notice severity by "Error:", "Warning:", or
 "Note:", never by colour alone. Delete stays focusable when inactive so its reason can be
 reached. No positive `tabIndex` is used, focus never targets a removed card, and passive
 refreshes never move focus. The only animation (the success banner sliding in) is turned
-off for `prefers-reduced-motion`.
+off for `prefers-reduced-motion`; the sections and action panel appear without motion.
 
 **Responsive layout.** The summary strip goes from four columns to two (at 1100 px) and
 one (at 700 px); cards fill an auto-fit grid; the toolbar controls and notice buttons
-wrap; the spending table uses fixed column widths (narrower below 480 px) so long names
-wrap instead of scrolling. The page has no horizontal scrolling at 375 px. It is reached
+wrap; a card's name and badge wrap together (the badge drops under the name) and its two
+links share a row or each take the full width; the action panel stays inside its card;
+the spending table uses fixed column widths, and below 480 px sizes Spent and Share to
+their content so names wrap between words instead of scrolling. The page has no horizontal scrolling at 375 px. It is reached
 from the sidebar, the collapsed sidebar, and the mobile drawer.
 
 **Protections.** The summary only ever reads the signed-in user's data, takes no IDs,

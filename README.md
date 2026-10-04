@@ -41,9 +41,10 @@ The project demonstrates layered backend architecture, short-lived JWTs with rot
 - Custom categories with approved icons, created together with a transaction or budget in one
   database transaction and reusable everywhere; database-enforced per-user name uniqueness and
   ownership
-- Dedicated Categories page: usage insights, this month's spending distribution, search,
-  filters, and sorting, category management, and shortcuts into each category's
-  transactions and budget, backed by a fixed-query summary API
+- Dedicated Categories page: this month's activity and spending distribution, categories
+  active this month shown first, no-budget warnings, search, filters, and sorting,
+  accessible card actions, and shortcuts into each category's transactions and budget,
+  backed by a fixed-query summary API
 - Responsive application shell: a collapsible desktop sidebar that remembers its state and
   an accessible mobile navigation drawer, with keyboard and reduced-motion support
 - Search, filtering, sorting, pagination, and financial analytics
@@ -170,15 +171,18 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 **Categories page** (`/categories`, in the sidebar and mobile drawer):
 
 - Summary strip: category counts, this month's top category, categories over budget, and
-  categories with spending
+  categories spending without a budget
 - This month's spending distribution as an accessible table with share bars
+- "Active this month" first (spending or a budget this month), then a collapsible "Other
+  categories" section that remembers whether it is open; each category appears once
 - A card per category with its icon, built-in or custom badge, spending and share, budget
-  progress and status, usage counts, and last-used date
+  progress and status, this month's transactions, and last-used date
+- A warning with a Set budget link on categories spending this month without a budget
 - Search (ignores case and surrounding spaces, Unicode-normalized), filters (Custom,
   Built-in, Unused, No budget this month), and sorting (name, this month's spending, most
   used); the summary always covers every category
-- Create, rename, re-icon, and delete custom categories on the page; Delete is disabled with
-  the reason when a category is in use
+- Create, rename, re-icon, and delete custom categories through each card's accessible
+  "More actions" button; Delete is unavailable, with the reason, when a category is in use
 - Shortcuts to the category's transactions (or to add its first one) and to set or edit its
   budget
 - Status feedback: success confirmations, and persistent, labelled warnings and errors that
@@ -321,8 +325,9 @@ Coverage includes:
 - Category selection, custom-category creation, icon picker, category filters, server field
   messages beside their inputs, icon fallback, and stale-session category state
 - The Categories page: loading, error, and empty states; create, edit, and delete workflows
-  with focus management; search, filters, sorting, and the spending table; deep links; and
-  status notices
+  with focus management; the card actions disclosure; current-month activity; no-budget
+  warnings; Active and Other sections with the saved preference; search, filters, sorting,
+  and the spending table; deep links; and status notices
 - Responsive navigation: public versus signed-in layouts, current-page state, sidebar collapse
   and saved preference, every mobile-drawer close path, focus return, and scroll-lock cleanup
 

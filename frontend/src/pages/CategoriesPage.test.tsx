@@ -590,6 +590,60 @@ describe("CategoriesPage", () => {
     });
   });
 
+  describe("page-wide checks", () => {
+    // Spotify spends with no budget, so a static warning is on screen too.
+    const spotify = summaryRow({ id: 40, name: "Spotify", iconKey: "music", currentMonthSpent: 12,
+      transactionCount: 1, currentMonthTransactionCount: 1, canDelete: false, lastTransactionDate: "2026-10-01" });
+
+    beforeEach(() => {
+      vi.mocked(getCategorySummary).mockResolvedValue(summaryList([...allRows, spotify]));
+    });
+
+    it("keeps the summary strip, spending table, and cards in agreement", async () => {
+      await renderPage();
+      const strip = screen.getByText("Categories", { selector: "dt" }).closest("dl")!;
+      const table = screen.getByRole("table");
+      const tableSpent = (name: string) =>
+        within(within(table).getByRole("rowheader", { name }).closest("tr")!).getAllByRole("cell")[0].textContent;
+      const cardSpent = (name: string) =>
+        within(card(name)).getByText(/^Spent in /).nextElementSibling!.textContent;
+
+      for (const name of ["Groceries", "Pet Care", "Spotify"]) {
+        expect(cardSpent(name)).toBe(tableSpent(name));
+      }
+      // Top category, total, and the No budget count all describe the same five categories.
+      expect(within(strip).getByText("$300.00 of $412.00")).toBeInTheDocument();
+      expect(within(table).getAllByRole("rowheader")).toHaveLength(3);
+      expect(within(strip).getByText("No budget").nextElementSibling).toHaveTextContent(/^1$/);
+      expect(within(strip).getByText("3 custom · 2 built-in")).toBeInTheDocument();
+      expect(screen.getAllByText(/spent in October with no budget\./)).toHaveLength(1);
+    });
+
+    it("has an accessible structure: headings, names, no menus, no positive tab order", async () => {
+      const user = await renderPage();
+      await user.click(actionsTrigger("Pet Care"));
+
+      expect(screen.getAllByRole("heading", { level: 1 }).map((h) => h.textContent)).toEqual(["Categories"]);
+      expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+        "Spending in October 2026", "All categories", "Active this month", "Other categories · 2",
+      ]);
+      // Disclosures, not ARIA menus; the open one is reported as expanded.
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      expect(screen.queryByRole("menuitem")).not.toBeInTheDocument();
+      expect(actionsTrigger("Pet Care")).toHaveAttribute("aria-expanded", "true");
+      expect(document.getElementById(actionsTrigger("Pet Care").getAttribute("aria-controls")!)).toBeVisible();
+      // Every control has a name, and nothing jumps the natural tab order.
+      for (const control of [...screen.getAllByRole("button"), ...screen.getAllByRole("link")]) {
+        expect(control).toHaveAccessibleName();
+      }
+      expect(document.querySelectorAll("[tabindex]:not([tabindex='-1']):not([tabindex='0'])")).toHaveLength(0);
+      // The card warning is static; only page messages may be live regions.
+      const warning = screen.getByText(/spent in October with no budget\./).closest<HTMLElement>(".inline-notice")!;
+      expect(warning).not.toHaveAttribute("role");
+      expect(warning.closest("[aria-live]")).toBeNull();
+    });
+  });
+
   describe("sections", () => {
     // Groceries and Pet Care are active (spending or a budget this month); Hobbies and
     // Income are not. These tests start from the default: "Other categories" closed.

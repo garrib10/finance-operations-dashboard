@@ -41,6 +41,9 @@ function renderApp(path: string, authenticated = true, overrides: Partial<AuthCo
   </AuthContext.Provider>);
 }
 
+// Full user-event flows are slow under coverage instrumentation and on a busy machine.
+vi.setConfig({ testTimeout: 20_000 });
+
 describe("application routing and account forms", () => {
   it.each([["/profile", "Profile"], ["/settings", "Account Settings"]])("protects and renders %s with account forms", (path, title) => {
     renderApp(path);

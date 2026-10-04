@@ -323,7 +323,8 @@ describe("BudgetPage category deep link", () => {
   it("opens this month's existing budget for editing", async () => {
     await renderAt(["/budgets?category=1"]);
 
-    expect(await screen.findByRole("heading", { name: "Edit Budget" })).toHaveFocus();
+    // Focus moves in an effect after the heading changes, so wait for it.
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
     expect(screen.getByLabelText("Category")).toHaveValue("1");
     expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500);
     expect(screen.getByRole("button", { name: "Update Budget" })).toBeInTheDocument();
@@ -334,7 +335,7 @@ describe("BudgetPage category deep link", () => {
     await renderAt([`/budgets?category=${petCare.id}`]);
 
     await waitFor(() => expect(screen.getByLabelText("Category")).toHaveValue(String(petCare.id)));
-    expect(screen.getByRole("heading", { name: "Create Budget" })).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Create Budget" })).toHaveFocus());
     // The form's month and year (the period filter has its own "Month" field).
     expect(document.getElementById("budget-month")).toHaveValue(String(month));
     expect(document.getElementById("budget-year")).toHaveValue(year);
@@ -364,7 +365,8 @@ describe("BudgetPage category deep link", () => {
 
     await user.click(screen.getByRole("button", { name: "History back" }));
 
-    expect(await screen.findByRole("heading", { name: "Edit Budget" })).toHaveFocus();
+    // Focus moves in an effect after the heading changes, so wait for it.
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
     expect(screen.getByLabelText("Category")).toHaveValue("1");
   });
 });
