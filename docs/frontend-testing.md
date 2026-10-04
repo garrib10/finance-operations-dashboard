@@ -406,13 +406,13 @@ Performed by the maintainer in Chrome against the local backend (not staging):
 - Active this month and Other categories: the sections, the Show/Hide toggle, and the
   layout at 375 px and full desktop width, including the card header, card links, and the
   spending table at 375 px.
+- Accessibility and responsive pass: 768 px, 1024 px, 200% zoom, and a screen reader pass
+  (VoiceOver) of the "More actions" disclosure, the Other categories toggle, and the card
+  warnings.
 
 ### Issue #102 checks still outstanding
 
 - [ ] The saved Show/Hide choice surviving a page refresh, and creating a category while
       Other categories is closed (opens, focuses the new card, choice not saved)
-- [ ] 768 px, 1024 px, and 200% zoom
-- [ ] Screen reader pass (VoiceOver): the "More actions" disclosure, the Other categories
-      toggle, and that card warnings are not announced
 - [ ] The README screenshots (`categories.png`, `categories-manage.png`,
-      `categories-mobile.png`)
+      `categories-mobile.png`), deferred to the final v1.3.0 release updates
