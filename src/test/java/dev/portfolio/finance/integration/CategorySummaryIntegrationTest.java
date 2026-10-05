@@ -3,6 +3,7 @@ package dev.portfolio.finance.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -172,8 +173,125 @@ class CategorySummaryIntegrationTest {
 
     // ------------------------------------------------------------------ helpers
 
+    @Test
+    void reportsTheSameSelectedAndServerMonthByDefault() throws Exception {
+        JsonNode summary = summary(owner);
+
+        assertThat(summary.get("month").asInt()).isEqualTo(today.getMonthValue());
+        assertThat(summary.get("year").asInt()).isEqualTo(today.getYear());
+        assertThat(summary.get("serverCurrentMonth").asInt()).isEqualTo(today.getMonthValue());
+        assertThat(summary.get("serverCurrentYear").asInt()).isEqualTo(today.getYear());
+    }
+
+    @Test
+    void describesAnEarlierMonthWhileKeepingAllTimeValues() throws Exception {
+        LocalDate selected = today.withDayOfMonth(1).minusMonths(1);       // first day of last month
+        LocalDate selectedEnd = selected.withDayOfMonth(selected.lengthOfMonth());
+        long pets = createCategory(owner, "Pet Care", "paw-print");
+        long quiet = createCategory(owner, "Quiet Month", "tag");
+        transaction(owner, pets, "EXPENSE", "20.00", selected);                // first day: in
+        transaction(owner, pets, "INCOME", "5.00", selectedEnd);               // last day: counted, not spending
+        transaction(owner, pets, "EXPENSE", "70.00", selected.minusDays(1));   // the month before: out
+        transaction(owner, pets, "EXPENSE", "9.00", today);                    // this month: out
+        budget(owner, pets, "40.00", selected);
+        budget(owner, pets, "500.00", today);
+        transaction(owner, quiet, "EXPENSE", "3.00", today);
+
+        JsonNode summary = summary(owner, selected);
+
+        assertThat(summary.get("month").asInt()).isEqualTo(selected.getMonthValue());
+        assertThat(summary.get("year").asInt()).isEqualTo(selected.getYear());
+        assertThat(summary.get("serverCurrentMonth").asInt()).isEqualTo(today.getMonthValue());
+        assertThat(summary.get("serverCurrentYear").asInt()).isEqualTo(today.getYear());
+
+        JsonNode petRow = byId(summary, pets);
+        assertThat(petRow.get("currentMonthTransactionCount").asLong()).isEqualTo(2);
+        assertThat(petRow.get("currentMonthSpent").decimalValue()).isEqualByComparingTo("20.00");
+        JsonNode budget = petRow.get("currentMonthBudget");
+        assertThat(budget.get("monthlyLimit").decimalValue()).isEqualByComparingTo("40.00");
+        assertThat(budget.get("amountRemaining").decimalValue()).isEqualByComparingTo("20.00");
+        assertThat(budget.get("percentageUsed").decimalValue()).isEqualByComparingTo("50.00");
+        assertThat(budget.get("status").asString()).isEqualTo("CAUTION");
+        // All-time values are the same whichever month is shown.
+        assertThat(petRow.get("transactionCount").asLong()).isEqualTo(4);
+        assertThat(petRow.get("budgetCount").asLong()).isEqualTo(2);
+        assertThat(petRow.get("allTimeSpent").decimalValue()).isEqualByComparingTo("99.00");
+        assertThat(petRow.get("lastTransactionDate").asString()).isEqualTo(today.toString());
+        assertThat(petRow.get("canDelete").asBoolean()).isFalse();
+
+        // No activity that month: still listed, with zeros.
+        JsonNode quietRow = byId(summary, quiet);
+        assertThat(quietRow.get("currentMonthTransactionCount").asLong()).isZero();
+        assertThat(quietRow.get("currentMonthSpent").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(quietRow.get("currentMonthBudget").isNull()).isTrue();
+    }
+
+    @Test
+    void keepsEachUsersEarlierMonthSeparate() throws Exception {
+        LocalDate selected = today.withDayOfMonth(1).minusMonths(1);
+        long ownerPets = createCategory(owner, "Pet Care", "paw-print");
+        long otherPets = createCategory(other, "Pet Care", "paw-print");
+        transaction(owner, ownerPets, "EXPENSE", "10.00", selected);
+        transaction(other, otherPets, "EXPENSE", "800.00", selected);
+        transaction(other, otherPets, "INCOME", "50.00", selected);
+        budget(other, otherPets, "900.00", selected);
+
+        JsonNode ownerSummary = summary(owner, selected);
+        JsonNode otherSummary = summary(other, selected);
+
+        assertThat(ids(ownerSummary)).doesNotContain(otherPets);
+        assertThat(ids(otherSummary)).doesNotContain(ownerPets);
+        JsonNode ownerRow = byId(ownerSummary, ownerPets);
+        assertThat(ownerRow.get("currentMonthTransactionCount").asLong()).isEqualTo(1);
+        assertThat(ownerRow.get("currentMonthSpent").decimalValue()).isEqualByComparingTo("10.00");
+        assertThat(ownerRow.get("currentMonthBudget").isNull()).isTrue();
+        JsonNode otherRow = byId(otherSummary, otherPets);
+        assertThat(otherRow.get("currentMonthTransactionCount").asLong()).isEqualTo(2);
+        assertThat(otherRow.get("currentMonthSpent").decimalValue()).isEqualByComparingTo("800.00");
+        assertThat(otherRow.get("currentMonthBudget").get("monthlyLimit").decimalValue()).isEqualByComparingTo("900.00");
+    }
+
+    @Test
+    void rejectsInvalidPeriodsWithFieldErrors() throws Exception {
+        LocalDate nextMonth = today.withDayOfMonth(1).plusMonths(1);
+        String futureField = nextMonth.getYear() > today.getYear() ? "year" : "month";
+
+        expectFieldError(Map.of("month", "8"), "year", "Month and year must be given together");
+        expectFieldError(Map.of("year", "2026"), "month", "Month and year must be given together");
+        expectFieldError(Map.of("month", "13", "year", "2026"), "month", "Month must be between 1 and 12");
+        expectFieldError(Map.of("month", "5", "year", "1999"), "year", "Year must be 2000 or later");
+        expectFieldError(Map.of("month", "abc", "year", "2026"), "month", "Month must be a whole number between 1 and 12");
+        expectFieldError(Map.of("month", "8", "year", "abcd"), "year", "Year must be a whole number");
+        send(get("/api/categories/summary")
+                .param("month", String.valueOf(nextMonth.getMonthValue()))
+                .param("year", String.valueOf(nextMonth.getYear())), owner, null)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields." + futureField).exists());
+    }
+
+    @Test
+    void requiresAuthenticationForAnEarlierMonthToo() throws Exception {
+        mockMvc.perform(get("/api/categories/summary").param("month", "1").param("year", "2026"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private void expectFieldError(Map<String, String> params, String field, String message) throws Exception {
+        MockHttpServletRequestBuilder request = get("/api/categories/summary");
+        params.forEach(request::param);
+        send(request, owner, null)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Validation Failed"))
+                .andExpect(jsonPath("$.fields." + field).value(message));
+    }
+
     private JsonNode summary(String bearer) throws Exception {
         return json(send(get("/api/categories/summary"), bearer, null).andExpect(status().isOk()));
+    }
+
+    private JsonNode summary(String bearer, LocalDate month) throws Exception {
+        return json(send(get("/api/categories/summary")
+                .param("month", String.valueOf(month.getMonthValue()))
+                .param("year", String.valueOf(month.getYear())), bearer, null).andExpect(status().isOk()));
     }
 
     private static JsonNode row(JsonNode summary, String name) {

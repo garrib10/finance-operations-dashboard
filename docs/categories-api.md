@@ -95,13 +95,49 @@ To delete a category that is in use, first move or delete its transactions and b
 
 ### `GET /api/categories/summary`
 
-Usage of every category the authenticated user owns, for the Categories page (issue #100).
-Read-only; it takes no parameters and never accepts a user or category ID.
+Usage of every category the authenticated user owns, for the Categories page (issue #100),
+for the server's current month or an earlier one (issue #103). Read-only; it never accepts
+a user or category ID, so ownership always comes from the access token.
+
+| Request | Month described |
+| --- | --- |
+| `GET /api/categories/summary` | The server's current reporting month (the default) |
+| `GET /api/categories/summary?month=8&year=2026` | August 2026 |
+
+**Optional parameters.** `month` and `year` are given together or not at all, and are
+validated before any data is read:
+
+| Rule | Field | Message |
+| --- | --- | --- |
+| Only one of the two given | the missing one | `Month and year must be given together` |
+| `month` outside 1–12 | `month` | `Month must be between 1 and 12` |
+| `year` before 2000 (the earliest year budgets accept) | `year` | `Year must be 2000 or later` |
+| `year` after the server's current year | `year` | `Year must be {current year} or earlier` |
+| A later month of the current year (no future months) | `month` | `Choose {Month Year} or an earlier month` |
+| `month` is not a whole number (`month=abc`) | `month` | `Month must be a whole number between 1 and 12` |
+| `year` is not a whole number (`year=abcd`) | `year` | `Year must be a whole number` |
+
+Invalid periods return `400` with the standard field-validation body, for example
+`GET /api/categories/summary?month=8`:
+
+```json
+{
+  "timestamp": "2026-10-04T18:30:00",
+  "status": 400,
+  "error": "Validation Failed",
+  "fields": { "year": "Month and year must be given together" }
+}
+```
+
+`?month=13&year=1999` reports both fields at once (`month` and `year`). Response for
+`GET /api/categories/summary?month=10&year=2026` (or no parameters in October 2026):
 
 ```json
 {
   "month": 10,
   "year": 2026,
+  "serverCurrentMonth": 10,
+  "serverCurrentYear": 2026,
   "categories": [
     {
       "id": 42,
@@ -166,7 +202,8 @@ and a never-used custom category (`null` date and budget, deletable).
 
 | Field | Meaning |
 | --- | --- |
-| `month`, `year` | The server's reporting month: the whole calendar month containing today in the server's default time zone, the same month the dashboard uses. |
+| `month`, `year` | The month the figures describe: the requested month, or by default the server's reporting month (the whole calendar month containing today in the server's default time zone, the same month the dashboard uses). Every `currentMonth*` row field refers to this month. |
+| `serverCurrentMonth`, `serverCurrentYear` | Always the server's own current reporting month, whatever was requested. Equal to `month`/`year` for a default request; a client compares them to tell whether it is showing history, and uses them as the latest month it may request. |
 | `categories` | Every category the user owns, ordered by name, then ID. Empty only if the user has no categories. |
 | `transactionCount` | All of the category's transactions, income and expense, in any month. With `budgetCount` it decides `canDelete`. |
 | `currentMonthTransactionCount` | The category's transactions, income and expense, in the reporting month given by the top-level `month` and `year` (inclusive of the 1st and last day, including future-dated ones). Always present, `0` when none. It is for display only and never affects `canDelete`; spending still counts expenses only. |
@@ -177,16 +214,25 @@ and a never-used custom category (`null` date and budget, deletable).
 | `canDelete` | `true` only for a custom category with no transactions and no budgets. It reflects the moment of the request: `DELETE` still re-checks and returns `409 CATEGORY_IN_USE` if a reference was added since. |
 
 Money values are JSON numbers with two decimal places, computed with exact decimal
-arithmetic. Unauthenticated requests receive `401`.
+arithmetic. Unauthenticated requests receive `401`. Whichever month is requested, the
+all-time fields (`transactionCount`, `budgetCount`, `lastTransactionDate`, `allTimeSpent`)
+and `canDelete` are the same; only `currentMonthSpent`, `currentMonthTransactionCount`,
+`currentMonthBudget`, `month`, and `year` follow the requested month. A category with no
+activity that month is still listed, with zeros and a `null` budget. For example,
+`?month=8&year=2026` in October 2026 returns `"month": 8, "year": 2026,
+"serverCurrentMonth": 10, "serverCurrentYear": 2026`.
 
-**Queries.** The summary runs a fixed five statements however many categories exist: the
+**Queries.** The summary runs a fixed five statements however many categories exist, for
+the current month or an earlier one (the requested month only changes the date range and
+month passed to the same queries): the
 user, the categories, one grouped transaction aggregate (counts, latest date, and both
 expense sums by conditional aggregation), one grouped budget count, and the reporting
 month's budgets. The transaction aggregate computes both counts, the latest date, and both
 expense sums in that one grouped statement (`COUNT(CASE …)` for this month's count), so
 adding `currentMonthTransactionCount` added no query. Transactions and budgets are aggregated separately rather than joined
 together, so no count or sum is multiplied. `CategorySummaryQueryCountTest` asserts the
-same statement count for 2 and 12 categories.
+same statement count for 2 and 12 categories, both for the current month and for an
+explicitly requested earlier month.
 
 ## Categories in transactions and budgets
 
