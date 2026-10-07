@@ -8,6 +8,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
@@ -18,6 +20,7 @@ import dev.portfolio.finance.entity.User;
 import dev.portfolio.finance.repository.projection.CategoryBudgetCountProjection;
 import dev.portfolio.finance.repository.projection.CategoryTransactionUsageProjection;
 import dev.portfolio.finance.repository.projection.CurrentMonthBudgetProjection;
+import dev.portfolio.finance.service.ReportingPeriod;
 import dev.portfolio.finance.support.TestDataFactory;
 import jakarta.persistence.EntityManager;
 
@@ -120,6 +123,37 @@ class CategorySummaryQueryTest {
     void omitsUnusedCategoriesAndOtherUsersData() {
         assertThat(usage()).containsOnlyKeys(pets.getId(), salary.getId());
         assertThat(usage()).doesNotContainKey(unused.getId());
+    }
+
+    @ParameterizedTest(name = "{0}-{1}")
+    @CsvSource({
+            "2026, 1",   // January: the day before is 31 December of the previous year
+            "2025, 12",  // December: the day after is 1 January of the next year
+            "2027, 2",   // February in a common year ends on the 28th
+            "2028, 2",   // February in a leap year ends on the 29th
+    })
+    void includesExactlyTheRequestedMonthsFirstAndLastDays(int year, int month) {
+        ReportingPeriod period = ReportingPeriod.of(year, month);
+        Category edges = categoryRepository.save(Category.custom(owner, "Edges", true));
+        expense(owner, edges, "1.00", period.start().minusDays(1));  // out
+        expense(owner, edges, "2.00", period.start());               // in
+        expense(owner, edges, "4.00", period.end());                 // in
+        expense(owner, edges, "8.00", period.end().plusDays(1));     // out
+        transactionRepository.save(TestDataFactory.createTransaction(owner, edges, TransactionType.INCOME,
+                new BigDecimal("16.00"), "Refund", period.end()));      // counted, never spending
+        entityManager.flush();
+        entityManager.clear();
+
+        CategoryTransactionUsageProjection edgeUsage = transactionRepository
+                .summarizeUsageByCategory(owner.getId(), TransactionType.EXPENSE, period.start(), period.end())
+                .stream().filter(row -> row.getCategoryId().equals(edges.getId())).findFirst().orElseThrow();
+
+        assertThat(edgeUsage.getCurrentMonthTransactionCount()).isEqualTo(3);
+        assertThat(edgeUsage.getCurrentMonthSpent()).isEqualByComparingTo("6.00");
+        // All-time values ignore the month.
+        assertThat(edgeUsage.getTransactionCount()).isEqualTo(5);
+        assertThat(edgeUsage.getAllTimeSpent()).isEqualByComparingTo("15.00");
+        assertThat(edgeUsage.getLastTransactionDate()).isEqualTo(period.end().plusDays(1));
     }
 
     @Test

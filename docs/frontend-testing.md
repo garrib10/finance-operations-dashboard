@@ -440,8 +440,41 @@ API parameters in [categories-api.md](categories-api.md#get-apicategoriessummary
 | Budget links: month, year, and category ID in every Set/Edit link (current month included), one of each parameter with no empty values, names with "for {Month Year}", the warning's link not duplicated, none for categories without budgets, search results and a month switch, no links while a month loads, Back from Budgets returns to the same month without touching preferences | `CategoriesPage.test.tsx`, `categoryDeepLink.test.ts` |
 | Budgets month link: linked month selected, that month's budget edited (not this month's), Create with the month preselected, focus on the form heading, out-of-range year offered, refresh, Back/Forward between months, invalid/partial/repeated months dropped with the category applied to today, unknown category dropped with the month kept and no focus moved, month-only link, using the link up after choosing another month, plain `/budgets` unchanged | `BudgetPage.categories.test.tsx` |
 
+### Automated coverage (Phase 4, hardening)
+
+| Area | Tests |
+| --- | --- |
+| More URL rejections: trailing space, tab, plus sign, repeated identical year; page clean-up of a later year, year only, empty month, padded and signed values, scientific notation, identical repeats (all replaced, nothing invalid sent, Back skips them); parameters in any order with others kept | `reportingPeriod.test.ts`, `CategoriesPage.test.tsx` |
+| Races: two quick month choices answering out of order (only the last shown, no error for the cancelled one); a refresh after a change superseded by a newer month | `CategoriesPage.test.tsx`, `useCategorySummary.test.ts` |
+| Recovery: a failed month keeps the server-bounded selects and Back to current month, which recovers | `CategoriesPage.test.tsx` |
+| Workflows in an earlier month: create and delete refresh that month, the new card appears once and takes focus, focus after a delete lands on a remaining card | `CategoriesPage.test.tsx` |
+| Semantics in an earlier month: one `h1`, `h2` order, no `menu` role, one "Showing" status, static warnings; Tab order of the month controls | `CategoriesPage.test.tsx`, `CategoryPeriodControls.test.tsx` |
+| Budgets month link: one `h1`, focus moved once and not taken back while typing, nothing saved without a submit | `BudgetPage.categories.test.tsx` |
+
+Backend (Phase 4): first and last days of January, December (into January), and February
+in common and leap years, with income counted but never spent and all-time values
+unchanged (`CategorySummaryQueryTest`); month 0, a later year, the current month written
+out (identical to the default), and January 2000 over HTTP
+(`CategorySummaryIntegrationTest`); an earlier month uses exactly the default request's
+statement count (`CategorySummaryQueryCountTest`).
+
+### Issue #103 manual checks
+
+These need a real browser (jsdom has no layout, native select keyboard handling, or
+screen reader):
+
+- [ ] 375 px, 768 px, 1024 px, 1440 px, and 200% zoom on Categories in an earlier month:
+  no page-level horizontal scroll; the month controls, strip ("Top in {Month Year}"),
+  section headers and toggles, toolbar, cards, warning links, and "More actions" panels
+  wrap inside the viewport with unclipped focus rings; sidebar expanded and collapsed
+- [ ] The same widths on a Budgets month link: form and Budget Period readable and usable
+- [ ] Arrow keys change the Month and Year selects; Tab order Month → Year → Back
+- [ ] Screen reader: "Showing {Month Year}" read once after a switch, budget link names
+  include the month, focus announced on "Edit Budget" / "Create Budget"
+- [ ] `prefers-reduced-motion`: no new motion on either page
+
 ### Issue #103 checks still outstanding
 
 - [x] Browser check of the selects, Back and Forward, and Back to current month
-- [ ] Browser check of Set/Edit budget from an earlier month, Back to Categories, and the Budgets form at 375 px
+- [x] Browser check of Set/Edit budget from an earlier month, Back to Categories, and the Budgets form at 375 px
 - [ ] 375 px and 200% zoom with the selects, and a screen reader pass of the month status

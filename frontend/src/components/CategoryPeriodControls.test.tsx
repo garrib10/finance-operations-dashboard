@@ -75,6 +75,17 @@ describe("CategoryPeriodControls", () => {
     expect(onReset).toHaveBeenCalledOnce();
   });
 
+  it("is reached in reading order with Tab (native selects, so the arrow keys work in browsers)", async () => {
+    const { user } = renderControls({ selected: { month: 8, year: 2026 } });
+
+    await user.tab();
+    expect(month()).toHaveFocus();
+    await user.tab();
+    expect(year()).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Back to current month" })).toHaveFocus();
+  });
+
   it("disables everything with a visible reason while a form is open", () => {
     renderControls({ selected: { month: 8, year: 2026 }, disabledReason: "Finish the open form first." });
 

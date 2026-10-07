@@ -36,11 +36,15 @@ describe("parsePeriodParams", () => {
     ["a negative month", "month=-1&year=2026"],
     ["a leading zero", "month=08&year=2026"],
     ["spaces", "month=%208&year=2026"],
+    ["a trailing space", "month=8%20&year=2026"],
+    ["a tab", "month=8&year=%092026"],
+    ["a plus sign", "month=%2B8&year=2026"],
     ["an exponent", "month=8&year=2e3"],
     ["month 0", "month=0&year=2026"],
     ["month 13", "month=13&year=2026"],
     ["a year before 2000", "month=8&year=1999"],
     ["a repeated month", "month=8&month=8&year=2026"],
+    ["a repeated identical year", "month=8&year=2026&year=2026"],
     ["conflicting years", "month=8&year=2025&year=2026"],
   ])("rejects %s", (_case, query) => {
     expect(parse(query)).toEqual({ kind: "invalid" });

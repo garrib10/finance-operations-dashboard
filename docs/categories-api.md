@@ -129,7 +129,16 @@ Invalid periods return `400` with the standard field-validation body, for exampl
 }
 ```
 
-`?month=13&year=1999` reports both fields at once (`month` and `year`). Response for
+`?month=13&year=1999` reports both fields at once (`month` and `year`).
+
+**Number parsing is Spring's.** A value that converts to the same whole number is
+accepted as that number: `month= 8` (padded), `month=+8`, and `month=08` all mean August,
+while `8.0`, `2e3`, and text are rejected as above. A parameter given twice
+(`month=8&month=9`) uses the first value. These spellings are not part of the contract:
+the Categories page treats them as invalid URLs, removes them, and only ever sends one
+plain `month` and one plain `year`. The range rules above always apply.
+
+Response for
 `GET /api/categories/summary?month=10&year=2026` (or no parameters in October 2026):
 
 ```json
@@ -222,7 +231,8 @@ activity that month is still listed, with zeros and a `null` budget. For example
 `?month=8&year=2026` in October 2026 returns `"month": 8, "year": 2026,
 "serverCurrentMonth": 10, "serverCurrentYear": 2026`.
 
-**Queries.** The summary runs a fixed five statements however many categories exist, for
+**Queries.** The summary runs a fixed five statements however many categories exist, and
+exactly as many for an earlier month as for the default request (both tested), for
 the current month or an earlier one (the requested month only changes the date range and
 month passed to the same queries): the
 user, the categories, one grouped transaction aggregate (counts, latest date, and both

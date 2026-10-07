@@ -370,7 +370,10 @@ the summary strip, spending table, cards, warnings, and Active/Other membership.
   shown under another's label. Only the newest request counts: a newer choice aborts the
   older request, and late answers, failures, and aborts are ignored. When it arrives, a
   single status says "Showing {Month Year}". A failure shows the usual error with "Try
-  again" for the same month.
+  again" for the same month; the selects (still bounded by the server month already
+  known) and "Back to current month" stay, so another month also recovers. A request
+  replaced by a newer choice is cancelled quietly, never shown as an error, and a refresh
+  after a change can never overwrite a month chosen since.
 - **Changes** (create, edit, delete) refresh the month being viewed, not the current one.
 - **Open forms:** while a create or edit form or a delete confirmation is open, the selects
   and Back button are disabled, with the visible reason "Finish or cancel the open form or

@@ -510,6 +510,19 @@ describe("BudgetPage month deep link", () => {
     expect(screen.getByTestId("url")).toHaveTextContent("/budgets?category=1&month=3&year=2025");
   });
 
+  it("moves focus once: typing afterwards and the budgets loading again never take it back", async () => {
+    const { user } = await renderAt(["/budgets?category=1&month=3&year=2025"]);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
+    expect(screen.getAllByRole("heading", { level: 1 }).map((heading) => heading.textContent)).toEqual(["Budgets"]);
+
+    const limit = screen.getByLabelText("Monthly Limit");
+    await user.clear(limit);
+    await user.type(limit, "325");
+    expect(limit).toHaveFocus();
+    expect(limit).toHaveValue(325);
+    expect(budgetService.updateBudget).not.toHaveBeenCalled(); // Only the user's own submit saves.
+  });
+
   it("leaves a plain visit on today's month", async () => {
     await renderAt(["/budgets"]);
 

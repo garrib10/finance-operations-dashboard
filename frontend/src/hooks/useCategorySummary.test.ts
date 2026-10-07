@@ -200,6 +200,29 @@ describe("useCategorySummary", () => {
       expect(calls().at(-1)).toEqual(AUGUST);
     });
 
+    it("never lets a refresh after a change overwrite a month chosen since", async () => {
+      const augustRefresh = deferred<CategorySummaryList>();
+      vi.mocked(getCategorySummary)
+        .mockResolvedValueOnce(current)
+        .mockResolvedValueOnce(august)
+        .mockReturnValueOnce(augustRefresh.promise)
+        .mockResolvedValueOnce(september);
+      const { result, rerender } = renderHook(({ wanted }) => useCategorySummary(wanted), {
+        initialProps: { wanted: AUGUST as typeof AUGUST | typeof SEPTEMBER },
+      });
+      await waitFor(() => expect(result.current.summary?.month).toBe(8));
+
+      let refreshed: Promise<boolean> | undefined;
+      act(() => { refreshed = result.current.reload(); }); // After a save, say.
+      rerender({ wanted: SEPTEMBER });
+      await waitFor(() => expect(result.current.summary?.month).toBe(9));
+
+      await act(async () => augustRefresh.resolve(august));
+      expect(result.current.summary?.month).toBe(9);
+      expect(result.current.status).toBe("ready");
+      await expect(refreshed).resolves.toBe(true); // Superseded, not failed.
+    });
+
     it("aborts the pending request when unmounted", async () => {
       const pending = deferred<CategorySummaryList>();
       vi.mocked(getCategorySummary).mockReturnValueOnce(pending.promise);

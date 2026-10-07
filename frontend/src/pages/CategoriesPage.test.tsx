@@ -701,6 +701,13 @@ describe("CategoriesPage", () => {
       ["a year before 2000", "month=8&year=1999"],
       ["a repeated month", "month=8&month=9&year=2026"],
       ["a future month", "month=12&year=2026"],
+      ["a later year", "month=1&year=2027"],
+      ["only a year", "year=2026"],
+      ["an empty month", "month=&year=2026"],
+      ["a trailing space", "month=8%20&year=2026"],
+      ["a plus sign", "month=%2B8&year=2026"],
+      ["scientific notation", "month=8&year=2e3"],
+      ["an identical repeated month", "month=8&month=8&year=2026"],
       ["the current month spelled out", "month=10&year=2026"],
     ])("replaces %s with the plain URL, keeping other parameters, without a history entry", async (_case, query) => {
       const user = renderAt(["/start", `/categories?view=compact&${query}`]);
@@ -826,6 +833,111 @@ describe("CategoriesPage", () => {
       await screen.findByRole("table", { name: "Spending in October 2026" });
 
       expect(window.localStorage.getItem(CATEGORIES_OTHERS_EXPANDED_KEY)).toBeNull();
+    });
+
+    it("keeps other parameters in any order and loads the month they name", async () => {
+      renderAt(["/categories?year=2026&view=compact&month=8"]);
+
+      expect(await screen.findByRole("table", { name: "Spending in August 2026" })).toBeInTheDocument();
+      expect(screen.getByTestId("url")).toHaveTextContent("/categories?year=2026&view=compact&month=8");
+      expect(calls()).toEqual([null, { month: 8, year: 2026 }]);
+    });
+
+    it("shows only the last month chosen when an earlier choice answers later", async () => {
+      const august = deferred<CategorySummaryList>();
+      const july = deferred<CategorySummaryList>();
+      vi.mocked(getCategorySummary).mockImplementation((period) => {
+        if (!period) return respond(null);
+        return period.month === 8 ? august.promise : july.promise;
+      });
+      const user = renderAt(["/categories"]);
+      await screen.findByRole("table", { name: "Spending in October 2026" });
+
+      await user.selectOptions(monthSelect(), "8");
+      await user.selectOptions(monthSelect(), "7");
+      await act(async () => july.resolve(summaryList([unusedRow], 7, 2026, 10, 2026)));
+      expect(await screen.findByRole("heading", { name: "Active in July 2026" })).toBeInTheDocument();
+
+      await act(async () => august.resolve(summaryList(augustRows, 8, 2026, 10, 2026)));
+      expect(screen.getByRole("heading", { name: "Active in July 2026" })).toBeInTheDocument();
+      expect(screen.queryByText(/August 2026/)).not.toBeInTheDocument();
+      expect(screen.getByTestId("url")).toHaveTextContent("/categories?month=7&year=2026");
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(); // The aborted request is no error.
+    });
+
+    it("keeps the month controls after a failed month, so another month can be chosen", async () => {
+      vi.mocked(getCategorySummary).mockImplementation((period) => (period?.month === 8
+        ? Promise.reject(new Error("network"))
+        : respond(period)));
+      const user = renderAt(["/categories?month=8&year=2026"]);
+      await screen.findByRole("alert");
+
+      // The server month from the first answer still bounds the choices.
+      expect(monthSelect()).toHaveValue("8");
+      expect(within(monthSelect()).getAllByRole("option")).toHaveLength(10);
+      expect(screen.getByText("How each category was used in August 2026: spending, budgets, and activity."))
+        .toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Back to current month" }));
+      expect(await screen.findByRole("table", { name: "Spending in October 2026" })).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("refreshes the chosen month after creating a category", async () => {
+      vi.mocked(categoryService.createCategory).mockResolvedValue(category({ id: 60, name: "Gifts", iconKey: "gift" }));
+      const user = renderAt(["/categories?month=8&year=2026"]);
+      await screen.findByRole("table", { name: "Spending in August 2026" });
+      vi.mocked(getCategorySummary).mockImplementation((period) => Promise.resolve(period
+        ? summaryList([...augustRows, summaryRow({ id: 60, name: "Gifts", iconKey: "gift" })], period.month, period.year, 10, 2026)
+        : summaryList(allRows, 10, 2026)));
+
+      await user.click(screen.getByRole("button", { name: "Create category" }));
+      await user.type(screen.getByLabelText("Category name"), "Gifts");
+      await user.click(within(screen.getByRole("form", { name: "Create category" })).getByRole("button", { name: "Create category" }));
+
+      expect(await screen.findByText("“Gifts” was created successfully.")).toBeInTheDocument();
+      expect(calls().at(-1)).toEqual({ month: 8, year: 2026 });
+      expect(screen.getByRole("table", { name: "Spending in August 2026" })).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole("heading", { name: "Gifts" })).toHaveFocus());
+      expect(cardNames().filter((name) => name === "Gifts")).toHaveLength(1);
+    });
+
+    it("refreshes the chosen month after deleting a category and focuses the next card", async () => {
+      const spare = summaryRow({ id: 30, name: "Spare" });
+      let rows = [...augustRows, spare];
+      vi.mocked(getCategorySummary).mockImplementation((period) => Promise.resolve(period
+        ? summaryList(rows, period.month, period.year, 10, 2026)
+        : summaryList(allRows, 10, 2026)));
+      vi.mocked(categoryService.deleteCategory).mockImplementation(async () => {
+        rows = augustRows;
+      });
+      const user = renderAt(["/categories?month=8&year=2026"]);
+      await screen.findByRole("table", { name: "Spending in August 2026" });
+
+      await chooseAction(user, "Spare", "Delete");
+      await user.click(screen.getByRole("button", { name: "Delete category" }));
+
+      expect(await screen.findByText("“Spare” was deleted successfully.")).toBeInTheDocument();
+      expect(calls().at(-1)).toEqual({ month: 8, year: 2026 });
+      expect(screen.queryByRole("article", { name: "Spare" })).not.toBeInTheDocument();
+      expect(screen.getByRole("table", { name: "Spending in August 2026" })).toBeInTheDocument();
+      // Focus lands on a remaining card's heading, never on the removed card or the body.
+      await waitFor(() => expect(document.activeElement?.id).toMatch(/^category-\d+-heading$/));
+    });
+
+    it("keeps one h1 and a logical heading order in an earlier month, with no menu roles", async () => {
+      renderAt(["/categories?month=8&year=2026"]);
+      await screen.findByRole("table", { name: "Spending in August 2026" });
+
+      expect(screen.getAllByRole("heading", { level: 1 }).map((heading) => heading.textContent)).toEqual(["Categories"]);
+      expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual([
+        "Spending in August 2026", "All categories", "Active in August 2026", "Other categories · 3",
+      ]);
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      expect(screen.getByRole("group", { name: "Reporting month" })).toBeInTheDocument();
+      // One status names the month; the static card warning is not a live region.
+      expect(screen.getAllByText("Showing August 2026")).toHaveLength(1);
+      expect(screen.getByText(/spent in August with no budget/).closest("[role]")).toBeNull();
     });
 
     describe("wording and budget links", () => {

@@ -258,7 +258,10 @@ class CategorySummaryIntegrationTest {
 
         expectFieldError(Map.of("month", "8"), "year", "Month and year must be given together");
         expectFieldError(Map.of("year", "2026"), "month", "Month and year must be given together");
+        expectFieldError(Map.of("month", "0", "year", "2026"), "month", "Month must be between 1 and 12");
         expectFieldError(Map.of("month", "13", "year", "2026"), "month", "Month must be between 1 and 12");
+        expectFieldError(Map.of("month", "1", "year", String.valueOf(today.getYear() + 1)), "year",
+                "Year must be " + today.getYear() + " or earlier");
         expectFieldError(Map.of("month", "5", "year", "1999"), "year", "Year must be 2000 or later");
         expectFieldError(Map.of("month", "abc", "year", "2026"), "month", "Month must be a whole number between 1 and 12");
         expectFieldError(Map.of("month", "8", "year", "abcd"), "year", "Year must be a whole number");
@@ -267,6 +270,24 @@ class CategorySummaryIntegrationTest {
                 .param("year", String.valueOf(nextMonth.getYear())), owner, null)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fields." + futureField).exists());
+    }
+
+    @Test
+    void acceptsTheCurrentMonthSpelledOutAndJanuary2000() throws Exception {
+        long pets = createCategory(owner, "Pet Care", "paw-print");
+        transaction(owner, pets, "EXPENSE", "12.00", today);
+
+        JsonNode explicit = summary(owner, today);
+        assertThat(explicit).isEqualTo(summary(owner)); // The same as asking for no month.
+
+        JsonNode earliest = summary(owner, LocalDate.of(2000, 1, 1));
+        assertThat(earliest.get("month").asInt()).isEqualTo(1);
+        assertThat(earliest.get("year").asInt()).isEqualTo(2000);
+        assertThat(earliest.get("serverCurrentYear").asInt()).isEqualTo(today.getYear());
+        JsonNode petRow = byId(earliest, pets);
+        assertThat(petRow.get("currentMonthTransactionCount").asLong()).isZero();
+        assertThat(petRow.get("currentMonthSpent").decimalValue()).isEqualByComparingTo("0.00");
+        assertThat(petRow.get("transactionCount").asLong()).isEqualTo(1);
     }
 
     @Test

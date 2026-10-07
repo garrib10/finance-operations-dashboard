@@ -64,6 +64,8 @@ class CategorySummaryQueryCountTest {
 
         assertThat(largeCount).isEqualTo(smallCount);
         assertThat(largeCount).isLessThanOrEqualTo(PLANNED_STATEMENTS);
+        // Naming a month costs nothing extra: the same statements as the default request.
+        assertThat(largeCount).isEqualTo(statementsFor(large, 12));
     }
 
     /** Last month for every seeded category: its 40.00 budget, and no transactions. */
