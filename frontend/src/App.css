@@ -1799,6 +1799,45 @@
   font-size: 0.875rem;
 }
 
+/* Reporting month (issue #103): two selects and Back to current month, wrapping on phones. */
+.category-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin: 0 0 1.5rem;
+}
+
+.category-period .form-field {
+  flex: 0 1 11rem;
+  min-width: 0;
+}
+
+.category-period select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.75rem;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.category-period select:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.category-period select:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.app-main .category-period__hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 /* Spending distribution: a plain table with an in-row bar that repeats the share. */
 .category-spending {
   margin: 0 0 2rem;
@@ -1965,6 +2004,23 @@
   margin: 0.25rem 0 0;
 }
 
+/* Categories notices keep a plain 1px border (no thick left accent), like the card warnings. */
+.categories-page .inline-notice {
+  border-left-width: 1px;
+}
+
+.categories-page .inline-notice--error {
+  border-left-color: var(--color-danger-border);
+}
+
+.categories-page .inline-notice--warning {
+  border-left-color: var(--color-warning-border);
+}
+
+.categories-page .inline-notice--info {
+  border-left-color: var(--color-info-border);
+}
+
 .categories-page__no-results {
   display: flex;
   flex-wrap: wrap;
@@ -2028,9 +2084,11 @@
   outline-offset: 2px;
 }
 
+/* 20.5rem keeps each card wide enough for its two links on one row; narrower windows get
+   fewer, wider columns instead of cramped ones (one column on phones). */
 .category-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20.5rem), 1fr));
   gap: 1rem;
   margin: 0;
   padding: 0;
@@ -2177,7 +2235,7 @@
 .category-card__links {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 /* Card links: transactions is the stronger, tinted action; budgets is quieter. */
@@ -2188,12 +2246,14 @@
   flex: 1 1 auto;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
+  gap: 0.3rem;
   min-height: 44px;
-  padding: 0.5rem 0.7rem;
+  /* Compact enough that "View transactions" and "Edit budget" share a row in a
+     three-column card, like the other link pairs. */
+  padding: 0.5rem 0.55rem;
   white-space: nowrap;
   color: var(--color-text);
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   font-weight: 600;
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -2226,11 +2286,17 @@
    tightened for a card: an even border (no accent bar) and a plain inline link, which as
    part of a sentence needs no 44px box (WCAG target-size exception for inline links). */
 .category-card__warning .inline-notice {
+  flex-wrap: nowrap;
   margin: 0;
   padding: 0.7rem 0.75rem;
   font-size: 0.9rem;
   border-left-width: 1px;
   border-left-color: var(--color-warning-border);
+}
+
+/* The text sits beside the icon at any card width (it wraps inside instead). */
+.category-card__warning .inline-notice__message {
+  flex: 1 1 0;
 }
 
 .category-card__warning-link {

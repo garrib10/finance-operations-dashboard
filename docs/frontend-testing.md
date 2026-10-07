@@ -416,3 +416,23 @@ Performed by the maintainer in Chrome against the local backend (not staging):
       Other categories is closed (opens, focuses the new card, choice not saved)
 - [ ] The README screenshots (`categories.png`, `categories-manage.png`,
       `categories-mobile.png`), deferred to the final v1.3.0 release updates
+
+## Issue #103 (v1.3.0) Categories page for earlier months
+
+Behaviour is documented in [categories.md](categories.md#categories-page-issue-100) and the
+API parameters in [categories-api.md](categories-api.md#get-apicategoriessummary).
+
+### Automated coverage (Phase 2, frontend)
+
+| Area | Tests |
+| --- | --- |
+| URL parsing: plain whole numbers only, partial, empty, text, decimals, signs, leading zeros, ranges, year 2000, repeated and conflicting parameters; available periods, years, months, clamping; other parameters kept | `reportingPeriod.test.ts` |
+| Requests: no parameters by default, both together for an earlier month, abort signal | `categoryService.test.ts` |
+| Start-up via the default request, current and future months never requested, newer months win over late answers, failures, and aborts, loading not ended by an older request, reload of the chosen month, abort on unmount | `useCategorySummary.test.ts` |
+| Selects: labels, options, clamping a future month, Back only for an earlier month, plain buttons, disabled with a reason | `CategoryPeriodControls.test.tsx` |
+| Page: current and earlier months from the URL, URL cleanup by replacement, history entries with Back and Forward, Back to current month with focus, loading without stale figures, failure and retry, refresh after a change uses the chosen month, locked controls during a workflow, preference untouched, past-tense wording | `CategoriesPage.test.tsx` |
+
+### Issue #103 checks still outstanding
+
+- [ ] Browser check of the selects, Back and Forward, and Back to current month
+- [ ] 375 px and 200% zoom with the selects, and a screen reader pass of the month status

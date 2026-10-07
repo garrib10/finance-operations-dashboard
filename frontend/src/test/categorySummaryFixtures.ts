@@ -43,6 +43,13 @@ export const salaryRow = summaryRow({
 
 export const unusedRow = summaryRow({ id: 9, name: "Hobbies", iconKey: "gamepad-2" });
 
-export function summaryList(categories: CategorySummary[], month = 10, year = 2026): CategorySummaryList {
-  return { month, year, categories };
+/** A summary response; the server's current month defaults to the month described. */
+export function summaryList(
+  categories: CategorySummary[],
+  month = 10,
+  year = 2026,
+  serverCurrentMonth = month,
+  serverCurrentYear = year,
+): CategorySummaryList {
+  return { month, year, serverCurrentMonth, serverCurrentYear, categories };
 }

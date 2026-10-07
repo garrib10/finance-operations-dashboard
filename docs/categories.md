@@ -344,6 +344,42 @@ return to it. A newly created category is likewise shown (and focused) until the
 toolbar change. After a delete, focus moves to the next card in the current filtered and
 sorted order. After any change the refreshed data is searched, filtered, and sorted again.
 
+**Earlier months** (issue #103). The Month and Year selects under the page heading (a
+"Reporting month" group, not a form) choose which month every monthly figure describes:
+the summary strip, spending table, cards, warnings, and Active/Other membership.
+
+- **The URL is the source of truth:** `/categories?month=8&year=2026` shows August 2026;
+  no parameters means the server's current month. The current month is always taken from
+  the server (`serverCurrentMonth`/`serverCurrentYear`), never the browser clock, so the
+  first request is always the plain one and an earlier month is requested once that is
+  known. Nothing invalid is ever sent.
+- **Accepted:** exactly one `month` and one `year`, written as plain whole numbers (no
+  signs, decimals, spaces, or leading zeros), from January 2000 up to the current month.
+  Anything else (only one of the two, empty, text, out of range, a future month, or a
+  parameter given twice even with the same value) is removed with a history replacement,
+  keeping other parameters, and the current month is shown. An explicit current month is
+  also replaced by the plain URL.
+- **Choosing:** years 2000 to the current year; months only up to the current month in
+  the current year, and choosing the current year moves a later month back to the current
+  one. Each choice adds a history entry, so Back and Forward step through the months
+  viewed, and a refresh keeps the month. "Back to current month" (shown only for an
+  earlier month) removes the parameters and keeps focus on the Month select.
+- **Loading:** the heading and selects stay; the figures and cards are replaced by
+  "Loading {Month Year}…" until that month arrives, so one month's figures are never
+  shown under another's label. Only the newest request counts: a newer choice aborts the
+  older request, and late answers, failures, and aborts are ignored. When it arrives, a
+  single status says "Showing {Month Year}". A failure shows the usual error with "Try
+  again" for the same month.
+- **Changes** (create, edit, delete) refresh the month being viewed, not the current one.
+- **Open forms:** while a create or edit form or a delete confirmation is open, the selects
+  and Back button are disabled, with the visible reason "Finish or cancel the open form or
+  confirmation to change the month." (Browser Back and Forward still work; an edit keeps
+  its typed values and the create form stays open across the change.)
+- **Wording for an earlier month:** "Active in {Month Year}", "Nothing had spending or a
+  budget in {Month Year}.", and "Every category had spending or a budget in {Month Year}.".
+  The current month keeps its usual wording.
+- Switching months never changes the saved Other categories preference.
+
 **Active and other categories** (issue #102). While browsing (no search, filter "All
 categories"), the cards are split into two sections, and **each category appears exactly
 once**:
@@ -353,6 +389,12 @@ once**:
   transactions, earlier budgets, and `budgetEnabled` never make a category active; built-in
   and custom categories follow the same rule. With none, it says "Nothing has spending or a
   budget in {Month} yet."
+  **Open by default**, with its own "Hide active categories" / "Show active categories"
+  button (`aria-expanded`, `aria-controls`) like Other categories, saved per device in
+  `fintrack:categories-active-expanded` (only a saved `"false"` closes it; anything else,
+  or unreadable storage, means open). It stays open, with the button hidden, while one of
+  its cards has a form or confirmation open, and opens for a card that focus is moving to;
+  neither is saved. With nothing active there is no button, only the message.
 - **Other categories · {n}:** everything else, with `n` counting only these. It is **closed
   by default**; "Show other categories" / "Hide other categories" (`aria-expanded`,
   `aria-controls`) opens and closes it, and closed cards are not rendered, so nothing hidden
@@ -360,11 +402,14 @@ once**:
 - **Saved choice:** only pressing that button saves it, per device, in `localStorage` key
   `fintrack:categories-others-expanded` (`"true"` or `"false"`; anything else, or unreadable
   storage, means closed).
-- **Opened automatically, never saved:** when nothing is active; while the create form is
-  open; while an Other card is being edited or has its delete confirmation open; and to show
-  a card that focus is about to land on (a new category, a saved or cancelled one, one that
-  moved into Other after a refresh, or the next card after a delete). The button is hidden
-  while one of the first three applies; pressing Show/Hide ends the last one.
+- **Opened automatically, never saved:** while the create form is open; while an Other card
+  is being edited or has its delete confirmation open (the button is hidden for these two);
+  to show a card that focus is about to land on (a new category, a saved or cancelled one,
+  one that moved into Other after a refresh, or the next card after a delete; pressing
+  Show/Hide ends this); and when nothing is active in the month shown, where it **starts
+  open by default but keeps its Show/Hide button**, as on every other month. Hiding it
+  then saves the choice like any Hide and keeps that month closed; another month with
+  nothing active starts open again.
 - **Sorting** applies inside each section and keeps the sections.
 - **Searching or filtering** shows the single flat results list instead (every match visible
   whatever the saved choice); clearing them returns to the sections and the saved choice.
@@ -436,5 +481,5 @@ Layout, zoom, and screen-reader announcements are verified manually (see
 
 ## Not implemented yet
 
-- Viewing the Categories page for an earlier month (the page always shows the server's
-  current reporting month).
+- Budget shortcuts that open the month being viewed on the Budgets page (issue #103, a
+  later phase).

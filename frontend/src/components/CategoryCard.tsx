@@ -170,7 +170,7 @@ export function CategoryCard({
             to={`/transactions?${ADD_TRANSACTION_PARAM}=${category.id}`}
             aria-label={`Add a transaction for ${category.name}`}
           >
-            <Plus aria-hidden="true" focusable="false" size={16} />
+            <Plus aria-hidden="true" focusable="false" size={15} />
             Add transaction
           </Link>
         ) : (
@@ -179,7 +179,7 @@ export function CategoryCard({
             to={`/transactions?${CATEGORY_PARAM}=${category.id}`}
             aria-label={`View transactions for ${category.name}`}
           >
-            <ArrowLeftRight aria-hidden="true" focusable="false" size={16} />
+            <ArrowLeftRight aria-hidden="true" focusable="false" size={15} />
             View transactions
           </Link>
         )}
@@ -189,7 +189,7 @@ export function CategoryCard({
             to={`/budgets?${CATEGORY_PARAM}=${category.id}`}
             aria-label={`${budget ? "Edit" : "Set"} budget for ${category.name}`}
           >
-            <PiggyBank aria-hidden="true" focusable="false" size={16} />
+            <PiggyBank aria-hidden="true" focusable="false" size={15} />
             {budget ? "Edit budget" : "Set budget"}
           </Link>
         )}

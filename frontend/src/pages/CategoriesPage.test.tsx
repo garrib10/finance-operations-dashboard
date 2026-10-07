@@ -11,9 +11,9 @@ vi.mock("../services/categoryService", async (importOriginal) => ({
   deleteCategory: vi.fn(),
 }));
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../context/AuthContext";
 import { CategoryProvider } from "../context/CategoryProvider";
@@ -31,7 +31,7 @@ import {
   summaryRow,
   unusedRow,
 } from "../test/categorySummaryFixtures";
-import { CATEGORIES_OTHERS_EXPANDED_KEY } from "../utils/categoriesSectionPreference";
+import { CATEGORIES_ACTIVE_EXPANDED_KEY, CATEGORIES_OTHERS_EXPANDED_KEY } from "../utils/categoriesSectionPreference";
 import CategoriesPage from "./CategoriesPage";
 
 const allRows = [groceriesRow, salaryRow, petCareRow, unusedRow];
@@ -590,6 +590,244 @@ describe("CategoriesPage", () => {
     });
   });
 
+  describe("earlier months", () => {
+    // The server's month is October 2026. In August, Hobbies spent with no budget (active)
+    // while Groceries had nothing (other), so the sections follow the chosen month.
+    const augustRows = [
+      { ...groceriesRow, currentMonthSpent: 0, currentMonthBudget: null, currentMonthTransactionCount: 0 },
+      salaryRow,
+      { ...petCareRow, currentMonthSpent: 0, currentMonthBudget: null, currentMonthTransactionCount: 0 },
+      { ...unusedRow, currentMonthSpent: 40, currentMonthTransactionCount: 1, transactionCount: 1,
+        canDelete: false, lastTransactionDate: "2026-08-12" },
+    ];
+    const respond = (period?: { month: number; year: number } | null) => Promise.resolve(period
+      ? summaryList(period.month === 8 ? augustRows : [], period.month, period.year, 10, 2026)
+      : summaryList(allRows, 10, 2026));
+    const calls = () => vi.mocked(getCategorySummary).mock.calls.map(([period]) => period ?? null);
+    const monthSelect = () => screen.getByLabelText("Month");
+    const yearSelect = () => screen.getByLabelText("Year");
+
+    /** Shows the current URL and steps through history, standing in for Back and Forward. */
+    function HistoryProbe() {
+      const location = useLocation();
+      const navigate = useNavigate();
+      return (
+        <>
+          <output data-testid="url">{location.pathname}{location.search}</output>
+          <button type="button" onClick={() => navigate(-1)}>History back</button>
+          <button type="button" onClick={() => navigate(1)}>History forward</button>
+        </>
+      );
+    }
+
+    function renderAt(entries: string[]) {
+      const user = userEvent.setup();
+      render(
+        <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
+          <CategoryProvider><CategoriesPage /></CategoryProvider>
+          <HistoryProbe />
+        </MemoryRouter>,
+      );
+      return user;
+    }
+
+    beforeEach(() => {
+      vi.mocked(getCategorySummary).mockImplementation(respond);
+    });
+
+    it("shows the server's current month without parameters, with no Back button", async () => {
+      renderAt(["/categories"]);
+      await screen.findByRole("table", { name: "Spending in October 2026" });
+
+      expect(monthSelect()).toHaveValue("10");
+      expect(yearSelect()).toHaveValue("2026");
+      expect(screen.queryByRole("button", { name: "Back to current month" })).not.toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Active this month" })).toBeInTheDocument();
+      expect(calls()).toEqual([null]);
+    });
+
+    it("loads an earlier month from the URL after learning the server month", async () => {
+      renderAt(["/categories?month=8&year=2026"]);
+
+      expect(await screen.findByRole("table", { name: "Spending in August 2026" })).toBeInTheDocument();
+      expect(calls()).toEqual([null, { month: 8, year: 2026 }]);
+      expect(monthSelect()).toHaveValue("8");
+      expect(screen.getByRole("heading", { name: "Active in August 2026" })).toBeInTheDocument();
+      expect(within(screen.getByRole("region", { name: "Active in August 2026" })).getByRole("heading", { name: "Hobbies" }))
+        .toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Other categories · 3" })).toBeInTheDocument();
+      expect(screen.getByText("$40.00 spent in August with no budget.", { exact: false })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Back to current month" })).toBeInTheDocument();
+      expect(screen.getByText("Showing August 2026")).toHaveAttribute("role", "status");
+      expect(screen.getByTestId("url")).toHaveTextContent("/categories?month=8&year=2026");
+    });
+
+    it("explains an earlier month where nothing was active, in the past tense", async () => {
+      vi.mocked(getCategorySummary).mockImplementation((period) => Promise.resolve(period
+        ? summaryList([salaryRow, unusedRow], period.month, period.year, 10, 2026)
+        : summaryList(allRows, 10, 2026)));
+      renderAt(["/categories?month=3&year=2025"]);
+
+      expect(await screen.findByText("Nothing had spending or a budget in March 2025.")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Active in March 2025" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Hobbies" })).toBeInTheDocument(); // Other opens automatically.
+    });
+
+    it("starts each empty month with Other open, and hiding it in one month leaves the next open", async () => {
+      window.localStorage.removeItem(CATEGORIES_OTHERS_EXPANDED_KEY);
+      vi.mocked(getCategorySummary).mockImplementation((period) => Promise.resolve(period
+        ? summaryList([salaryRow, unusedRow], period.month, period.year, 10, 2026)
+        : summaryList(allRows, 10, 2026)));
+      const user = renderAt(["/categories?month=3&year=2025"]);
+      const hobbies = () => screen.queryByRole("heading", { name: "Hobbies" });
+      await screen.findByText("Nothing had spending or a budget in March 2025.");
+
+      expect(hobbies()).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Hide other categories" }));
+      expect(hobbies()).not.toBeInTheDocument();
+
+      await user.selectOptions(monthSelect(), "4");
+      await screen.findByText("Nothing had spending or a budget in April 2025.");
+      expect(hobbies()).toBeInTheDocument(); // April starts open again by default.
+      expect(screen.getByRole("button", { name: "Hide other categories" })).toBeInTheDocument();
+    });
+
+    it.each([
+      ["only a month", "month=8"],
+      ["text", "month=abc&year=2026"],
+      ["a decimal", "month=8.5&year=2026"],
+      ["month 13", "month=13&year=2026"],
+      ["a year before 2000", "month=8&year=1999"],
+      ["a repeated month", "month=8&month=9&year=2026"],
+      ["a future month", "month=12&year=2026"],
+      ["the current month spelled out", "month=10&year=2026"],
+    ])("replaces %s with the plain URL, keeping other parameters, without a history entry", async (_case, query) => {
+      const user = renderAt(["/start", `/categories?view=compact&${query}`]);
+
+      await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent(/^\/categories\?view=compact$/));
+      await screen.findByRole("table", { name: "Spending in October 2026" });
+      expect(calls().every((period) => period === null)).toBe(true); // Nothing invalid is ever sent.
+
+      await user.click(screen.getByRole("button", { name: "History back" }));
+      expect(screen.getByTestId("url")).toHaveTextContent("/start"); // The bad URL was replaced.
+    });
+
+    it("adds a history entry for each chosen month, and Back and Forward follow them", async () => {
+      const user = renderAt(["/categories"]);
+      await screen.findByRole("table", { name: "Spending in October 2026" });
+
+      await user.selectOptions(monthSelect(), "8");
+      expect(await screen.findByRole("table", { name: "Spending in August 2026" })).toBeInTheDocument();
+      expect(screen.getByTestId("url")).toHaveTextContent("/categories?month=8&year=2026");
+      expect(monthSelect()).toHaveFocus(); // Focus stays on the control the user changed.
+
+      await user.click(screen.getByRole("button", { name: "History back" }));
+      expect(await screen.findByRole("table", { name: "Spending in October 2026" })).toBeInTheDocument();
+      expect(screen.getByTestId("url")).toHaveTextContent(/^\/categories$/);
+
+      await user.click(screen.getByRole("button", { name: "History forward" }));
+      expect(await screen.findByRole("table", { name: "Spending in August 2026" })).toBeInTheDocument();
+    });
+
+    it("goes back to the current month by removing the parameters, keeping focus nearby", async () => {
+      const user = renderAt(["/categories?view=compact&month=8&year=2026"]);
+      await screen.findByRole("table", { name: "Spending in August 2026" });
+
+      await user.click(screen.getByRole("button", { name: "Back to current month" }));
+
+      expect(await screen.findByRole("table", { name: "Spending in October 2026" })).toBeInTheDocument();
+      expect(screen.getByTestId("url")).toHaveTextContent(/^\/categories\?view=compact$/);
+      await waitFor(() => expect(monthSelect()).toHaveFocus());
+      expect(screen.queryByRole("button", { name: "Back to current month" })).not.toBeInTheDocument();
+    });
+
+    it("never shows the previous month's figures while another month loads, then shows the new one", async () => {
+      const august = deferred<CategorySummaryList>();
+      vi.mocked(getCategorySummary).mockImplementation((period) => (period ? august.promise : respond(null)));
+      const user = renderAt(["/categories"]);
+      await screen.findByRole("table", { name: "Spending in October 2026" });
+
+      await user.selectOptions(monthSelect(), "8");
+      expect(await screen.findByText("Loading August 2026…")).toHaveAttribute("role", "status");
+      expect(screen.queryByRole("table")).not.toBeInTheDocument();
+      expect(screen.queryByRole("article")).not.toBeInTheDocument();
+      expect(screen.queryByText("Categories", { selector: "dt" })).not.toBeInTheDocument();
+      expect(monthSelect()).toBeEnabled(); // The controls stay usable while loading.
+
+      await act(async () => august.resolve(summaryList(augustRows, 8, 2026, 10, 2026)));
+      expect(await screen.findByRole("table", { name: "Spending in August 2026" })).toBeInTheDocument();
+    });
+
+    it("explains a failed month and retries the same month", async () => {
+      vi.mocked(getCategorySummary)
+        .mockImplementationOnce(respond)
+        .mockRejectedValueOnce(new Error("network"))
+        .mockImplementation(respond);
+      const user = renderAt(["/categories?month=8&year=2026"]);
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent("Unable to load categories. Please try again.");
+      expect(screen.queryByRole("table")).not.toBeInTheDocument(); // October is not shown as August.
+
+      await user.click(within(alert).getByRole("button", { name: "Try again" }));
+      expect(await screen.findByRole("table", { name: "Spending in August 2026" })).toBeInTheDocument();
+      expect(calls().at(-1)).toEqual({ month: 8, year: 2026 });
+    });
+
+    it("refreshes the chosen month after a change, not the current one", async () => {
+      vi.mocked(categoryService.updateCategory).mockResolvedValue(category({ id: 9, name: "Hobbies" }));
+      const user = renderAt(["/categories?month=8&year=2026"]);
+      await screen.findByRole("table", { name: "Spending in August 2026" });
+
+      await chooseAction(user, "Hobbies", "Edit");
+      await user.click(screen.getByRole("button", { name: "Save category" }));
+
+      expect(await screen.findByText("“Hobbies” was updated successfully.")).toBeInTheDocument();
+      expect(calls().at(-1)).toEqual({ month: 8, year: 2026 });
+      expect(screen.getByRole("table", { name: "Spending in August 2026" })).toBeInTheDocument();
+    });
+
+    it("locks the month while a form is open, and says why", async () => {
+      const user = renderAt(["/categories?month=8&year=2026"]);
+      await screen.findByRole("table", { name: "Spending in August 2026" });
+
+      await chooseAction(user, "Hobbies", "Edit");
+      const reason = "Finish or cancel the open form or confirmation to change the month.";
+      expect(monthSelect()).toBeDisabled();
+      expect(monthSelect()).toHaveAccessibleDescription(reason);
+      expect(screen.getByText(reason)).toBeVisible();
+
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(monthSelect()).toBeEnabled();
+    });
+
+    it("keeps an edit's typed values when browser Back changes the month", async () => {
+      const user = renderAt(["/categories", "/categories?month=8&year=2026"]);
+      await screen.findByRole("table", { name: "Spending in August 2026" });
+      await chooseAction(user, "Hobbies", "Edit");
+      await user.type(screen.getByLabelText("Category name"), " club");
+
+      await user.click(screen.getByRole("button", { name: "History back" }));
+
+      expect(await screen.findByRole("table", { name: "Spending in October 2026" })).toBeInTheDocument();
+      expect(screen.getByRole("form", { name: "Edit Hobbies" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Category name")).toHaveValue("Hobbies club");
+    });
+
+    it("never writes the Other categories preference while changing months", async () => {
+      window.localStorage.removeItem(CATEGORIES_OTHERS_EXPANDED_KEY);
+      const user = renderAt(["/categories"]);
+      await screen.findByRole("table", { name: "Spending in October 2026" });
+
+      await user.selectOptions(monthSelect(), "8");
+      await screen.findByRole("table", { name: "Spending in August 2026" });
+      await user.click(screen.getByRole("button", { name: "Back to current month" }));
+      await screen.findByRole("table", { name: "Spending in October 2026" });
+
+      expect(window.localStorage.getItem(CATEGORIES_OTHERS_EXPANDED_KEY)).toBeNull();
+    });
+  });
+
   describe("page-wide checks", () => {
     // Spotify spends with no budget, so a static warning is on screen too.
     const spotify = summaryRow({ id: 40, name: "Spotify", iconKey: "music", currentMonthSpent: 12,
@@ -710,14 +948,25 @@ describe("CategoriesPage", () => {
       expect(namesIn(otherSection())).toEqual(["Hobbies", "Income"]);
     });
 
-    it("opens Other categories when nothing is active, without saving that", async () => {
+    it("opens Other categories when nothing is active, without saving that, and can still hide it", async () => {
       vi.mocked(getCategorySummary).mockResolvedValue(summaryList([salaryRow, unusedRow], 9, 2026));
-      await renderPage();
+      const user = await renderPage();
 
       expect(within(activeSection()).getByText("Nothing has spending or a budget in September yet.")).toBeInTheDocument();
       expect(namesIn(otherSection())).toEqual(["Hobbies", "Income"]);
-      expect(toggle()).toBeNull(); // Nothing to hide.
-      expect(window.localStorage.getItem(KEY)).toBeNull();
+      expect(window.localStorage.getItem(KEY)).toBeNull(); // Opening by default is never saved.
+
+      // The same Show/Hide as on any month.
+      expect(toggle()).toHaveAccessibleName("Hide other categories");
+      expect(toggle()).toHaveAttribute("aria-expanded", "true");
+      await user.click(toggle()!);
+      expect(namesIn(otherSection())).toEqual([]);
+      expect(toggle()).toHaveAccessibleName("Show other categories");
+      expect(window.localStorage.getItem(KEY)).toBe("false");
+
+      await user.click(toggle()!);
+      expect(namesIn(otherSection())).toEqual(["Hobbies", "Income"]);
+      expect(window.localStorage.getItem(KEY)).toBe("true");
     });
 
     it("keeps the account-level empty state when there are no categories at all", async () => {
@@ -807,6 +1056,43 @@ describe("CategoriesPage", () => {
 
       await waitFor(() => expect(screen.getByRole("heading", { name: "Hobbies" })).toHaveFocus());
       expect(namesIn(otherSection())).toEqual(["Hobbies", "Income"]);
+    });
+
+    it("lets Active this month be hidden and shown too, remembering the choice", async () => {
+      const activeToggle = () => screen.queryByRole("button", { name: /(Show|Hide) active categories/ });
+      const user = await renderPage();
+
+      expect(namesIn(activeSection())).toEqual(["Groceries", "Pet Care"]); // Open by default.
+      expect(activeToggle()).toHaveAccessibleName("Hide active categories");
+      expect(activeToggle()).toHaveAttribute("aria-expanded", "true");
+      expect(activeToggle()).toHaveAttribute("aria-controls", "categories-active-list");
+
+      await user.click(activeToggle()!);
+      expect(namesIn(activeSection())).toEqual([]);
+      expect(activeToggle()).toHaveAccessibleName("Show active categories");
+      expect(window.localStorage.getItem(CATEGORIES_ACTIVE_EXPANDED_KEY)).toBe("false");
+      expect(screen.getByText("Showing 0 of 4 categories")).toBeInTheDocument();
+      // The figures above are for every category, open or closed.
+      expect(screen.getByText("Categories", { selector: "dt" }).closest("dl")).toHaveTextContent("$300.00 of $400.00");
+
+      await user.click(activeToggle()!);
+      expect(namesIn(activeSection())).toEqual(["Groceries", "Pet Care"]);
+      expect(window.localStorage.getItem(CATEGORIES_ACTIVE_EXPANDED_KEY)).toBe("true");
+    });
+
+    it("restores a hidden Active this month and keeps an Active card's form on screen", async () => {
+      window.localStorage.setItem(CATEGORIES_ACTIVE_EXPANDED_KEY, "false");
+      vi.mocked(getCategorySummary).mockResolvedValue(summaryList([...allRows,
+        summaryRow({ id: 30, name: "Gym", currentMonthSpent: 20, transactionCount: 1, currentMonthTransactionCount: 1,
+          canDelete: false, lastTransactionDate: "2026-10-05" })]));
+      const user = await renderPage();
+      expect(namesIn(activeSection())).toEqual([]);
+
+      await user.click(screen.getByRole("button", { name: "Show active categories" }));
+      await chooseAction(user, "Gym", "Edit");
+      expect(within(activeSection()).getByRole("form", { name: "Edit Gym" })).toBeInTheDocument();
+      // Required open while the form is up, so there is no Hide to press.
+      expect(screen.queryByRole("button", { name: /active categories/ })).toBeNull();
     });
 
     it("keeps the sections when only the sort changes, sorting inside each", async () => {

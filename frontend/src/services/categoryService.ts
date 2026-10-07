@@ -1,3 +1,4 @@
+import type { ReportingPeriod } from "../utils/reportingPeriod";
 import { apiRequest } from "./api";
 import type {
   CategoryResponse,
@@ -16,9 +17,20 @@ export function getCategories(): Promise<CategoryResponse[]> {
   return apiRequest<CategoryResponse[]>("/api/categories");
 }
 
-/** Usage of every category the user owns, for the server's reporting month. */
-export function getCategorySummary(): Promise<CategorySummaryList> {
-  return apiRequest<CategorySummaryList>("/api/categories/summary");
+/**
+ * Usage of every category the user owns, for the server's current month or, with a
+ * period, an earlier one. Both parameters are sent together or not at all.
+ */
+export function getCategorySummary(
+  period?: ReportingPeriod | null,
+  signal?: AbortSignal,
+): Promise<CategorySummaryList> {
+  const endpoint = period
+    ? `/api/categories/summary?month=${period.month}&year=${period.year}`
+    : "/api/categories/summary";
+  return signal
+    ? apiRequest<CategorySummaryList>(endpoint, { signal })
+    : apiRequest<CategorySummaryList>(endpoint);
 }
 
 export function createCategory(

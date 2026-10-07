@@ -1,9 +1,11 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CategoryCard } from "../components/CategoryCard";
 import { CategoryDeleteConfirm } from "../components/CategoryDeleteConfirm";
 import { CategoryDiscoveryToolbar } from "../components/CategoryDiscoveryToolbar";
 import { CategoryForm } from "../components/CategoryForm";
+import { CategoryPeriodControls, PERIOD_MONTH_ID } from "../components/CategoryPeriodControls";
 import { CategoryRefreshNotice } from "../components/CategoryRefreshNotice";
 import { resolveIconKey } from "../components/categoryIconRegistry";
 import { CategorySpendingTable } from "../components/CategorySpendingTable";
@@ -26,11 +28,20 @@ import {
   type CategoryDiscovery,
 } from "../utils/categoryDiscovery";
 import {
+  readCategoriesActiveExpanded,
   readCategoriesOthersExpanded,
+  saveCategoriesActiveExpanded,
   saveCategoriesOthersExpanded,
 } from "../utils/categoriesSectionPreference";
 import { formatReportingMonth, monthSpendingTotal, partitionByActivity } from "../utils/categorySummary";
 import { categoryCardIds } from "../utils/categoryUsage";
+import {
+  isAvailablePeriod,
+  isSamePeriod,
+  parsePeriodParams,
+  withPeriod,
+  type ReportingPeriod,
+} from "../utils/reportingPeriod";
 
 const LIST_HEADING_ID = "categories-list-heading";
 const CREATE_BUTTON_ID = "categories-create-button";
@@ -38,6 +49,7 @@ const SEARCH_ID = "category-search";
 const ACTIVE_HEADING_ID = "categories-active-heading";
 const OTHER_HEADING_ID = "categories-other-heading";
 const OTHER_REGION_ID = "categories-other-list";
+const ACTIVE_REGION_ID = "categories-active-list";
 const NOTICE_ID = "categories-page-notice";
 const NOT_FOUND_MESSAGE = "This category no longer exists. The list has been refreshed.";
 
@@ -76,7 +88,12 @@ type Workflow =
  */
 function CategoriesPage() {
   const { user } = useAuth();
-  const { summary, status, error, reload } = useCategorySummary();
+  // ?month=&year= is the source of truth for an earlier month; no parameters means the
+  // server's current month. The hook only requests a period once it is known to be valid.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const periodParams = parsePeriodParams(searchParams);
+  const urlPeriod = periodParams.kind === "period" ? periodParams.period : null;
+  const { summary, current, status, error, reload } = useCategorySummary(urlPeriod);
   const { createCategory, updateCategory, deleteCategory, reload: reloadCategories } = useCategories();
   const dateFormat = user?.preferences?.dateFormat ?? "MEDIUM";
 
@@ -94,18 +111,31 @@ function CategoriesPage() {
   const [editDraft, setEditDraft] = useState<CategoryDraft | null>(null);
   // The user's own Show/Hide choice for "Other categories", saved per device.
   const [othersSaved, setOthersSaved] = useState(readCategoriesOthersExpanded);
+  // The same for "Active this month", which is open unless the user hid it.
+  const [activeSaved, setActiveSaved] = useState(readCategoriesActiveExpanded);
   // A card that must stay on screen for focus (just created, saved, cancelled, or the next
   // card after a delete). It opens "Other categories" without touching the saved choice,
   // and the user's own Show/Hide press clears it.
   const [revealId, setRevealId] = useState<number | null>(null);
+  // The month (year-month) whose open-by-default "nothing active" state the user hid.
+  const [emptyMonthHidden, setEmptyMonthHidden] = useState<string | null>(null);
   // Deleted on the server: hidden at once, even if the summary refresh then fails.
   const [removedIds, setRemovedIds] = useState<readonly number[]>([]);
   // Element to focus once the list has re-rendered, with a fallback if it is gone.
   const pendingFocus = useRef<{ id: string; fallback: string } | null>(null);
 
-  const monthLabel = summary ? formatReportingMonth(summary.month, summary.year) : "";
+  // The month the page should show: a valid URL month, else the server's current month.
+  const targetPeriod: ReportingPeriod | null =
+    urlPeriod && (!current || isAvailablePeriod(urlPeriod, current)) ? urlPeriod : current;
+  // Data is shown only when it describes that month, so a switch never shows one month's
+  // figures under another month's label (the previous data waits out of sight).
+  const shown = summary && targetPeriod && isSamePeriod({ month: summary.month, year: summary.year }, targetPeriod)
+    ? summary
+    : null;
+  const historical = Boolean(shown && current && !isSamePeriod({ month: shown.month, year: shown.year }, current));
+  const monthLabel = shown ? formatReportingMonth(shown.month, shown.year) : "";
   const monthName = monthLabel.split(" ")[0];
-  const rows = (summary?.categories ?? []).filter((row) => !removedIds.includes(row.id));
+  const rows = (shown?.categories ?? []).filter((row) => !removedIds.includes(row.id));
   const workflowId = workflow.kind === "edit" || workflow.kind === "delete" ? workflow.id : null;
   const visible = discoverCategories(rows, discovery, [workflowId, recentId]);
   const keptVisible = visible.find((row) => !matchesSearch(row, discovery.query) || !matchesFilter(row, discovery.filter));
@@ -117,11 +147,22 @@ function CategoriesPage() {
   const browsing = normalizeSearch(discovery.query) === "" && discovery.filter === "all";
   const { activeCategories, otherCategories } = partitionByActivity(visible);
   const inOthers = (id: number | null) => id !== null && otherCategories.some((row) => row.id === id);
+  const inActive = (id: number | null) => id !== null && activeCategories.some((row) => row.id === id);
+  // Active this month: the saved choice, kept open while one of its cards has a form or
+  // confirmation open (the toggle is then hidden) or holds the card focus is moving to.
+  const activeForced = inActive(workflowId);
+  const activeOpen = activeForced || activeSaved || inActive(revealId);
   // Reasons that must keep the section open (the toggle is hidden while they apply)...
-  const othersForced = activeCategories.length === 0 || workflow.kind === "create" || inOthers(workflowId);
-  // ...and the effective state: forced, the saved choice, or a card kept on screen for focus.
-  const othersOpen = othersForced || othersSaved || inOthers(revealId);
-  const shownCount = browsing ? activeCategories.length + (othersOpen ? otherCategories.length : 0) : visible.length;
+  const othersForced = workflow.kind === "create" || inOthers(workflowId);
+  // ...a month with nothing active, which opens it by default (the page would otherwise be
+  // empty) but, like everywhere else, can still be hidden: that choice lasts for the month...
+  const shownKey = shown ? `${shown.year}-${shown.month}` : "";
+  const othersOpenForEmpty = activeCategories.length === 0 && emptyMonthHidden !== shownKey;
+  // ...and the effective state: forced, empty, the saved choice, or a card kept for focus.
+  const othersOpen = othersForced || othersOpenForEmpty || othersSaved || inOthers(revealId);
+  const shownCount = browsing
+    ? (activeOpen ? activeCategories.length : 0) + (othersOpen ? otherCategories.length : 0)
+    : visible.length;
   // The order cards are rendered in, for choosing the next card after a delete.
   const renderedOrder = browsing ? [...activeCategories, ...otherCategories] : visible;
 
@@ -137,6 +178,35 @@ function CategoriesPage() {
 
   function focusAfterRender(id: string, fallback = LIST_HEADING_ID): void {
     pendingFocus.current = { id, fallback };
+  }
+
+  /**
+   * Corrects the URL without adding history: malformed or partial period parameters, a
+   * month outside January 2000 to the current month, and an explicit current month (the
+   * same as no parameters) are all replaced by the plain URL. Other parameters are kept.
+   */
+  const normalizePeriodUrl = useEffectEvent(() => {
+    const unavailable = urlPeriod && current && (!isAvailablePeriod(urlPeriod, current) || isSamePeriod(urlPeriod, current));
+    if (periodParams.kind === "invalid" || unavailable) {
+      setSearchParams((params) => withPeriod(params, null), { replace: true });
+    }
+  });
+
+  useEffect(() => {
+    normalizePeriodUrl();
+  }, [searchParams, current?.month, current?.year]);
+
+  /** A month or year the user chose: a new history entry, so Back returns to the last one. */
+  function changePeriod(next: ReportingPeriod): void {
+    if (!current) return;
+    setOpenActionsId(null);
+    setSearchParams((params) => withPeriod(params, isSamePeriod(next, current) ? null : next));
+  }
+
+  function resetPeriod(): void {
+    setOpenActionsId(null);
+    setSearchParams((params) => withPeriod(params, null));
+    focusAfterRender(PERIOD_MONTH_ID); // The Back button disappears; keep focus nearby.
   }
 
   /** Keeps a card on screen (and "Other categories" open if it is there) for focus. */
@@ -158,11 +228,22 @@ function CategoriesPage() {
     setOpenActionsId(null);
   }
 
+  /** The user's explicit Show/Hide for Active this month: the only thing that saves it. */
+  function toggleActive(): void {
+    const next = !activeOpen;
+    setActiveSaved(next);
+    saveCategoriesActiveExpanded(next);
+    setRevealId(null);
+    setOpenActionsId(null);
+  }
+
   /** The user's explicit Show/Hide: the only thing that saves the preference. */
   function toggleOthers(): void {
     const next = !othersOpen;
     setOthersSaved(next);
     saveCategoriesOthersExpanded(next);
+    // Hiding a month with nothing active also overrides its open-by-default for that month.
+    setEmptyMonthHidden(next ? null : shownKey);
     setRevealId(null);
     setOpenActionsId(null);
   }
@@ -336,9 +417,23 @@ function CategoriesPage() {
         <h1 id="categories-heading">Categories</h1>
         <p>
           How each category is used
-          {summary ? ` in ${monthLabel}` : " this month"}: spending, budgets, and activity.
+          {shown ? ` in ${monthLabel}` : " this month"}: spending, budgets, and activity.
         </p>
       </div>
+
+      {current && targetPeriod && (
+        <CategoryPeriodControls
+          selected={targetPeriod}
+          current={current}
+          onChange={changePeriod}
+          onReset={resetPeriod}
+          disabledReason={workflow.kind === "none" ? undefined
+            : "Finish or cancel the open form or confirmation to change the month."}
+        />
+      )}
+
+      {/* One short announcement when a month has finished loading; never per card. */}
+      <p className="visually-hidden" role="status">{shown && status !== "loading" ? `Showing ${monthLabel}` : ""}</p>
 
       {/* One status area: a floating success confirmation, or one persistent notice. */}
       <StatusBanner
@@ -346,7 +441,7 @@ function CategoriesPage() {
         onDismiss={() => setPageStatus(null)}
       />
 
-      {status === "error" && !summary && (
+      {status === "error" && !shown && (
         // The first load failed: there is no data, so nothing stale is shown.
         <InlineNotice variant="error" action={{ label: "Try again", onClick: () => void reload() }}>
           {error}
@@ -368,10 +463,13 @@ function CategoriesPage() {
       {(!pageStatus || pageStatus.type === "success") && <CategoryRefreshNotice />}
 
       {!summary && status === "loading" && <p role="status">Loading categories…</p>}
+      {summary && !shown && status === "loading" && targetPeriod && (
+        <p role="status">Loading {formatReportingMonth(targetPeriod.month, targetPeriod.year)}…</p>
+      )}
 
       {summary && (
         <>
-          {rows.length > 0 && (
+          {shown && rows.length > 0 && (
             <>
               <CategorySummaryStrip rows={rows} monthLabel={monthLabel} />
               <CategorySpendingTable categories={rows} monthLabel={monthLabel} />
@@ -408,7 +506,7 @@ function CategoriesPage() {
             </div>
           )}
 
-          {rows.length > 0 && (
+          {shown && rows.length > 0 && (
             <CategoryDiscoveryToolbar
               discovery={discovery}
               onChange={changeDiscovery}
@@ -419,7 +517,9 @@ function CategoriesPage() {
             />
           )}
 
-          {rows.length === 0 ? (
+          {/* The list header and create form above stay while another month loads, so an
+              open form is never lost; the cards wait for that month's data. */}
+          {!shown ? null : rows.length === 0 ? (
             <p className="empty-state">You don’t have any categories yet.</p>
           ) : visible.length === 0 ? (
             <div className="categories-page__no-results">
@@ -431,11 +531,35 @@ function CategoriesPage() {
           ) : browsing ? (
             <>
               <section className="categories-section" aria-labelledby={ACTIVE_HEADING_ID}>
-                <h2 id={ACTIVE_HEADING_ID}>Active this month</h2>
+                <div className="categories-section__header">
+                  <h2 id={ACTIVE_HEADING_ID}>{historical ? `Active in ${monthLabel}` : "Active this month"}</h2>
+                  {/* Hidden while one of its cards has a form or confirmation open. */}
+                  {activeCategories.length > 0 && !activeForced && (
+                    <button
+                      type="button"
+                      className="button button--secondary button--small categories-section__toggle"
+                      aria-expanded={activeOpen}
+                      aria-controls={ACTIVE_REGION_ID}
+                      onClick={toggleActive}
+                    >
+                      {activeOpen ? "Hide active categories" : "Show active categories"}
+                      {activeOpen
+                        ? <ChevronUp aria-hidden="true" focusable="false" size={16} />
+                        : <ChevronDown aria-hidden="true" focusable="false" size={16} />}
+                    </button>
+                  )}
+                </div>
                 {activeCategories.length === 0 ? (
-                  <p className="empty-state">Nothing has spending or a budget in {monthName} yet.</p>
+                  <p className="empty-state">
+                    {historical
+                      ? `Nothing had spending or a budget in ${monthLabel}.`
+                      : `Nothing has spending or a budget in ${monthName} yet.`}
+                  </p>
                 ) : (
-                  renderGrid(activeCategories)
+                  // Closed: nothing inside is rendered, so no hidden card can take focus.
+                  <div id={ACTIVE_REGION_ID} hidden={!activeOpen}>
+                    {activeOpen && renderGrid(activeCategories)}
+                  </div>
                 )}
               </section>
 
@@ -459,7 +583,11 @@ function CategoriesPage() {
                   )}
                 </div>
                 {otherCategories.length === 0 ? (
-                  <p className="empty-state">Every category has spending or a budget this month.</p>
+                  <p className="empty-state">
+                    {historical
+                      ? `Every category had spending or a budget in ${monthLabel}.`
+                      : "Every category has spending or a budget this month."}
+                  </p>
                 ) : (
                   // Closed: nothing inside is rendered, so no hidden card can take focus.
                   <div id={OTHER_REGION_ID} hidden={!othersOpen}>
