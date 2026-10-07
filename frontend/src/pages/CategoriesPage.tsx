@@ -133,6 +133,7 @@ function CategoriesPage() {
     ? summary
     : null;
   const historical = Boolean(shown && current && !isSamePeriod({ month: shown.month, year: shown.year }, current));
+  const targetHistorical = Boolean(targetPeriod && current && !isSamePeriod(targetPeriod, current));
   const monthLabel = shown ? formatReportingMonth(shown.month, shown.year) : "";
   const monthName = monthLabel.split(" ")[0];
   const rows = (shown?.categories ?? []).filter((row) => !removedIds.includes(row.id));
@@ -386,7 +387,7 @@ function CategoriesPage() {
     return undefined;
   }
 
-  function renderGrid(categories: CategorySummary[]) {
+  function renderGrid(categories: CategorySummary[], period: ReportingPeriod) {
     return (
       <ul className="category-grid">
         {categories.map((category) => (
@@ -394,7 +395,7 @@ function CategoriesPage() {
             <CategoryCard
               category={category}
               monthTotal={monthSpendingTotal(rows)}
-              monthName={monthName}
+              period={period}
               dateFormat={dateFormat}
               onEdit={() => startWorkflow({ kind: "edit", id: category.id })}
               onDelete={() => startWorkflow({ kind: "delete", id: category.id })}
@@ -415,9 +416,13 @@ function CategoriesPage() {
     <section className="categories-page" aria-labelledby="categories-heading">
       <div className="page-header">
         <h1 id="categories-heading">Categories</h1>
+        {/* The month being shown or loaded, so a switch (or a failed load) never reads as
+            "this month" while an earlier month is selected. */}
         <p>
-          How each category is used
-          {shown ? ` in ${monthLabel}` : " this month"}: spending, budgets, and activity.
+          {targetPeriod
+            ? `How each category ${targetHistorical ? "was" : "is"} used in ${formatReportingMonth(targetPeriod.month, targetPeriod.year)}`
+            : "How each category is used this month"}
+          : spending, budgets, and activity.
         </p>
       </div>
 
@@ -471,8 +476,8 @@ function CategoriesPage() {
         <>
           {shown && rows.length > 0 && (
             <>
-              <CategorySummaryStrip rows={rows} monthLabel={monthLabel} />
-              <CategorySpendingTable categories={rows} monthLabel={monthLabel} />
+              <CategorySummaryStrip rows={rows} monthLabel={monthLabel} historical={historical} />
+              <CategorySpendingTable categories={rows} monthLabel={monthLabel} historical={historical} />
             </>
           )}
 
@@ -513,6 +518,7 @@ function CategoriesPage() {
               onClear={clearDiscovery}
               shown={shownCount}
               total={rows.length}
+              monthName={monthName}
               keptVisibleNote={keptVisibleNote || undefined}
             />
           )}
@@ -558,7 +564,7 @@ function CategoriesPage() {
                 ) : (
                   // Closed: nothing inside is rendered, so no hidden card can take focus.
                   <div id={ACTIVE_REGION_ID} hidden={!activeOpen}>
-                    {activeOpen && renderGrid(activeCategories)}
+                    {activeOpen && renderGrid(activeCategories, shown)}
                   </div>
                 )}
               </section>
@@ -591,13 +597,13 @@ function CategoriesPage() {
                 ) : (
                   // Closed: nothing inside is rendered, so no hidden card can take focus.
                   <div id={OTHER_REGION_ID} hidden={!othersOpen}>
-                    {othersOpen && renderGrid(otherCategories)}
+                    {othersOpen && renderGrid(otherCategories, shown)}
                   </div>
                 )}
               </section>
             </>
           ) : (
-            renderGrid(visible)
+            renderGrid(visible, shown)
           )}
         </>
       )}

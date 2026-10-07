@@ -370,3 +370,151 @@ describe("BudgetPage category deep link", () => {
     expect(screen.getByLabelText("Category")).toHaveValue("1");
   });
 });
+
+describe("BudgetPage month deep link", () => {
+  // Groceries (ID 1) has a budget in March 2025 (and this month); Pet Care has none.
+  const march2025 = budget({ id: 2, monthlyLimit: 300, month: 3, year: 2025 });
+  const viewPeriod = () => within(screen.getByTestId("budget-period-filter"));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(accountContext());
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
+    vi.mocked(categoryService.getCategories).mockResolvedValue(sampleCategories);
+    useBudgets([budget(), march2025]);
+  });
+
+  async function renderAt(entries: string[]) {
+    const user = userEvent.setup();
+    const view = render(
+      <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
+        <CategoryProvider><BudgetPage /></CategoryProvider>
+        <HistoryProbe />
+      </MemoryRouter>,
+    );
+    await screen.findByRole("heading", { name: /Create Budget|Edit Budget/ });
+    return { user, view };
+  }
+
+  it("opens the linked month and edits that month's budget, not this month's", async () => {
+    await renderAt(["/budgets?category=1&month=3&year=2025"]);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
+    expect(viewPeriod().getByLabelText("Month")).toHaveValue("3");
+    expect(viewPeriod().getByLabelText("Year")).toHaveValue("2025");
+    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(300);
+    expect(document.getElementById("budget-month")).toHaveValue("3");
+    expect(document.getElementById("budget-year")).toHaveValue(2025);
+    expect(screen.getByTestId("budget-card-2")).toBeInTheDocument();
+    expect(screen.queryByTestId("budget-card-1")).not.toBeInTheDocument();
+    // The link stays, so a refresh or a copied URL opens the same thing.
+    expect(screen.getByTestId("url")).toHaveTextContent("/budgets?category=1&month=3&year=2025");
+    expect(budgetService.updateBudget).not.toHaveBeenCalled();
+  });
+
+  it("starts a new budget for the linked month when the category has none then", async () => {
+    await renderAt([`/budgets?category=${petCare.id}&month=3&year=2025`]);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Create Budget" })).toHaveFocus());
+    expect(screen.getByLabelText("Category")).toHaveValue(String(petCare.id));
+    expect(document.getElementById("budget-month")).toHaveValue("3");
+    expect(document.getElementById("budget-year")).toHaveValue(2025);
+    expect(budgetService.createBudget).not.toHaveBeenCalled();
+  });
+
+  it("does not use another month's budget: this month's Groceries budget is not March's", async () => {
+    useBudgets([budget()]);
+    await renderAt(["/budgets?category=1&month=3&year=2025"]);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Create Budget" })).toHaveFocus());
+    expect(screen.getByLabelText("Category")).toHaveValue("1");
+    expect(document.getElementById("budget-month")).toHaveValue("3");
+  });
+
+  it("offers a linked year outside the usual range", async () => {
+    await renderAt(["/budgets?category=1&month=6&year=2012"]);
+
+    await waitFor(() => expect(viewPeriod().getByLabelText("Year")).toHaveValue("2012"));
+    expect(within(viewPeriod().getByLabelText("Year")).getByRole("option", { name: "2012" })).toBeInTheDocument();
+  });
+
+  it("reopens the same budget after a refresh", async () => {
+    const { view } = await renderAt(["/budgets?category=1&month=3&year=2025"]);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
+    view.unmount();
+
+    await renderAt(["/budgets?category=1&month=3&year=2025"]);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
+    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(300);
+  });
+
+  it.each([
+    ["a partial month", "month=3"],
+    ["a month out of range", "month=13&year=2025"],
+    ["a year before 2000", "month=3&year=1999"],
+    ["a leading zero", "month=03&year=2025"],
+    ["a repeated month", "month=3&month=4&year=2025"],
+    ["text", "month=march&year=2025"],
+  ])("drops %s and applies the category to today's month", async (_case, query) => {
+    await renderAt([`/budgets?tab=list&category=1&${query}`]);
+
+    await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent(/^\/budgets\?tab=list&category=1$/));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
+    expect(viewPeriod().getByLabelText("Month")).toHaveValue(String(month));
+    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500); // This month's budget.
+  });
+
+  it("keeps a valid month but drops an unknown or another user's category, opening nothing", async () => {
+    await renderAt(["/budgets?category=999&month=3&year=2025"]);
+
+    await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent(/^\/budgets\?month=3&year=2025$/));
+    expect(viewPeriod().getByLabelText("Month")).toHaveValue("3");
+    expect(screen.getByLabelText("Category")).toHaveValue("");
+    expect(screen.getByRole("heading", { name: "Create Budget" })).not.toHaveFocus();
+    expect(categoryService.getCategories).toHaveBeenCalledTimes(1); // Never asks the API about the ID.
+  });
+
+  it("shows only the month without a category", async () => {
+    await renderAt(["/budgets?month=3&year=2025"]);
+
+    expect(viewPeriod().getByLabelText("Month")).toHaveValue("3");
+    expect(screen.getByRole("heading", { name: "Create Budget" })).not.toHaveFocus();
+    expect(screen.getByTestId("url")).toHaveTextContent("/budgets?month=3&year=2025");
+  });
+
+  it("uses up the link once the user shows another month, so it is not reopened", async () => {
+    const { user } = await renderAt(["/budgets?tab=list&category=1&month=3&year=2025"]);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
+    await user.click(screen.getByRole("button", { name: "Cancel Edit" }));
+
+    await user.selectOptions(viewPeriod().getByLabelText("Month"), "4");
+
+    await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent(/^\/budgets\?tab=list$/));
+    expect(viewPeriod().getByLabelText("Month")).toHaveValue("4");
+    expect(screen.getByRole("heading", { name: "Create Budget" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Category")).toHaveValue("");
+  });
+
+  it("follows browser history between linked months", async () => {
+    const { user } = await renderAt([
+      "/budgets?category=1&month=3&year=2025",
+      `/budgets?category=1&month=${month}&year=${year}`,
+    ]);
+    await waitFor(() => expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500));
+
+    await user.click(screen.getByRole("button", { name: "History back" }));
+
+    await waitFor(() => expect(screen.getByLabelText("Monthly Limit")).toHaveValue(300));
+    expect(viewPeriod().getByLabelText("Month")).toHaveValue("3");
+    expect(viewPeriod().getByLabelText("Year")).toHaveValue("2025");
+    expect(screen.getByTestId("url")).toHaveTextContent("/budgets?category=1&month=3&year=2025");
+  });
+
+  it("leaves a plain visit on today's month", async () => {
+    await renderAt(["/budgets"]);
+
+    expect(viewPeriod().getByLabelText("Month")).toHaveValue(String(month));
+    expect(viewPeriod().getByLabelText("Year")).toHaveValue(String(year));
+    expect(screen.getByTestId("url")).toHaveTextContent(/^\/budgets$/);
+  });
+});

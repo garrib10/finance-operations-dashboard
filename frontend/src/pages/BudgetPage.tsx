@@ -43,6 +43,7 @@ import {
   type CategoryDraft,
 } from "../utils/categoryForm";
 import { CATEGORY_PARAM, categoryLinkKey, resolveCategoryLink } from "../utils/categoryDeepLink";
+import { MONTH_PARAM, YEAR_PARAM, parsePeriodParams } from "../utils/reportingPeriod";
 import type {
   BudgetAnalyticsResponse,
   BudgetResponse,
@@ -109,9 +110,6 @@ function formatBudgetMonth(month: number, year: number): string {
 function BudgetPage() {
   const [budgets, setBudgets] = useState<BudgetResponse[]>([]);
 
-  const yearOptions = Array.from(
-    new Set([...defaultYearOptions, ...budgets.map((budget) => budget.year)]),
-  ).sort((firstYear, secondYear) => firstYear - secondYear);
 
   const [analytics, setAnalytics] = useState<
     Record<number, BudgetAnalyticsResponse>
@@ -140,10 +138,50 @@ function BudgetPage() {
   const editTriggerIdRef = useRef<number | null>(null);
   const pendingFocusTriggerIdRef = useRef<number | null>(null);
 
-  const today = new Date();
-  const [viewMonth, setViewMonth] = useState(String(today.getMonth() + 1));
-  const [viewYear, setViewYear] = useState(String(today.getFullYear()));
+  // ?month=&year= (from a Categories budget link) opens that month; anything else opens
+  // today's month as before. Checked with the Categories parser, so both pages agree on
+  // what a valid month is (one of each, plain numbers, month 1-12, year 2000 or later).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const periodParams = parsePeriodParams(searchParams);
+  const linkedPeriod = periodParams.kind === "period" ? periodParams.period : null;
+  const linkedPeriodKey = linkedPeriod ? `${linkedPeriod.year}-${linkedPeriod.month}` : null;
+  const [viewMonth, setViewMonth] = useState(() => String(linkedPeriod?.month ?? new Date().getMonth() + 1));
+  const [viewYear, setViewYear] = useState(() => String(linkedPeriod?.year ?? new Date().getFullYear()));
   const [viewCategoryId, setViewCategoryId] = useState("");
+
+  // A different linked month (Back/Forward between links) moves the view there once.
+  const [appliedPeriodKey, setAppliedPeriodKey] = useState(linkedPeriodKey);
+  if (linkedPeriodKey !== appliedPeriodKey) {
+    setAppliedPeriodKey(linkedPeriodKey);
+    if (linkedPeriod) {
+      setViewMonth(String(linkedPeriod.month));
+      setViewYear(String(linkedPeriod.year));
+    }
+  }
+
+  // The linked year may be outside the usual range, so it is always offered.
+  const yearOptions = Array.from(
+    new Set([...defaultYearOptions, ...budgets.map((budget) => budget.year), Number(viewYear)]),
+  ).sort((firstYear, secondYear) => firstYear - secondYear);
+
+  // An invalid month is dropped (the category link still applies, to today's month). A
+  // linked month describes the page only until the user shows another month (or a save
+  // moves there): the whole link is then used up, so its category is dropped too and the
+  // URL is plain /budgets again. Replaced, never pushed, so Back still leaves the page.
+  const periodLinkInvalid = periodParams.kind === "invalid";
+  const periodLinkLeft = linkedPeriod !== null && linkedPeriodKey === appliedPeriodKey
+    && (String(linkedPeriod.month) !== viewMonth || String(linkedPeriod.year) !== viewYear);
+
+  useEffect(() => {
+    if (!periodLinkInvalid && !periodLinkLeft) return;
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.delete(MONTH_PARAM);
+      next.delete(YEAR_PARAM);
+      if (periodLinkLeft) next.delete(CATEGORY_PARAM);
+      return next;
+    }, { replace: true });
+  }, [periodLinkInvalid, periodLinkLeft, setSearchParams]);
 
   /**
    * A category deleted elsewhere can no longer be chosen or filtered on. Until the list
@@ -265,11 +303,14 @@ function BudgetPage() {
   }, [failureAttempt]);
 
   // ?category={id} from the Categories page: edit that category's budget for the
-  // displayed month if it has one, otherwise start a new budget with it preselected.
-  // Resolved against the user's own categories; invalid links are dropped silently.
-  const [searchParams, setSearchParams] = useSearchParams();
+  // displayed month (the linked ?month=&year= when given) if it has one, otherwise start
+  // a new budget with it preselected. Resolved against the user's own categories; invalid
+  // links are dropped silently.
   const categoryLink = resolveCategoryLink(searchParams.get(CATEGORY_PARAM), categoryStatus, categories);
+  // The month is part of the link: Back/Forward to the same category in another month
+  // opens that month's budget.
   const linkKey = categoryLinkKey(categoryLink);
+  const handledKey = `${linkKey}@${linkedPeriodKey ?? "today"}`;
   // The link handled last, so reloads and re-renders never reopen the form.
   const handledLinkKey = useRef<string | null>(null);
 
@@ -302,13 +343,13 @@ function BudgetPage() {
   });
 
   useEffect(() => {
-    if (isLoading || linkKey === "pending" || linkKey === "none" || handledLinkKey.current === linkKey) {
+    if (isLoading || linkKey === "pending" || linkKey === "none" || handledLinkKey.current === handledKey) {
       if (linkKey === "none") handledLinkKey.current = null;
       return;
     }
-    handledLinkKey.current = linkKey;
+    handledLinkKey.current = handledKey;
     applyCategoryLink();
-  }, [isLoading, linkKey]);
+  }, [isLoading, linkKey, handledKey]);
 
   useEffect(() => {
     if (editingBudgetId === null) {

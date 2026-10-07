@@ -432,7 +432,16 @@ API parameters in [categories-api.md](categories-api.md#get-apicategoriessummary
 | Selects: labels, options, clamping a future month, Back only for an earlier month, plain buttons, disabled with a reason | `CategoryPeriodControls.test.tsx` |
 | Page: current and earlier months from the URL, URL cleanup by replacement, history entries with Back and Forward, Back to current month with focus, loading without stale figures, failure and retry, refresh after a change uses the chosen month, locked controls during a workflow, preference untouched, past-tense wording | `CategoriesPage.test.tsx` |
 
+### Automated coverage (Phase 3, wording and budget links)
+
+| Area | Tests |
+| --- | --- |
+| Historical wording: subtitle (shown, loading), strip, spending-table intro, cards (singular and plural), warning, filter and sort options, no "this month" anywhere; present tense kept for the current month | `CategoriesPage.test.tsx`, `CategorySpendingTable.test.tsx` |
+| Budget links: month, year, and category ID in every Set/Edit link (current month included), one of each parameter with no empty values, names with "for {Month Year}", the warning's link not duplicated, none for categories without budgets, search results and a month switch, no links while a month loads, Back from Budgets returns to the same month without touching preferences | `CategoriesPage.test.tsx`, `categoryDeepLink.test.ts` |
+| Budgets month link: linked month selected, that month's budget edited (not this month's), Create with the month preselected, focus on the form heading, out-of-range year offered, refresh, Back/Forward between months, invalid/partial/repeated months dropped with the category applied to today, unknown category dropped with the month kept and no focus moved, month-only link, using the link up after choosing another month, plain `/budgets` unchanged | `BudgetPage.categories.test.tsx` |
+
 ### Issue #103 checks still outstanding
 
-- [ ] Browser check of the selects, Back and Forward, and Back to current month
+- [x] Browser check of the selects, Back and Forward, and Back to current month
+- [ ] Browser check of Set/Edit budget from an earlier month, Back to Categories, and the Budgets form at 375 px
 - [ ] 375 px and 200% zoom with the selects, and a screen reader pass of the month status

@@ -13,7 +13,7 @@ vi.mock("../services/categoryService", async (importOriginal) => ({
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../context/AuthContext";
 import { CategoryProvider } from "../context/CategoryProvider";
@@ -238,10 +238,10 @@ describe("CategoriesPage", () => {
 
     expect(within(card("Groceries")).getByRole("link", { name: "View transactions for Groceries" }))
       .toHaveAttribute("href", "/transactions?category=1");
-    expect(within(card("Groceries")).getByRole("link", { name: "Edit budget for Groceries" }))
-      .toHaveAttribute("href", "/budgets?category=1");
-    expect(within(card("Hobbies")).getByRole("link", { name: "Set budget for Hobbies" }))
-      .toHaveAttribute("href", "/budgets?category=9");
+    expect(within(card("Groceries")).getByRole("link", { name: "Edit budget for Groceries for October 2026" }))
+      .toHaveAttribute("href", "/budgets?category=1&month=10&year=2026");
+    expect(within(card("Hobbies")).getByRole("link", { name: "Set budget for Hobbies for October 2026" }))
+      .toHaveAttribute("href", "/budgets?category=9&month=10&year=2026");
     expect(within(card("Income")).getByRole("link", { name: "View transactions for Income" })).toBeInTheDocument();
     expect(within(card("Income")).queryByRole("link", { name: /budget/ })).not.toBeInTheDocument();
   });
@@ -347,7 +347,7 @@ describe("CategoriesPage", () => {
       ["Custom", ["Hobbies", "Pet Care"]],
       ["Built-in", ["Groceries", "Income"]],
       ["Unused", ["Hobbies"]],
-      ["No budget this month", ["Hobbies", "Income"]],
+      ["No budget in October", ["Hobbies", "Income"]],
       ["All categories", ["Groceries", "Pet Care", "Hobbies", "Income"]],
     ])("filters to %s", async (option, expected) => {
       const user = await renderPage();
@@ -358,7 +358,7 @@ describe("CategoriesPage", () => {
     });
 
     it.each([
-      ["This month’s spending", ["Groceries", "Pet Care", "Hobbies", "Income"]],
+      ["Spending in October", ["Groceries", "Pet Care", "Hobbies", "Income"]],
       ["Most used", ["Groceries", "Pet Care", "Income", "Hobbies"]],
       ["Name", ["Groceries", "Pet Care", "Hobbies", "Income"]],
     ])("sorts by %s", async (option, expected) => {
@@ -496,10 +496,10 @@ describe("CategoriesPage", () => {
 
       const text = warning("Books")!;
       expect(text).toHaveTextContent("Warning: $125.50 spent in October with no budget. Set budget");
-      const links = within(card("Books")).getAllByRole("link", { name: "Set budget for Books" });
+      const links = within(card("Books")).getAllByRole("link", { name: "Set budget for Books for October 2026" });
       expect(links).toHaveLength(1);
       expect(text).toContainElement(links[0]);
-      expect(links[0]).toHaveAttribute("href", "/budgets?category=20");
+      expect(links[0]).toHaveAttribute("href", "/budgets?category=20&month=10&year=2026");
       expect(links[0].querySelector("svg")).toBeNull(); // Plain text link inside the warning.
       // The other links and the actions stay.
       expect(within(card("Books")).getByRole("link", { name: "View transactions for Books" })).toBeInTheDocument();
@@ -526,17 +526,17 @@ describe("CategoriesPage", () => {
 
       // No spending: the ordinary Set budget link, no warning.
       expect(warning("Hobbies")).toBeNull();
-      expect(within(card("Hobbies")).getByRole("link", { name: "Set budget for Hobbies" })).toBeInTheDocument();
+      expect(within(card("Hobbies")).getByRole("link", { name: "Set budget for Hobbies for October 2026" })).toBeInTheDocument();
       // A budget this month: Edit budget, no warning, no Set budget.
       expect(warning("Groceries")).toBeNull();
-      expect(within(card("Groceries")).getByRole("link", { name: "Edit budget for Groceries" })).toBeInTheDocument();
+      expect(within(card("Groceries")).getByRole("link", { name: "Edit budget for Groceries for October 2026" })).toBeInTheDocument();
       expect(within(card("Groceries")).queryByRole("link", { name: /Set budget/ })).not.toBeInTheDocument();
       // Takes no budgets: no warning and no budget action.
       expect(warning("Tolls")).toBeNull();
       expect(within(card("Tolls")).queryByRole("link", { name: /budget/ })).not.toBeInTheDocument();
       // Income only this month is not spending.
       expect(warning("Side Gigs")).toBeNull();
-      expect(within(card("Side Gigs")).getByRole("link", { name: "Set budget for Side Gigs" })).toBeInTheDocument();
+      expect(within(card("Side Gigs")).getByRole("link", { name: "Set budget for Side Gigs for October 2026" })).toBeInTheDocument();
     });
 
     it("names the server's reporting month", async () => {
@@ -671,6 +671,7 @@ describe("CategoriesPage", () => {
       expect(await screen.findByText("Nothing had spending or a budget in March 2025.")).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Active in March 2025" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Hobbies" })).toBeInTheDocument(); // Other opens automatically.
+      expect(screen.getByText("No spending in March 2025")).toBeInTheDocument(); // Not "yet": it is over.
     });
 
     it("starts each empty month with Other open, and hiding it in one month leaves the next open", async () => {
@@ -825,6 +826,136 @@ describe("CategoriesPage", () => {
       await screen.findByRole("table", { name: "Spending in October 2026" });
 
       expect(window.localStorage.getItem(CATEGORIES_OTHERS_EXPANDED_KEY)).toBeNull();
+    });
+
+    describe("wording and budget links", () => {
+      // September 2025: Groceries had a budget, Hobbies spent with none, Pet Care was quiet,
+      // and Income takes no budgets.
+      const septemberRows = [
+        { ...groceriesRow, currentMonthTransactionCount: 1 },
+        salaryRow,
+        { ...petCareRow, currentMonthSpent: 0, currentMonthBudget: null, currentMonthTransactionCount: 0 },
+        { ...unusedRow, currentMonthSpent: 25, currentMonthTransactionCount: 2, transactionCount: 2,
+          canDelete: false, lastTransactionDate: "2025-09-03" },
+      ];
+      const SEPTEMBER = "/categories?month=9&year=2025";
+      const budgetLinks = () => screen.queryAllByRole("link", { name: /budget for/ });
+
+      beforeEach(() => {
+        vi.mocked(getCategorySummary).mockImplementation((period) => Promise.resolve(period
+          ? summaryList(period.month === 9 ? septemberRows : augustRows, period.month, period.year, 10, 2026)
+          : summaryList(allRows, 10, 2026)));
+      });
+
+      it("describes an earlier month in the past tense and never as this month", async () => {
+        renderAt([SEPTEMBER]);
+        await screen.findByRole("table", { name: "Spending in September 2025" });
+
+        expect(screen.getByText("How each category was used in September 2025: spending, budgets, and activity."))
+          .toBeInTheDocument();
+        const strip = screen.getAllByRole("definition")[0].closest("dl")!;
+        expect(within(strip).getByText("Top in September 2025")).toBeInTheDocument();
+        expect(within(strip).getByText("of 1 budget in September 2025")).toBeInTheDocument();
+        expect(within(strip).getByText("categories spending in September 2025 without a budget")).toBeInTheDocument();
+        expect(screen.getByText(/Categories with no spending in September 2025 are not listed\./)).toBeInTheDocument();
+        expect(within(card("Groceries")).getByText("Spent in September")).toBeInTheDocument();
+        expect(activity("Groceries")).toHaveTextContent("1 transaction in September");
+        expect(activity("Hobbies")).toHaveTextContent("2 transactions in September");
+        expect(within(card("Pet Care")).getByText("No budget for September")).toBeInTheDocument();
+        expect(within(card("Hobbies")).getByText(/\$25\.00 spent in September with no budget\./)).toBeInTheDocument();
+        expect(within(screen.getByLabelText("Filter categories")).getByRole("option", { name: "No budget in September" }))
+          .toBeInTheDocument();
+        expect(within(screen.getByLabelText("Sort categories")).getByRole("option", { name: "Spending in September" }))
+          .toBeInTheDocument();
+        expect(within(strip).queryByText(/yet/)).not.toBeInTheDocument();
+        expect(document.body.textContent).not.toMatch(/this month/i);
+      });
+
+      it("keeps the present tense for the server's current month", async () => {
+        renderAt(["/categories"]);
+        await screen.findByRole("table", { name: "Spending in October 2026" });
+
+        expect(screen.getByText("How each category is used in October 2026: spending, budgets, and activity."))
+          .toBeInTheDocument();
+        expect(screen.getByText("Top this month")).toBeInTheDocument();
+        expect(screen.getByText("of 2 budgets this month")).toBeInTheDocument();
+      });
+
+      it("names the month being loaded, not this month, before its data arrives", async () => {
+        vi.mocked(getCategorySummary).mockImplementation((period) => period
+          ? new Promise<CategorySummaryList>(() => {})
+          : Promise.resolve(summaryList(allRows, 10, 2026)));
+        renderAt([SEPTEMBER]);
+
+        expect(await screen.findByText("Loading September 2025…")).toBeInTheDocument();
+        expect(screen.getByText("How each category was used in September 2025: spending, budgets, and activity."))
+          .toBeInTheDocument();
+        expect(budgetLinks()).toHaveLength(0); // No card (or link) for another month meanwhile.
+      });
+
+      it("opens Budgets on the month being shown, with the month in each link's name", async () => {
+        renderAt([SEPTEMBER]);
+        await screen.findByRole("table", { name: "Spending in September 2025" });
+
+        expect(within(card("Groceries")).getByRole("link", { name: "Edit budget for Groceries for September 2025" }))
+          .toHaveAttribute("href", "/budgets?category=1&month=9&year=2025");
+        // The warning holds Hobbies' only Set budget link.
+        const hobbiesLinks = within(card("Hobbies")).getAllByRole("link", { name: /budget for Hobbies/ });
+        expect(hobbiesLinks).toHaveLength(1);
+        expect(hobbiesLinks[0]).toHaveAccessibleName("Set budget for Hobbies for September 2025");
+        expect(hobbiesLinks[0]).toHaveAttribute("href", "/budgets?category=9&month=9&year=2025");
+        expect(within(card("Pet Care")).getByRole("link", { name: "Set budget for Pet Care for September 2025" }))
+          .toHaveAttribute("href", "/budgets?category=7&month=9&year=2025");
+        expect(within(card("Income")).queryByRole("link", { name: /budget/ })).not.toBeInTheDocument();
+        for (const link of budgetLinks()) {
+          const params = new URL(link.getAttribute("href")!, "http://localhost").searchParams;
+          expect([...params.keys()]).toEqual(["category", "month", "year"]);
+          expect([...params.values()].every((value) => /^[1-9]\d*$/.test(value))).toBe(true);
+        }
+      });
+
+      it("keeps the month in links in search results and after switching months", async () => {
+        const user = renderAt([SEPTEMBER]);
+        await screen.findByRole("table", { name: "Spending in September 2025" });
+
+        await user.type(screen.getByLabelText("Search categories"), "pet");
+        expect(within(card("Pet Care")).getByRole("link", { name: "Set budget for Pet Care for September 2025" }))
+          .toHaveAttribute("href", "/budgets?category=7&month=9&year=2025");
+
+        await user.clear(screen.getByLabelText("Search categories"));
+        await user.selectOptions(yearSelect(), "2026");
+        await user.selectOptions(monthSelect(), "8");
+        await screen.findByRole("table", { name: "Spending in August 2026" });
+        expect(budgetLinks().length).toBeGreaterThan(0);
+        for (const link of budgetLinks()) {
+          expect(link.getAttribute("href")).toMatch(/&month=8&year=2026$/);
+          expect(link).toHaveAccessibleName(/for August 2026$/);
+        }
+      });
+
+      it("comes back to the same month with Back after following a budget link", async () => {
+        const user = userEvent.setup();
+        render(
+          <MemoryRouter initialEntries={[SEPTEMBER]}>
+            <Routes>
+              <Route path="/categories" element={<CategoryProvider><CategoriesPage /></CategoryProvider>} />
+              <Route path="/budgets" element={<h1>Budgets</h1>} />
+            </Routes>
+            <HistoryProbe />
+          </MemoryRouter>,
+        );
+        await screen.findByRole("table", { name: "Spending in September 2025" });
+
+        await user.click(screen.getByRole("link", { name: "Edit budget for Groceries for September 2025" }));
+        expect(await screen.findByRole("heading", { name: "Budgets", level: 1 })).toBeInTheDocument();
+        expect(screen.getByTestId("url")).toHaveTextContent("/budgets?category=1&month=9&year=2025");
+
+        await user.click(screen.getByRole("button", { name: "History back" }));
+        expect(await screen.findByRole("table", { name: "Spending in September 2025" })).toBeInTheDocument();
+        expect(screen.getByTestId("url")).toHaveTextContent(SEPTEMBER);
+        expect(monthSelect()).toHaveValue("9");
+        expect(window.localStorage.getItem(CATEGORIES_ACTIVE_EXPANDED_KEY)).toBeNull();
+      });
     });
   });
 
@@ -1193,8 +1324,8 @@ describe("CategoriesPage", () => {
       const links = [
         [card("Groceries"), "View transactions for Groceries", "View transactions", "/transactions?category=1"],
         [card("Hobbies"), "Add a transaction for Hobbies", "Add transaction", "/transactions?addCategory=9"],
-        [card("Groceries"), "Edit budget for Groceries", "Edit budget", "/budgets?category=1"],
-        [card("Hobbies"), "Set budget for Hobbies", "Set budget", "/budgets?category=9"],
+        [card("Groceries"), "Edit budget for Groceries for October 2026", "Edit budget", "/budgets?category=1&month=10&year=2026"],
+        [card("Hobbies"), "Set budget for Hobbies for October 2026", "Set budget", "/budgets?category=9&month=10&year=2026"],
       ] as const;
       for (const [scope, name, text, href] of links) {
         const link = within(scope).getByRole("link", { name });
