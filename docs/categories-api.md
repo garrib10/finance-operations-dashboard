@@ -212,7 +212,7 @@ and a never-used custom category (`null` date and budget, deletable).
 | Field | Meaning |
 | --- | --- |
 | `month`, `year` | The month the figures describe: the requested month, or by default the server's reporting month (the whole calendar month containing today in the server's default time zone, the same month the dashboard uses). Every `currentMonth*` row field refers to this month. |
-| `serverCurrentMonth`, `serverCurrentYear` | Always the server's own current reporting month, whatever was requested. Equal to `month`/`year` for a default request; a client compares them to tell whether it is showing history, and uses them as the latest month it may request. |
+| `serverCurrentMonth`, `serverCurrentYear` | Always the server's own current reporting month, whatever was requested. Equal to `month`/`year` for a default request (both come from one clock reading, so even a request running across midnight at a month end reports one month); a client compares them to tell whether it is showing history, and uses them as the latest month it may request. |
 | `categories` | Every category the user owns, ordered by name, then ID. Empty only if the user has no categories. |
 | `transactionCount` | All of the category's transactions, income and expense, in any month. With `budgetCount` it decides `canDelete`. |
 | `currentMonthTransactionCount` | The category's transactions, income and expense, in the reporting month given by the top-level `month` and `year` (inclusive of the 1st and last day, including future-dated ones). Always present, `0` when none. It is for display only and never affects `canDelete`; spending still counts expenses only. |

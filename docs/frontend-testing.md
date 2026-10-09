@@ -323,10 +323,13 @@ table) was fixed during Phase 3 by using `minmax(0, …)` columns.
 
 ### Issue #95 checks still outstanding
 
-- [ ] 320px, 768px, 1024px, 1280px, and 1440px widths, and the drawer at 200% zoom
+- [x] 320px, 768px, 1024px, 1280px, and 1440px widths, and the drawer at 200% zoom
+      (scripted Chromium pass, October 9, 2026; see Issue #103 manual checks)
 - [ ] Screen reader pass (VoiceOver): link names, toggle and menu-button state, dialog
-      name, current page, no duplicate tooltip announcements
-- [ ] Reduced motion: drawer appears without sliding
+      name, current page, no duplicate tooltip announcements (the accessibility tree was
+      checked on October 9, 2026: single link names, `aria-current="page"`, expanded
+      states, modal `dialog` "Navigation menu"; spoken output still unchecked)
+- [x] Reduced motion: drawer appears without sliding (October 9, 2026)
 - [ ] A long display name: truncated with an ellipsis in the top bar, shown in full in the
       open account menu (CSS added in Phase 4)
 - [ ] Budgets charts redraw once after collapsing or expanding the sidebar
@@ -368,12 +371,16 @@ Performed by the maintainer in Chrome against the local backend (not staging):
 
 ### Issue #100 checks still outstanding
 
-- [ ] 768px, 1024px, and 1440px widths, and 200% zoom
-- [ ] Keyboard-only pass of the toolbar, cards, forms, confirmation, and notices
+- [x] 768px, 1024px, and 1440px widths, and 200% zoom (October 9, 2026)
+- [ ] Keyboard-only pass of the toolbar, cards, forms, confirmation, and notices (toolbar,
+      card links, section toggles, and "More actions" with Esc checked on October 9, 2026;
+      the edit form, delete confirmation, and notices still need a pass)
 - [ ] Screen reader pass (VoiceOver): result-count updates, error versus warning
       announcements, spending-table headers
-- [ ] Reduced motion: the success banner appears without sliding
-- [ ] The in-use race: a transaction added in another tab before confirming a delete
+- [x] Reduced motion: the success banner appears without sliding (October 9, 2026)
+- [x] The in-use race: a transaction added in another tab before confirming a delete
+      (October 9, 2026: refused with "… is still used by transactions or budgets …", card
+      kept, focus on "More actions"; the test category and transaction were removed)
 - [ ] The restyled page-level errors and refresh warnings on Transactions, Budgets, and
       the Dashboard (changed in Phase 6, covered by tests only)
 
@@ -458,23 +465,50 @@ out (identical to the default), and January 2000 over HTTP
 (`CategorySummaryIntegrationTest`); an earlier month uses exactly the default request's
 statement count (`CategorySummaryQueryCountTest`).
 
+Backend (Phase 5): a default request whose clock passes midnight at a month end between
+readings still reports one month for `month` and `serverCurrentMonth` (fails on the old
+two-reading code with "expected: 10 but was: 11"; `CategorySummaryServiceTest`).
+
 ### Issue #103 manual checks
 
 These need a real browser (jsdom has no layout, native select keyboard handling, or
-screen reader):
+screen reader). On October 9, 2026 a scripted Chromium pass (Playwright, run outside the
+repository against the local app and the local demo account) checked layout, keyboard
+order, the accessibility tree, reduced motion, and the delete race; VoiceOver itself
+still needs a person.
 
-- [ ] 375 px, 768 px, 1024 px, 1440 px, and 200% zoom on Categories in an earlier month:
-  no page-level horizontal scroll; the month controls, strip ("Top in {Month Year}"),
-  section headers and toggles, toolbar, cards, warning links, and "More actions" panels
-  wrap inside the viewport with unclipped focus rings; sidebar expanded and collapsed
-- [ ] The same widths on a Budgets month link: form and Budget Period readable and usable
-- [ ] Arrow keys change the Month and Year selects; Tab order Month → Year → Back
-- [ ] Screen reader: "Showing {Month Year}" read once after a switch, budget link names
-  include the month, focus announced on "Edit Budget" / "Create Budget"
-- [ ] `prefers-reduced-motion`: no new motion on either page
+- [x] 320, 375, 768, 1024, 1280, and 1440 px and 200% zoom (720 CSS px at 2×) on
+  Categories in September 2026: no page-level horizontal scroll and no element outside
+  the viewport; sidebar expanded and collapsed at 1280 and 1440; "More actions" panels
+  inside the viewport at 320–1440 px with Esc returning focus. Found and fixed: at 320 px a
+  long category name was squeezed beside the icon and "More actions" and broke mid-word;
+  a card under 12rem wide now puts the name on its own row (container query; 375 px and
+  wider unchanged)
+- [x] The same widths on a Budgets month link (`?category=25&month=9&year=2026`): no
+  horizontal scroll, focus on "Edit Budget"
+- [x] Tab order: Month → Year → Back to current month → Create category → search, filter,
+  sort → section toggle → card links → Other toggle; Enter on Back to current month leaves
+  focus on Month; Enter on a section toggle flips `aria-expanded` and keeps focus
+- [x] Month and Year selects by keyboard (October 9, 2026, by hand): Space or ↓ opens the
+  native menu, arrows and Return choose, the month loads, and focus stays on the select;
+  Return on Back to current month returns to the current month with focus on Month
+- [x] Accessibility tree: one `h1`, `h2` order as documented, budget link names "Edit
+  budget for {name} for September 2026", status texts "Showing September 2026" and
+  "Showing n of 13 categories", toggles' `aria-controls` targets exist, no `menu` roles,
+  no live regions in cards, no exposed icons, spending-table column and row headers,
+  sidebar names without duplicated tooltip text, drawer a modal `dialog` "Navigation menu"
+- [x] VoiceOver in Safari (October 9, 2026, by hand): "Showing August 2026" and "Showing
+  September 2026" each spoken once after switching months; "Back to current month,
+  button", "Create category, button", and the create form's "Category name, edit text"
+  read as expected. Budget link names, the "Edit Budget" focus target, and toggle states
+  were confirmed in the accessibility tree by the scripted pass, not by ear. (Return in the
+  create form's name field submits it, as it should; a category created by accident
+  during the check was deleted.)
+- [x] `prefers-reduced-motion`: the success banner and the mobile drawer have no animation
 
 ### Issue #103 checks still outstanding
 
 - [x] Browser check of the selects, Back and Forward, and Back to current month
 - [x] Browser check of Set/Edit budget from an earlier month, Back to Categories, and the Budgets form at 375 px
-- [ ] 375 px and 200% zoom with the selects, and a screen reader pass of the month status
+- [x] 375 px and 200% zoom with the selects (scripted pass above)
+- [x] VoiceOver pass of the month status (October 9, 2026)

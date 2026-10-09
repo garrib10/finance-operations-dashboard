@@ -324,12 +324,12 @@ lives on the page only (no URL parameters) and is applied in this order:
    - Built-in: `builtIn` is true.
    - Unused: no transactions and no budgets ever (`transactionCount` and `budgetCount`
      both 0). Built-ins can be unused, though they still cannot be deleted.
-   - No budget this month: `currentMonthBudget` is null, whether or not the category takes
-     budgets.
+   - No budget in {Month} (the month shown): `currentMonthBudget` is null, whether or not
+     the category takes budgets.
 3. **Sort** ("Sort categories"), always ending on name (locale-aware, ignoring case) and
    then ID, so the order never shuffles:
    - Name: name, then ID (the default).
-   - This month's spending: highest first, then name, then ID.
+   - Spending in {Month} (the month shown): highest first, then name, then ID.
    - Most used: most transactions (all time), then this month's spending, then name, then ID.
 
 "Showing {n} of {total} categories" is a polite status region. "Clear category filters"
