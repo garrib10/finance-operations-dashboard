@@ -58,15 +58,4 @@ class ReportingPeriodProviderTest {
         // The date-based factory gives the same month as the explicit one.
         assertThat(ReportingPeriod.monthOf(LocalDate.of(2026, 8, 17))).isEqualTo(ReportingPeriod.of(2026, 8));
     }
-
-    @Test
-    void usesTheCurrentMonthWithoutARequestAndTheRequestedMonthOtherwise() {
-        ReportingPeriodProvider provider =
-                new ReportingPeriodProvider(Clock.fixed(Instant.parse("2026-10-15T12:00:00Z"), ZoneId.of("UTC")));
-
-        assertThat(provider.forMonth(null, null)).isEqualTo(provider.currentMonth());
-        assertThat(provider.forMonth(8, 2026)).isEqualTo(ReportingPeriod.of(2026, 8));
-        // The clock is not consulted for an explicit month.
-        assertThat(provider.forMonth(2, 2028).end()).isEqualTo(LocalDate.of(2028, 2, 29));
-    }
 }

@@ -3,6 +3,8 @@ package dev.portfolio.finance.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -12,11 +14,13 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -259,6 +263,34 @@ class CategorySummaryServiceTest {
         assertThat(quiet.currentMonthSpent()).isEqualTo(new BigDecimal("0.00"));
         assertThat(quiet.currentMonthBudget()).isNull();
         verify(transactionRepository).summarizeUsageByCategory(1L, TransactionType.EXPENSE, augStart, augEnd);
+    }
+
+    @Test
+    void readsTheClockOnceSoADefaultRequestAcrossMidnightReportsOneMonth() {
+        // The first reading is the last instant of October; any later one is in November.
+        Clock midnight = new Clock() {
+            private final AtomicInteger reads = new AtomicInteger();
+
+            @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+            @Override public Clock withZone(ZoneId zone) { return this; }
+            @Override public Instant instant() {
+                return reads.getAndIncrement() == 0
+                        ? Instant.parse("2026-10-31T23:59:59.999Z")
+                        : Instant.parse("2026-11-01T00:00:00Z");
+            }
+        };
+        service = new CategorySummaryService(userRepository, categoryRepository, transactionRepository,
+                budgetRepository, new ReportingPeriodProvider(midnight));
+        // Any dates: the assertion below, not a stubbing mismatch, is what must catch a second reading.
+        when(categoryRepository.findAllByUserIdOrderByNameAscIdAsc(1L)).thenReturn(List.of());
+        when(transactionRepository.summarizeUsageByCategory(any(), any(), any(), any())).thenReturn(List.of());
+        when(budgetRepository.countBudgetsByCategory(1L)).thenReturn(List.of());
+        when(budgetRepository.findMonthBudgets(anyLong(), anyInt(), anyInt())).thenReturn(List.of());
+
+        CategorySummaryListResponse summary = service.getSummary(EMAIL, null, null);
+
+        assertThat(summary.month()).isEqualTo(summary.serverCurrentMonth()).isEqualTo(10);
+        assertThat(summary.year()).isEqualTo(summary.serverCurrentYear()).isEqualTo(2026);
     }
 
     @Test

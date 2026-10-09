@@ -74,9 +74,11 @@ public class CategorySummaryService {
      */
     @Transactional(readOnly = true)
     public CategorySummaryListResponse getSummary(String authenticatedEmail, Integer month, Integer year) {
+        // One clock reading serves both the default month and the server month, so a request
+        // that runs across midnight at a month end never reports two different months.
         ReportingPeriod current = reportingPeriodProvider.currentMonth();
         validatePeriod(month, year, current);
-        ReportingPeriod period = reportingPeriodProvider.forMonth(month, year);
+        ReportingPeriod period = month == null ? current : ReportingPeriod.of(year, month); // Both or neither.
 
         User user = userRepository.findByEmail(authenticatedEmail).orElseThrow();
         Long userId = user.getId();

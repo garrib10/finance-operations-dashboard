@@ -29,15 +29,4 @@ public class ReportingPeriodProvider {
     public ReportingPeriod currentMonth() {
         return ReportingPeriod.monthOf(LocalDate.now(clock));
     }
-
-    /**
-     * The current month when both values are absent, otherwise the requested month. Callers
-     * validate the values first (the allowed range differs between features).
-     */
-    public ReportingPeriod forMonth(Integer month, Integer year) {
-        if (month == null && year == null) {
-            return currentMonth();
-        }
-        return ReportingPeriod.of(year, month);
-    }
 }
