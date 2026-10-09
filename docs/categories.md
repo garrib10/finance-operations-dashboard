@@ -244,7 +244,8 @@ The page offers:
   to the history table. A category with no transactions shows "Add transaction" instead,
   which opens `/transactions?addCategory={id}` with the new-transaction form focused and the
   category chosen (an invalid `addCategory` is removed silently). Categories that take
-  budgets also get "Set budget" or "Edit budget" (`/budgets?category={id}`); for a category
+  budgets also get "Set budget" or "Edit budget" (`/budgets?category={id}&month={m}&year={yyyy}`,
+  for the month being shown); for a category
   spending without a budget, Set budget is inside the warning instead. Categories that
   do not take budgets get no budget action, even if a budget exists.
 - **After a change:** the shared category list (used by every dropdown) updates first,
@@ -323,12 +324,12 @@ lives on the page only (no URL parameters) and is applied in this order:
    - Built-in: `builtIn` is true.
    - Unused: no transactions and no budgets ever (`transactionCount` and `budgetCount`
      both 0). Built-ins can be unused, though they still cannot be deleted.
-   - No budget this month: `currentMonthBudget` is null, whether or not the category takes
-     budgets.
+   - No budget in {Month} (the month shown): `currentMonthBudget` is null, whether or not
+     the category takes budgets.
 3. **Sort** ("Sort categories"), always ending on name (locale-aware, ignoring case) and
    then ID, so the order never shuffles:
    - Name: name, then ID (the default).
-   - This month's spending: highest first, then name, then ID.
+   - Spending in {Month} (the month shown): highest first, then name, then ID.
    - Most used: most transactions (all time), then this month's spending, then name, then ID.
 
 "Showing {n} of {total} categories" is a polite status region. "Clear category filters"
@@ -344,6 +345,64 @@ return to it. A newly created category is likewise shown (and focused) until the
 toolbar change. After a delete, focus moves to the next card in the current filtered and
 sorted order. After any change the refreshed data is searched, filtered, and sorted again.
 
+**Earlier months** (issue #103). The Month and Year selects under the page heading (a
+"Reporting month" group, not a form) choose which month every monthly figure describes:
+the summary strip, spending table, cards, warnings, and Active/Other membership.
+
+- **The URL is the source of truth:** `/categories?month=8&year=2026` shows August 2026;
+  no parameters means the server's current month. The current month is always taken from
+  the server (`serverCurrentMonth`/`serverCurrentYear`), never the browser clock, so the
+  first request is always the plain one and an earlier month is requested once that is
+  known. Nothing invalid is ever sent.
+- **Accepted:** exactly one `month` and one `year`, written as plain whole numbers (no
+  signs, decimals, spaces, or leading zeros), from January 2000 up to the current month.
+  Anything else (only one of the two, empty, text, out of range, a future month, or a
+  parameter given twice even with the same value) is removed with a history replacement,
+  keeping other parameters, and the current month is shown. An explicit current month is
+  also replaced by the plain URL.
+- **Choosing:** years 2000 to the current year; months only up to the current month in
+  the current year, and choosing the current year moves a later month back to the current
+  one. Each choice adds a history entry, so Back and Forward step through the months
+  viewed, and a refresh keeps the month. "Back to current month" (shown only for an
+  earlier month) removes the parameters and keeps focus on the Month select.
+- **Loading:** the heading and selects stay; the figures and cards are replaced by
+  "Loading {Month Year}…" until that month arrives, so one month's figures are never
+  shown under another's label. Only the newest request counts: a newer choice aborts the
+  older request, and late answers, failures, and aborts are ignored. When it arrives, a
+  single status says "Showing {Month Year}". A failure shows the usual error with "Try
+  again" for the same month; the selects (still bounded by the server month already
+  known) and "Back to current month" stay, so another month also recovers. A request
+  replaced by a newer choice is cancelled quietly, never shown as an error, and a refresh
+  after a change can never overwrite a month chosen since.
+- **Changes** (create, edit, delete) refresh the month being viewed, not the current one.
+- **Open forms:** while a create or edit form or a delete confirmation is open, the selects
+  and Back button are disabled, with the visible reason "Finish or cancel the open form or
+  confirmation to change the month." (Browser Back and Forward still work; an edit keeps
+  its typed values and the create form stays open across the change.)
+- **Wording for an earlier month:** nothing says "this month". The subtitle reads "How each
+  category was used in {Month Year}" (also while that month loads or fails), sections read
+  "Active in {Month Year}", "Nothing had spending or a budget in {Month Year}.", and "Every
+  category had spending or a budget in {Month Year}.", and the strip reads "Top in {Month
+  Year}", "of {n} budgets in {Month Year}", and "No spending in {Month Year}". The spending
+  table says "Categories with no spending in {Month Year} are not listed." The current month
+  keeps its usual wording ("is used in", "this month", "No spending yet"). Cards name just
+  the month ("Spent in September", "2 transactions in September", "No budget for
+  September"), since the page names the year; the filter and sort options name it too ("No
+  budget in {Month}", "Spending in {Month}").
+- **Every figure comes from the month shown:** transaction counts (income and expenses),
+  spending (expenses only), the budget with its remaining amount, percentage, and status,
+  the No budget count and warnings, Active/Other membership, the strip, and the spending
+  table. The rules are the same for every month; delete eligibility stays all-time.
+- **Budget links keep the month:** Set budget and Edit budget open
+  `/budgets?category={id}&month={m}&year={yyyy}` for the month the cards describe (the
+  response's month, never the browser clock or a month still loading), so Budgets edits that
+  month's budget or starts one for that month. The current month is written out too, so
+  Budgets never relies on the browser clock. Their accessible names include the month ("Set
+  budget for Groceries for September 2025"). Browser Back from Budgets returns to the same
+  Categories month.
+- Switching months and following links never change the saved Active or Other
+  categories preferences.
+
 **Active and other categories** (issue #102). While browsing (no search, filter "All
 categories"), the cards are split into two sections, and **each category appears exactly
 once**:
@@ -353,6 +412,12 @@ once**:
   transactions, earlier budgets, and `budgetEnabled` never make a category active; built-in
   and custom categories follow the same rule. With none, it says "Nothing has spending or a
   budget in {Month} yet."
+  **Open by default**, with its own "Hide active categories" / "Show active categories"
+  button (`aria-expanded`, `aria-controls`) like Other categories, saved per device in
+  `fintrack:categories-active-expanded` (only a saved `"false"` closes it; anything else,
+  or unreadable storage, means open). It stays open, with the button hidden, while one of
+  its cards has a form or confirmation open, and opens for a card that focus is moving to;
+  neither is saved. With nothing active there is no button, only the message.
 - **Other categories · {n}:** everything else, with `n` counting only these. It is **closed
   by default**; "Show other categories" / "Hide other categories" (`aria-expanded`,
   `aria-controls`) opens and closes it, and closed cards are not rendered, so nothing hidden
@@ -360,11 +425,14 @@ once**:
 - **Saved choice:** only pressing that button saves it, per device, in `localStorage` key
   `fintrack:categories-others-expanded` (`"true"` or `"false"`; anything else, or unreadable
   storage, means closed).
-- **Opened automatically, never saved:** when nothing is active; while the create form is
-  open; while an Other card is being edited or has its delete confirmation open; and to show
-  a card that focus is about to land on (a new category, a saved or cancelled one, one that
-  moved into Other after a refresh, or the next card after a delete). The button is hidden
-  while one of the first three applies; pressing Show/Hide ends the last one.
+- **Opened automatically, never saved:** while the create form is open; while an Other card
+  is being edited or has its delete confirmation open (the button is hidden for these two);
+  to show a card that focus is about to land on (a new category, a saved or cancelled one,
+  one that moved into Other after a refresh, or the next card after a delete; pressing
+  Show/Hide ends this); and when nothing is active in the month shown, where it **starts
+  open by default but keeps its Show/Hide button**, as on every other month. Hiding it
+  then saves the choice like any Hide and keeps that month closed; another month with
+  nothing active starts open again.
 - **Sorting** applies inside each section and keeps the sections.
 - **Searching or filtering** shows the single flat results list instead (every match visible
   whatever the saved choice); clearing them returns to the sections and the saved choice.
@@ -386,7 +454,17 @@ user's ID behaves exactly like a missing one.
 - **Budgets:** if the displayed month has a budget for the category, it opens in the
   existing edit form; otherwise, for a category that takes budgets, the create form opens
   with the category preselected for the displayed month (nothing is saved automatically).
-  A category that does not take budgets is ignored.
+  A category that does not take budgets is ignored. Focus moves to the form heading ("Edit
+  Budget" or "Create Budget") once the budgets have loaded; an ignored link moves no focus.
+- **Budgets month (issue #103):** `?month={m}&year={yyyy}` (checked by the same parser as
+  Categories: one of each, plain whole numbers, month 1–12, year 2000 or later) opens that
+  month in the Budget Period selects, and the category link then uses that month's budget
+  (never another month's). The link stays in the URL, so a refresh or a copied URL opens the
+  same form, and Back/Forward between links follow the month. An invalid month is removed
+  with a history replacement and the category applies to today's month; an unknown or
+  another user's category is removed and the valid month kept. Once the user shows another
+  month (or a save moves there), the month and category are removed together, so the URL
+  never describes a different month. A plain `/budgets` visit is unchanged.
 
 **Accessibility.** One `h1` ("Categories"), then `h2` sections (spending, All categories,
 Active this month, Other categories) and an `h3` per card. Card actions are a disclosure
@@ -436,5 +514,5 @@ Layout, zoom, and screen-reader announcements are verified manually (see
 
 ## Not implemented yet
 
-- Viewing the Categories page for an earlier month (the page always shows the server's
-  current reporting month).
+- Budget shortcuts that open the month being viewed on the Budgets page (issue #103, a
+  later phase).

@@ -2,7 +2,11 @@ package dev.portfolio.finance.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Month;
+import java.time.format.TextStyle;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -14,6 +18,7 @@ import dev.portfolio.finance.dto.category.CurrentMonthBudgetResponse;
 import dev.portfolio.finance.entity.Category;
 import dev.portfolio.finance.entity.TransactionType;
 import dev.portfolio.finance.entity.User;
+import dev.portfolio.finance.exception.category.CategoryValidationException;
 import dev.portfolio.finance.repository.BudgetRepository;
 import dev.portfolio.finance.repository.CategoryRepository;
 import dev.portfolio.finance.repository.TransactionRepository;
@@ -23,7 +28,8 @@ import dev.portfolio.finance.repository.projection.CategoryTransactionUsageProje
 import dev.portfolio.finance.repository.projection.CurrentMonthBudgetProjection;
 
 /**
- * Category usage for the Categories page. Five statements per request regardless of how
+ * Category usage for the Categories page, for the server's current month or a requested
+ * earlier one. Five statements per request regardless of how
  * many categories exist: the user, the categories, one grouped transaction aggregate, one
  * grouped budget count, and the reporting month's budgets. Transactions and budgets are
  * aggregated separately, never joined together, so no count or sum is multiplied.
@@ -32,6 +38,8 @@ import dev.portfolio.finance.repository.projection.CurrentMonthBudgetProjection;
 public class CategorySummaryService {
 
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2);
+    private static final int EARLIEST_YEAR = 2000;
+    private static final String PAIRED_MESSAGE = "Month and year must be given together";
 
     private final UserRepository userRepository;
     private final CategoryRepository categoryRepository;
@@ -53,11 +61,27 @@ public class CategorySummaryService {
         this.reportingPeriodProvider = reportingPeriodProvider;
     }
 
+    /** The server's current reporting month. */
     @Transactional(readOnly = true)
     public CategorySummaryListResponse getSummary(String authenticatedEmail) {
+        return getSummary(authenticatedEmail, null, null);
+    }
+
+    /**
+     * The requested month, or the server's current month when both values are absent. The
+     * period is validated before any query, so a rejected request touches no data; the
+     * request never names a user, so ownership always comes from the authenticated email.
+     */
+    @Transactional(readOnly = true)
+    public CategorySummaryListResponse getSummary(String authenticatedEmail, Integer month, Integer year) {
+        // One clock reading serves both the default month and the server month, so a request
+        // that runs across midnight at a month end never reports two different months.
+        ReportingPeriod current = reportingPeriodProvider.currentMonth();
+        validatePeriod(month, year, current);
+        ReportingPeriod period = month == null ? current : ReportingPeriod.of(year, month); // Both or neither.
+
         User user = userRepository.findByEmail(authenticatedEmail).orElseThrow();
         Long userId = user.getId();
-        ReportingPeriod period = reportingPeriodProvider.currentMonth();
 
         List<Category> categories = categoryRepository.findAllByUserIdOrderByNameAscIdAsc(userId);
 
@@ -82,7 +106,40 @@ public class CategorySummaryService {
                         monthBudgets.get(category.getId())))
                 .toList();
 
-        return new CategorySummaryListResponse(period.month(), period.year(), rows);
+        return new CategorySummaryListResponse(period.month(), period.year(), current.month(), current.year(), rows);
+    }
+
+    /**
+     * Both or neither; month 1–12; year from 2000 (the earliest budgets accept) to the
+     * current year; never a month after the current one, so this stays a history view.
+     */
+    private static void validatePeriod(Integer month, Integer year, ReportingPeriod current) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        if (month == null && year == null) {
+            return;
+        }
+        if (month == null) {
+            errors.put("month", PAIRED_MESSAGE);
+        } else if (month < 1 || month > 12) {
+            errors.put("month", "Month must be between 1 and 12");
+        }
+        if (year == null) {
+            errors.put("year", PAIRED_MESSAGE);
+        } else if (year < EARLIEST_YEAR) {
+            errors.put("year", "Year must be " + EARLIEST_YEAR + " or later");
+        } else if (year > current.year()) {
+            errors.put("year", "Year must be " + current.year() + " or earlier");
+        }
+        if (errors.isEmpty() && year == current.year() && month > current.month()) {
+            errors.put("month", "Choose " + monthLabel(current) + " or an earlier month");
+        }
+        if (!errors.isEmpty()) {
+            throw new CategoryValidationException(errors);
+        }
+    }
+
+    private static String monthLabel(ReportingPeriod period) {
+        return Month.of(period.month()).getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + period.year();
     }
 
     private static CategorySummaryResponse toRow(

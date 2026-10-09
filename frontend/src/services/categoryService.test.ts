@@ -31,12 +31,26 @@ describe("categoryService", () => {
     expect(mockApiRequest).toHaveBeenCalledWith("/api/categories");
   });
 
-  it("loads the category usage summary", async () => {
-    const summary = { month: 10, year: 2026, categories: [] };
+  it("loads the category usage summary for the current month without period parameters", async () => {
+    const summary = { month: 10, year: 2026, serverCurrentMonth: 10, serverCurrentYear: 2026, categories: [] };
     mockApiRequest.mockResolvedValue(summary);
 
     await expect(getCategorySummary()).resolves.toEqual(summary);
     expect(mockApiRequest).toHaveBeenCalledWith("/api/categories/summary");
+    await getCategorySummary(null);
+    expect(mockApiRequest).toHaveBeenLastCalledWith("/api/categories/summary");
+  });
+
+  it("sends both period parameters for an earlier month, with the abort signal", async () => {
+    mockApiRequest.mockResolvedValue({});
+    const controller = new AbortController();
+
+    await getCategorySummary({ month: 8, year: 2026 }, controller.signal);
+    expect(mockApiRequest).toHaveBeenCalledWith("/api/categories/summary?month=8&year=2026",
+      { signal: controller.signal });
+
+    await getCategorySummary({ month: 1, year: 2000 });
+    expect(mockApiRequest).toHaveBeenLastCalledWith("/api/categories/summary?month=1&year=2000");
   });
 
   it("returns built-in status and icon keys unchanged", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { groceries, petCare, sampleCategories } from "../test/categoryFixtures";
-import { categoryLinkKey, resolveCategoryLink } from "./categoryDeepLink";
+import { budgetShortcutPath, categoryLinkKey, resolveCategoryLink } from "./categoryDeepLink";
 
 describe("resolveCategoryLink", () => {
   it("has no link without the parameter", () => {
@@ -27,5 +27,19 @@ describe("resolveCategoryLink", () => {
   it("gives effects a key that changes only with the link's meaning", () => {
     expect(categoryLinkKey({ kind: "valid", id: "40", category: petCare })).toBe("valid:40");
     expect(categoryLinkKey({ kind: "invalid" })).toBe("invalid");
+  });
+});
+
+describe("budgetShortcutPath", () => {
+  it("names the category and the month once each, with no empty values", () => {
+    const path = budgetShortcutPath(12, { month: 9, year: 2026 });
+    const params = new URL(path, "http://localhost").searchParams;
+
+    expect(path).toBe("/budgets?category=12&month=9&year=2026");
+    expect([...params.keys()]).toEqual(["category", "month", "year"]);
+  });
+
+  it("writes the current month out like any other month", () => {
+    expect(budgetShortcutPath(3, { month: 10, year: 2026 })).toBe("/budgets?category=3&month=10&year=2026");
   });
 });

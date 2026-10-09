@@ -27,6 +27,7 @@ import dev.portfolio.finance.exception.category.CategoryInUseException;
 import dev.portfolio.finance.exception.category.CategoryNotFoundException;
 import dev.portfolio.finance.exception.category.DuplicateCategoryException;
 import dev.portfolio.finance.exception.category.InvalidCategoryNameException;
+import dev.portfolio.finance.exception.category.CategoryValidationException;
 import dev.portfolio.finance.service.CategoryService;
 import dev.portfolio.finance.service.CategorySummaryService;
 import dev.portfolio.finance.dto.category.CategorySummaryListResponse;
@@ -585,7 +586,7 @@ void shouldUpdateCategoryWhenRequestIsValid()
 void shouldReturnTheCategorySummaryForTheAuthenticatedUser()
         throws Exception {
 
-    when(categorySummaryService.getSummary(TEST_EMAIL)).thenReturn(new CategorySummaryListResponse(10, 2026, List.of(
+    when(categorySummaryService.getSummary(TEST_EMAIL, null, null)).thenReturn(new CategorySummaryListResponse(10, 2026, 10, 2026, List.of(
             new CategorySummaryResponse(7L, "Pet Care", "paw-print", false, true, 3, 2, 1,
                     LocalDate.of(2026, 10, 2), new BigDecimal("60.00"), new BigDecimal("140.00"),
                     new CurrentMonthBudgetResponse(4L, new BigDecimal("100.00"), new BigDecimal("60.00"),
@@ -598,6 +599,8 @@ void shouldReturnTheCategorySummaryForTheAuthenticatedUser()
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.month").value(10))
             .andExpect(jsonPath("$.year").value(2026))
+            .andExpect(jsonPath("$.serverCurrentMonth").value(10))
+            .andExpect(jsonPath("$.serverCurrentYear").value(2026))
             .andExpect(jsonPath("$.categories[0].id").value(7))
             .andExpect(jsonPath("$.categories[0].iconKey").value("paw-print"))
             .andExpect(jsonPath("$.categories[0].budgetEnabled").value(true))
@@ -615,7 +618,55 @@ void shouldReturnTheCategorySummaryForTheAuthenticatedUser()
             .andExpect(jsonPath("$.categories[1].currentMonthBudget").isEmpty())
             .andExpect(jsonPath("$.categories[1].canDelete").value(true));
 
-    verify(categorySummaryService).getSummary(TEST_EMAIL);
+    verify(categorySummaryService).getSummary(TEST_EMAIL, null, null);
     verify(categoryService, never()).getCategoryById(any(), any());
+}
+
+@Test
+void shouldPassARequestedMonthToTheSummaryAndReportBothMonths() throws Exception {
+    when(categorySummaryService.getSummary(TEST_EMAIL, 8, 2026))
+            .thenReturn(new CategorySummaryListResponse(8, 2026, 10, 2026, List.of()));
+
+    mockMvc.perform(get("/api/categories/summary").param("month", "8").param("year", "2026")
+                    .principal(authentication))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.month").value(8))
+            .andExpect(jsonPath("$.year").value(2026))
+            .andExpect(jsonPath("$.serverCurrentMonth").value(10))
+            .andExpect(jsonPath("$.serverCurrentYear").value(2026))
+            .andExpect(jsonPath("$.categories").isEmpty());
+
+    verify(categorySummaryService).getSummary(TEST_EMAIL, 8, 2026);
+}
+
+@Test
+void shouldReportAnInvalidPeriodAsFieldValidation() throws Exception {
+    when(categorySummaryService.getSummary(TEST_EMAIL, 8, null)).thenThrow(new CategoryValidationException(
+            java.util.Map.of("year", "Month and year must be given together")));
+
+    mockMvc.perform(get("/api/categories/summary").param("month", "8").principal(authentication))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.error").value("Validation Failed"))
+            .andExpect(jsonPath("$.fields.year").value("Month and year must be given together"))
+            .andExpect(jsonPath("$.fields.month").doesNotExist());
+}
+
+@Test
+void shouldNameTheMalformedSummaryParameter() throws Exception {
+    mockMvc.perform(get("/api/categories/summary").param("month", "abc").param("year", "2026")
+                    .principal(authentication))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("Validation Failed"))
+            .andExpect(jsonPath("$.fields.month").value("Month must be a whole number between 1 and 12"))
+            .andExpect(jsonPath("$.fields.id").doesNotExist());
+
+    mockMvc.perform(get("/api/categories/summary").param("month", "8").param("year", "abcd")
+                    .principal(authentication))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fields.year").value("Year must be a whole number"))
+            .andExpect(jsonPath("$.fields.id").doesNotExist());
+
+    org.mockito.Mockito.verifyNoInteractions(categorySummaryService);
 }
 }

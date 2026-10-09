@@ -53,6 +53,39 @@ class CategorySummaryQueryCountTest {
         assertThat(largeCount).isLessThanOrEqualTo(PLANNED_STATEMENTS);
     }
 
+    @Test
+    void usesTheSameStatementCountForAnEarlierMonth() {
+        String small = seed("small-history@example.com", 2);
+        String large = seed("large-history@example.com", 12);
+        LocalDate lastMonth = LocalDate.now().minusMonths(1);
+
+        long smallCount = statementsForMonth(small, 2, lastMonth);
+        long largeCount = statementsForMonth(large, 12, lastMonth);
+
+        assertThat(largeCount).isEqualTo(smallCount);
+        assertThat(largeCount).isLessThanOrEqualTo(PLANNED_STATEMENTS);
+        // Naming a month costs nothing extra: the same statements as the default request.
+        assertThat(largeCount).isEqualTo(statementsFor(large, 12));
+    }
+
+    /** Last month for every seeded category: its 40.00 budget, and no transactions. */
+    private long statementsForMonth(String email, int expectedRows, LocalDate month) {
+        entityManager.flush();
+        entityManager.clear();
+        Statistics statistics = entityManager.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        statistics.clear();
+
+        assertThat(summaryService.getSummary(email, month.getMonthValue(), month.getYear()).categories())
+                .hasSize(expectedRows)
+                .allSatisfy(row -> {
+                    assertThat(row.currentMonthBudget().monthlyLimit()).isEqualByComparingTo("40.00");
+                    assertThat(row.currentMonthTransactionCount()).isZero();
+                    assertThat(row.transactionCount()).isEqualTo(2); // All time is unchanged.
+                });
+
+        return statistics.getPrepareStatementCount();
+    }
+
     /** Seeds categories that each have transactions and current and past budgets. */
     private String seed(String email, int categories) {
         User user = userRepository.save(TestDataFactory.createUser("Query", "Count", email));

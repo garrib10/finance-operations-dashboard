@@ -323,10 +323,13 @@ table) was fixed during Phase 3 by using `minmax(0, …)` columns.
 
 ### Issue #95 checks still outstanding
 
-- [ ] 320px, 768px, 1024px, 1280px, and 1440px widths, and the drawer at 200% zoom
+- [x] 320px, 768px, 1024px, 1280px, and 1440px widths, and the drawer at 200% zoom
+      (scripted Chromium pass, October 9, 2026; see Issue #103 manual checks)
 - [ ] Screen reader pass (VoiceOver): link names, toggle and menu-button state, dialog
-      name, current page, no duplicate tooltip announcements
-- [ ] Reduced motion: drawer appears without sliding
+      name, current page, no duplicate tooltip announcements (the accessibility tree was
+      checked on October 9, 2026: single link names, `aria-current="page"`, expanded
+      states, modal `dialog` "Navigation menu"; spoken output still unchecked)
+- [x] Reduced motion: drawer appears without sliding (October 9, 2026)
 - [ ] A long display name: truncated with an ellipsis in the top bar, shown in full in the
       open account menu (CSS added in Phase 4)
 - [ ] Budgets charts redraw once after collapsing or expanding the sidebar
@@ -368,12 +371,16 @@ Performed by the maintainer in Chrome against the local backend (not staging):
 
 ### Issue #100 checks still outstanding
 
-- [ ] 768px, 1024px, and 1440px widths, and 200% zoom
-- [ ] Keyboard-only pass of the toolbar, cards, forms, confirmation, and notices
+- [x] 768px, 1024px, and 1440px widths, and 200% zoom (October 9, 2026)
+- [ ] Keyboard-only pass of the toolbar, cards, forms, confirmation, and notices (toolbar,
+      card links, section toggles, and "More actions" with Esc checked on October 9, 2026;
+      the edit form, delete confirmation, and notices still need a pass)
 - [ ] Screen reader pass (VoiceOver): result-count updates, error versus warning
       announcements, spending-table headers
-- [ ] Reduced motion: the success banner appears without sliding
-- [ ] The in-use race: a transaction added in another tab before confirming a delete
+- [x] Reduced motion: the success banner appears without sliding (October 9, 2026)
+- [x] The in-use race: a transaction added in another tab before confirming a delete
+      (October 9, 2026: refused with "… is still used by transactions or budgets …", card
+      kept, focus on "More actions"; the test category and transaction were removed)
 - [ ] The restyled page-level errors and refresh warnings on Transactions, Budgets, and
       the Dashboard (changed in Phase 6, covered by tests only)
 
@@ -416,3 +423,92 @@ Performed by the maintainer in Chrome against the local backend (not staging):
       Other categories is closed (opens, focuses the new card, choice not saved)
 - [ ] The README screenshots (`categories.png`, `categories-manage.png`,
       `categories-mobile.png`), deferred to the final v1.3.0 release updates
+
+## Issue #103 (v1.3.0) Categories page for earlier months
+
+Behaviour is documented in [categories.md](categories.md#categories-page-issue-100) and the
+API parameters in [categories-api.md](categories-api.md#get-apicategoriessummary).
+
+### Automated coverage (Phase 2, frontend)
+
+| Area | Tests |
+| --- | --- |
+| URL parsing: plain whole numbers only, partial, empty, text, decimals, signs, leading zeros, ranges, year 2000, repeated and conflicting parameters; available periods, years, months, clamping; other parameters kept | `reportingPeriod.test.ts` |
+| Requests: no parameters by default, both together for an earlier month, abort signal | `categoryService.test.ts` |
+| Start-up via the default request, current and future months never requested, newer months win over late answers, failures, and aborts, loading not ended by an older request, reload of the chosen month, abort on unmount | `useCategorySummary.test.ts` |
+| Selects: labels, options, clamping a future month, Back only for an earlier month, plain buttons, disabled with a reason | `CategoryPeriodControls.test.tsx` |
+| Page: current and earlier months from the URL, URL cleanup by replacement, history entries with Back and Forward, Back to current month with focus, loading without stale figures, failure and retry, refresh after a change uses the chosen month, locked controls during a workflow, preference untouched, past-tense wording | `CategoriesPage.test.tsx` |
+
+### Automated coverage (Phase 3, wording and budget links)
+
+| Area | Tests |
+| --- | --- |
+| Historical wording: subtitle (shown, loading), strip, spending-table intro, cards (singular and plural), warning, filter and sort options, no "this month" anywhere; present tense kept for the current month | `CategoriesPage.test.tsx`, `CategorySpendingTable.test.tsx` |
+| Budget links: month, year, and category ID in every Set/Edit link (current month included), one of each parameter with no empty values, names with "for {Month Year}", the warning's link not duplicated, none for categories without budgets, search results and a month switch, no links while a month loads, Back from Budgets returns to the same month without touching preferences | `CategoriesPage.test.tsx`, `categoryDeepLink.test.ts` |
+| Budgets month link: linked month selected, that month's budget edited (not this month's), Create with the month preselected, focus on the form heading, out-of-range year offered, refresh, Back/Forward between months, invalid/partial/repeated months dropped with the category applied to today, unknown category dropped with the month kept and no focus moved, month-only link, using the link up after choosing another month, plain `/budgets` unchanged | `BudgetPage.categories.test.tsx` |
+
+### Automated coverage (Phase 4, hardening)
+
+| Area | Tests |
+| --- | --- |
+| More URL rejections: trailing space, tab, plus sign, repeated identical year; page clean-up of a later year, year only, empty month, padded and signed values, scientific notation, identical repeats (all replaced, nothing invalid sent, Back skips them); parameters in any order with others kept | `reportingPeriod.test.ts`, `CategoriesPage.test.tsx` |
+| Races: two quick month choices answering out of order (only the last shown, no error for the cancelled one); a refresh after a change superseded by a newer month | `CategoriesPage.test.tsx`, `useCategorySummary.test.ts` |
+| Recovery: a failed month keeps the server-bounded selects and Back to current month, which recovers | `CategoriesPage.test.tsx` |
+| Workflows in an earlier month: create and delete refresh that month, the new card appears once and takes focus, focus after a delete lands on a remaining card | `CategoriesPage.test.tsx` |
+| Semantics in an earlier month: one `h1`, `h2` order, no `menu` role, one "Showing" status, static warnings; Tab order of the month controls | `CategoriesPage.test.tsx`, `CategoryPeriodControls.test.tsx` |
+| Budgets month link: one `h1`, focus moved once and not taken back while typing, nothing saved without a submit | `BudgetPage.categories.test.tsx` |
+
+Backend (Phase 4): first and last days of January, December (into January), and February
+in common and leap years, with income counted but never spent and all-time values
+unchanged (`CategorySummaryQueryTest`); month 0, a later year, the current month written
+out (identical to the default), and January 2000 over HTTP
+(`CategorySummaryIntegrationTest`); an earlier month uses exactly the default request's
+statement count (`CategorySummaryQueryCountTest`).
+
+Backend (Phase 5): a default request whose clock passes midnight at a month end between
+readings still reports one month for `month` and `serverCurrentMonth` (fails on the old
+two-reading code with "expected: 10 but was: 11"; `CategorySummaryServiceTest`).
+
+### Issue #103 manual checks
+
+These need a real browser (jsdom has no layout, native select keyboard handling, or
+screen reader). On October 9, 2026 a scripted Chromium pass (Playwright, run outside the
+repository against the local app and the local demo account) checked layout, keyboard
+order, the accessibility tree, reduced motion, and the delete race; VoiceOver itself
+still needs a person.
+
+- [x] 320, 375, 768, 1024, 1280, and 1440 px and 200% zoom (720 CSS px at 2×) on
+  Categories in September 2026: no page-level horizontal scroll and no element outside
+  the viewport; sidebar expanded and collapsed at 1280 and 1440; "More actions" panels
+  inside the viewport at 320–1440 px with Esc returning focus. Found and fixed: at 320 px a
+  long category name was squeezed beside the icon and "More actions" and broke mid-word;
+  a card under 12rem wide now puts the name on its own row (container query; 375 px and
+  wider unchanged)
+- [x] The same widths on a Budgets month link (`?category=25&month=9&year=2026`): no
+  horizontal scroll, focus on "Edit Budget"
+- [x] Tab order: Month → Year → Back to current month → Create category → search, filter,
+  sort → section toggle → card links → Other toggle; Enter on Back to current month leaves
+  focus on Month; Enter on a section toggle flips `aria-expanded` and keeps focus
+- [x] Month and Year selects by keyboard (October 9, 2026, by hand): Space or ↓ opens the
+  native menu, arrows and Return choose, the month loads, and focus stays on the select;
+  Return on Back to current month returns to the current month with focus on Month
+- [x] Accessibility tree: one `h1`, `h2` order as documented, budget link names "Edit
+  budget for {name} for September 2026", status texts "Showing September 2026" and
+  "Showing n of 13 categories", toggles' `aria-controls` targets exist, no `menu` roles,
+  no live regions in cards, no exposed icons, spending-table column and row headers,
+  sidebar names without duplicated tooltip text, drawer a modal `dialog` "Navigation menu"
+- [x] VoiceOver in Safari (October 9, 2026, by hand): "Showing August 2026" and "Showing
+  September 2026" each spoken once after switching months; "Back to current month,
+  button", "Create category, button", and the create form's "Category name, edit text"
+  read as expected. Budget link names, the "Edit Budget" focus target, and toggle states
+  were confirmed in the accessibility tree by the scripted pass, not by ear. (Return in the
+  create form's name field submits it, as it should; a category created by accident
+  during the check was deleted.)
+- [x] `prefers-reduced-motion`: the success banner and the mobile drawer have no animation
+
+### Issue #103 checks still outstanding
+
+- [x] Browser check of the selects, Back and Forward, and Back to current month
+- [x] Browser check of Set/Edit budget from an earlier month, Back to Categories, and the Budgets form at 375 px
+- [x] 375 px and 200% zoom with the selects (scripted pass above)
+- [x] VoiceOver pass of the month status (October 9, 2026)

@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import dev.portfolio.finance.dto.category.CategorySummaryListResponse;
 import dev.portfolio.finance.dto.category.CategorySummaryResponse;
 import dev.portfolio.finance.entity.BudgetStatus;
 import dev.portfolio.finance.entity.Category;
@@ -62,6 +63,38 @@ class CategorySummaryMySqlIT extends MySqlIntegrationTestBase {
         assertThat(unusedRow.currentMonthSpent()).isEqualTo(new BigDecimal("0.00"));
         assertThat(unusedRow.allTimeSpent()).isEqualTo(new BigDecimal("0.00"));
         assertThat(unusedRow.canDelete()).isTrue();
+    }
+
+    @Test
+    void describesAnEarlierMonthWithExactBoundariesOnMySql() {
+        String email = "summary-history-" + UUID.randomUUID() + "@example.com";
+        User user = userRepository.save(TestDataFactory.createUser("Summary", "History", email));
+        Category pets = categoryRepository.save(Category.custom(user, "Pet Care", true));
+        LocalDate start = LocalDate.now().withDayOfMonth(1).minusMonths(2);
+        LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
+
+        save(user, pets, TransactionType.EXPENSE, "0.10", start);              // first day: in
+        save(user, pets, TransactionType.EXPENSE, "0.25", end);                // last day: in
+        save(user, pets, TransactionType.INCOME, "7.00", end);                 // counted, never spending
+        save(user, pets, TransactionType.EXPENSE, "3.00", start.minusDays(1)); // the month before: out
+        save(user, pets, TransactionType.EXPENSE, "4.00", end.plusDays(1));    // the month after: out
+        budgetRepository.save(TestDataFactory.createBudget(user, pets, new BigDecimal("0.70"),
+                start.getMonthValue(), start.getYear()));
+
+        CategorySummaryListResponse summary = summaryService.getSummary(email, start.getMonthValue(), start.getYear());
+        CategorySummaryResponse petRow = summary.categories().stream()
+                .filter(row -> row.id().equals(pets.getId())).findFirst().orElseThrow();
+
+        assertThat(summary.month()).isEqualTo(start.getMonthValue());
+        assertThat(summary.year()).isEqualTo(start.getYear());
+        assertThat(petRow.currentMonthTransactionCount()).isEqualTo(3);
+        assertThat(petRow.currentMonthSpent()).isEqualTo(new BigDecimal("0.35"));
+        assertThat(petRow.currentMonthBudget().monthlyLimit()).isEqualTo(new BigDecimal("0.70"));
+        assertThat(petRow.currentMonthBudget().amountRemaining()).isEqualTo(new BigDecimal("0.35"));
+        assertThat(petRow.currentMonthBudget().percentageUsed()).isEqualTo(new BigDecimal("50.00"));
+        assertThat(petRow.currentMonthBudget().status()).isEqualTo(BudgetStatus.CAUTION);
+        assertThat(petRow.transactionCount()).isEqualTo(5);
+        assertThat(petRow.allTimeSpent()).isEqualTo(new BigDecimal("7.35"));
     }
 
     private void save(User user, Category category, TransactionType type, String amount, LocalDate date) {

@@ -78,9 +78,15 @@ export interface CategorySummary {
 }
 
 export interface CategorySummaryList {
-  /** The server's reporting month (1–12) and year. */
+  /**
+   * The month the figures describe (1–12) and its year: the requested month, or the
+   * server's current month by default. Every `currentMonth*` row field refers to it.
+   */
   month: number;
   year: number;
+  /** The server's own current reporting month, whatever was requested. */
+  serverCurrentMonth: number;
+  serverCurrentYear: number;
   /** Ordered by name, then ID. */
   categories: CategorySummary[];
 }

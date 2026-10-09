@@ -4,10 +4,11 @@ import { Link } from "react-router-dom";
 import type { DateFormatPreference } from "../types/account";
 import type { CategorySummary } from "../types/category";
 import { clampProgressPercentage, formatBudgetStatus } from "../utils/budgetStatus";
-import { formatShare, needsCurrentMonthBudget, spendingShare } from "../utils/categorySummary";
-import { ADD_TRANSACTION_PARAM, CATEGORY_PARAM } from "../utils/categoryDeepLink";
+import { formatReportingMonth, formatShare, needsCurrentMonthBudget, spendingShare } from "../utils/categorySummary";
+import { ADD_TRANSACTION_PARAM, CATEGORY_PARAM, budgetShortcutPath } from "../utils/categoryDeepLink";
 import { categoryCardIds, deleteBlockedReason, monthActivity } from "../utils/categoryUsage";
 import { formatCurrency, formatDate } from "../utils/formatters";
+import { monthName as nameOfMonth, type ReportingPeriod } from "../utils/reportingPeriod";
 import { CategoryActionsMenu } from "./CategoryActionsMenu";
 import { CategoryIcon } from "./CategoryIcon";
 import { InlineNotice } from "./InlineNotice";
@@ -16,8 +17,8 @@ interface CategoryCardProps {
   category: CategorySummary;
   /** The month's total expense spending, for the share figure. */
   monthTotal: number;
-  /** For example "October" (the server's reporting month). */
-  monthName: string;
+  /** The month the figures describe (the summary response's month, never the browser's). */
+  period: ReportingPeriod;
   dateFormat: DateFormatPreference;
   /** Opens the edit form (custom categories only). */
   onEdit?: () => void;
@@ -39,7 +40,7 @@ interface CategoryCardProps {
 export function CategoryCard({
   category,
   monthTotal,
-  monthName,
+  period,
   dateFormat,
   onEdit,
   onDelete,
@@ -52,6 +53,11 @@ export function CategoryCard({
   const budget = category.currentMonthBudget;
   // Spending but no budget this month: the warning carries the card's only Set budget link.
   const needsBudget = needsCurrentMonthBudget(category);
+  // The card's lines name just the month (the page names the year); the budget links,
+  // which leave the page, name both and open Budgets on that same month.
+  const monthName = nameOfMonth(period.month);
+  const budgetPath = budgetShortcutPath(category.id, period);
+  const budgetLabel = (verb: string) => `${verb} budget for ${category.name} for ${formatReportingMonth(period.month, period.year)}`;
 
   return (
     <article className="category-card" aria-labelledby={headingId}>
@@ -133,8 +139,8 @@ export function CategoryCard({
               {formatCurrency(category.currentMonthSpent)} spent in {monthName} with no budget.{" "}
               <Link
                 className="category-card__warning-link"
-                to={`/budgets?${CATEGORY_PARAM}=${category.id}`}
-                aria-label={`Set budget for ${category.name}`}
+                to={budgetPath}
+                aria-label={budgetLabel("Set")}
               >
                 Set budget
               </Link>
@@ -147,7 +153,7 @@ export function CategoryCard({
         )
       )}
 
-      {/* This month's activity; the all-time counts only decide whether Delete is available. */}
+      {/* The month's activity; the all-time counts only decide whether Delete is available. */}
       <p className="category-card__usage">
         {category.lastTransactionDate === null ? (
           "Not used yet"
@@ -170,7 +176,7 @@ export function CategoryCard({
             to={`/transactions?${ADD_TRANSACTION_PARAM}=${category.id}`}
             aria-label={`Add a transaction for ${category.name}`}
           >
-            <Plus aria-hidden="true" focusable="false" size={16} />
+            <Plus aria-hidden="true" focusable="false" size={15} />
             Add transaction
           </Link>
         ) : (
@@ -179,17 +185,17 @@ export function CategoryCard({
             to={`/transactions?${CATEGORY_PARAM}=${category.id}`}
             aria-label={`View transactions for ${category.name}`}
           >
-            <ArrowLeftRight aria-hidden="true" focusable="false" size={16} />
+            <ArrowLeftRight aria-hidden="true" focusable="false" size={15} />
             View transactions
           </Link>
         )}
         {category.budgetEnabled && !needsBudget && (
           <Link
             className="category-card__link"
-            to={`/budgets?${CATEGORY_PARAM}=${category.id}`}
-            aria-label={`${budget ? "Edit" : "Set"} budget for ${category.name}`}
+            to={budgetPath}
+            aria-label={budgetLabel(budget ? "Edit" : "Set")}
           >
-            <PiggyBank aria-hidden="true" focusable="false" size={16} />
+            <PiggyBank aria-hidden="true" focusable="false" size={15} />
             {budget ? "Edit budget" : "Set budget"}
           </Link>
         )}

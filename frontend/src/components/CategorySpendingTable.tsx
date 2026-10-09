@@ -6,8 +6,10 @@ import { CategoryIcon } from "./CategoryIcon";
 interface CategorySpendingTableProps {
   /** Every category in the summary: the distribution never follows the card filters. */
   categories: CategorySummary[];
-  /** For example "October 2026" (the server's reporting month). */
+  /** For example "October 2026" (the summary response's month). */
   monthLabel: string;
+  /** An earlier month than the server's current one: say so instead of "this month". */
+  historical?: boolean;
 }
 
 const HEADING_ID = "category-spending-heading";
@@ -16,7 +18,7 @@ const HEADING_ID = "category-spending-heading";
  * Where the month's spending went, as a table: every value is text, and each row's bar
  * only repeats its share visually (so the bars and icons are hidden from assistive tech).
  */
-export function CategorySpendingTable({ categories, monthLabel }: CategorySpendingTableProps) {
+export function CategorySpendingTable({ categories, monthLabel, historical = false }: CategorySpendingTableProps) {
   const distribution = spendingDistribution(categories);
 
   return (
@@ -29,7 +31,7 @@ export function CategorySpendingTable({ categories, monthLabel }: CategorySpendi
         <>
           <p className="category-spending__intro">
             Share of {formatCurrency(distribution.total)} in expenses. Categories with no
-            spending this month are not listed.
+            spending {historical ? `in ${monthLabel}` : "this month"} are not listed.
           </p>
 
           <table className="category-spending__table" aria-labelledby={HEADING_ID}>

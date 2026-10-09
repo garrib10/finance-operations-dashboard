@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import dev.portfolio.finance.dto.category.CategoryResponse;
 import dev.portfolio.finance.dto.category.CategorySummaryListResponse;
@@ -64,13 +65,19 @@ public class CategoryController {
         return ResponseEntity.ok(response);
     }
 
-    /** Usage of the signed-in user's categories for the server's reporting month. */
+    /**
+     * Usage of the signed-in user's categories for the server's current month, or for an
+     * earlier month when both {@code month} and {@code year} are given (validated in the
+     * service; malformed values are reported by name in {@code CategoryExceptionHandler}).
+     */
     @GetMapping("/summary")
     public ResponseEntity<CategorySummaryListResponse> getCategorySummary(
-            Authentication authentication
+            Authentication authentication,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer year
     ) {
         return ResponseEntity.ok(
-                categorySummaryService.getSummary(authentication.getName())
+                categorySummaryService.getSummary(authentication.getName(), month, year)
         );
     }
 

@@ -10,12 +10,14 @@ import { CategoryIcon } from "./CategoryIcon";
 
 interface CategorySummaryStripProps {
   rows: CategorySummary[];
-  /** For example "October 2026" (the server's reporting month). */
+  /** For example "October 2026" (the summary response's month). */
   monthLabel: string;
+  /** An earlier month than the server's current one: say so instead of "this month". */
+  historical?: boolean;
 }
 
 /** Headline figures, all derived from the summary rows so they always agree with the cards. */
-export function CategorySummaryStrip({ rows, monthLabel }: CategorySummaryStripProps) {
+export function CategorySummaryStrip({ rows, monthLabel, historical = false }: CategorySummaryStripProps) {
   const custom = rows.filter((row) => !row.builtIn).length;
   const top = topCategory(rows);
   const budgets = rows.filter((row) => row.currentMonthBudget !== null).length;
@@ -31,7 +33,7 @@ export function CategorySummaryStrip({ rows, monthLabel }: CategorySummaryStripP
       </div>
 
       <div className="category-stat">
-        <dt>Top this month</dt>
+        <dt>{historical ? `Top in ${monthLabel}` : "Top this month"}</dt>
         {top ? (
           <>
             <dd className="category-stat__value category-stat__value--name">
@@ -43,7 +45,9 @@ export function CategorySummaryStrip({ rows, monthLabel }: CategorySummaryStripP
             </dd>
           </>
         ) : (
-          <dd className="category-stat__detail">No spending yet in {monthLabel}</dd>
+          <dd className="category-stat__detail">
+            {historical ? `No spending in ${monthLabel}` : `No spending yet in ${monthLabel}`}
+          </dd>
         )}
       </div>
 
@@ -51,7 +55,7 @@ export function CategorySummaryStrip({ rows, monthLabel }: CategorySummaryStripP
         <dt>Over budget</dt>
         <dd className="category-stat__value">{overBudgetCount(rows)}</dd>
         <dd className="category-stat__detail">
-          of {budgets} {budgets === 1 ? "budget" : "budgets"} this month
+          of {budgets} {budgets === 1 ? "budget" : "budgets"} {historical ? `in ${monthLabel}` : "this month"}
         </dd>
       </div>
 

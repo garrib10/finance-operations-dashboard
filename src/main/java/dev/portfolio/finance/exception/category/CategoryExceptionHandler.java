@@ -32,6 +32,8 @@ import dev.portfolio.finance.exception.GlobalExceptionHandler;
 public class CategoryExceptionHandler {
 
     static final String INVALID_ID_MESSAGE = "Category ID must be a positive whole number";
+    static final String INVALID_MONTH_MESSAGE = "Month must be a whole number between 1 and 12";
+    static final String INVALID_YEAR_MESSAGE = "Year must be a whole number";
 
     private static final Map<String, String> TYPE_MESSAGES = Map.of(
             "name", "Category name must be text",
@@ -98,10 +100,20 @@ public class CategoryExceptionHandler {
         return validation(fields);
     }
 
-    /** Non-numeric or out-of-range path IDs. */
+    /**
+     * A value that cannot be converted, reported under its own parameter name: the summary's
+     * {@code month} or {@code year}, otherwise the path {@code id}.
+     */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<ValidationErrorResponse> handleUnparseableId() {
-        return validation(Map.of("id", INVALID_ID_MESSAGE));
+    public ResponseEntity<ValidationErrorResponse> handleUnparseableValue(MethodArgumentTypeMismatchException ex) {
+        String message = switch (ex.getName()) {
+            case "month" -> INVALID_MONTH_MESSAGE;
+            case "year" -> INVALID_YEAR_MESSAGE;
+            default -> null;
+        };
+        return message == null
+                ? validation(Map.of("id", INVALID_ID_MESSAGE))
+                : validation(Map.of(ex.getName(), message));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

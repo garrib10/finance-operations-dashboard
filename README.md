@@ -41,10 +41,11 @@ The project demonstrates layered backend architecture, short-lived JWTs with rot
 - Custom categories with approved icons, created together with a transaction or budget in one
   database transaction and reusable everywhere; database-enforced per-user name uniqueness and
   ownership
-- Dedicated Categories page: this month's activity and spending distribution, categories
-  active this month shown first, no-budget warnings, search, filters, and sorting,
-  accessible card actions, and shortcuts into each category's transactions and budget,
-  backed by a fixed-query summary API
+- Dedicated Categories page: any month's activity and spending distribution (this month by
+  default, earlier months through shareable URLs), categories active that month shown first,
+  no-budget warnings, search, filters, and sorting, accessible card actions, and shortcuts
+  into each category's transactions and that month's budget, backed by a fixed-query summary
+  API
 - Responsive application shell: a collapsible desktop sidebar that remembers its state and
   an accessible mobile navigation drawer, with keyboard and reduced-motion support
 - Search, filtering, sorting, pagination, and financial analytics
@@ -170,7 +171,10 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 
 **Categories page** (`/categories`, in the sidebar and mobile drawer):
 
-- Summary strip: category counts, this month's top category, categories over budget, and
+- Month and Year selects (this month by default, back to January 2000, never a future
+  month); an earlier month is a shareable URL (`/categories?month=8&year=2026`) that survives
+  refresh and Back/Forward, with "Back to current month" to return
+- Summary strip: category counts, the month's top category, categories over budget, and
   categories spending without a budget
 - This month's spending distribution as an accessible table with share bars
 - "Active this month" first (spending or a budget this month), then a collapsible "Other
@@ -179,12 +183,12 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
   progress and status, this month's transactions, and last-used date
 - A warning with a Set budget link on categories spending this month without a budget
 - Search (ignores case and surrounding spaces, Unicode-normalized), filters (Custom,
-  Built-in, Unused, No budget this month), and sorting (name, this month's spending, most
+  Built-in, Unused, No budget in the month), and sorting (name, the month's spending, most
   used); the summary always covers every category
 - Create, rename, re-icon, and delete custom categories through each card's accessible
   "More actions" button; Delete is unavailable, with the reason, when a category is in use
 - Shortcuts to the category's transactions (or to add its first one) and to set or edit its
-  budget
+  budget for the month shown, opening Budgets on that month
 - Status feedback: success confirmations, and persistent, labelled warnings and errors that
   never rely on colour alone; field errors stay beside their inputs
 
@@ -393,7 +397,7 @@ The health, registration, and login endpoints are public. All other endpoints re
 | Categories     | `GET`    | `/api/categories/{id}`        | Get a category                                  |
 | Categories     | `PUT`    | `/api/categories/{id}`        | Rename or re-icon a custom category             |
 | Categories     | `DELETE` | `/api/categories/{id}`        | Delete an unused custom category                |
-| Categories     | `GET`    | `/api/categories/summary`     | Per-category usage and spending summary         |
+| Categories     | `GET`    | `/api/categories/summary`     | Per-category usage; optional `month`/`year`     |
 | Budgets        | `POST`   | `/api/budgets`                | Create a monthly budget                         |
 | Budgets        | `GET`    | `/api/budgets`                | Get budgets for a selected period               |
 | Budgets        | `GET`    | `/api/budgets/{id}`           | Get a budget                                    |

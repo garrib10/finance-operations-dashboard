@@ -4,6 +4,7 @@ import {
   SORT_OPTIONS,
   isDefaultDiscovery,
   type CategoryDiscovery,
+  type DiscoveryOptionLabel,
   type CategoryFilter,
   type CategorySort,
 } from "../utils/categoryDiscovery";
@@ -15,6 +16,8 @@ interface CategoryDiscoveryToolbarProps {
   onClear: () => void;
   shown: number;
   total: number;
+  /** For example "September": the month the cards describe. */
+  monthName: string;
   /** Explains a card kept visible although it does not match (one being edited, say). */
   keptVisibleNote?: string;
 }
@@ -30,8 +33,11 @@ export function CategoryDiscoveryToolbar({
   onClear,
   shown,
   total,
+  monthName,
   keptVisibleNote,
 }: CategoryDiscoveryToolbarProps) {
+  const labelOf = (label: DiscoveryOptionLabel) => (typeof label === "function" ? label(monthName) : label);
+
   return (
     <div className="category-toolbar">
       <div className="category-toolbar__controls" role="search" aria-label="Find categories">
@@ -56,7 +62,7 @@ export function CategoryDiscoveryToolbar({
             onChange={(event) => onChange({ ...discovery, filter: event.target.value as CategoryFilter })}
           >
             {FILTER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
+              <option key={option.value} value={option.value}>{labelOf(option.label)}</option>
             ))}
           </select>
         </div>
@@ -69,7 +75,7 @@ export function CategoryDiscoveryToolbar({
             onChange={(event) => onChange({ ...discovery, sort: event.target.value as CategorySort })}
           >
             {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
+              <option key={option.value} value={option.value}>{labelOf(option.label)}</option>
             ))}
           </select>
         </div>

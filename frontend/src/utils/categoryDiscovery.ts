@@ -12,17 +12,20 @@ export interface CategoryDiscovery {
 
 export const DEFAULT_DISCOVERY: CategoryDiscovery = { query: "", filter: "all", sort: "name" };
 
-export const FILTER_OPTIONS: ReadonlyArray<{ value: CategoryFilter; label: string }> = [
+/** A fixed label, or one naming the month shown (for example "No budget in September"). */
+export type DiscoveryOptionLabel = string | ((monthName: string) => string);
+
+export const FILTER_OPTIONS: ReadonlyArray<{ value: CategoryFilter; label: DiscoveryOptionLabel }> = [
   { value: "all", label: "All categories" },
   { value: "custom", label: "Custom" },
   { value: "builtIn", label: "Built-in" },
   { value: "unused", label: "Unused" },
-  { value: "noBudget", label: "No budget this month" },
+  { value: "noBudget", label: (monthName) => `No budget in ${monthName}` },
 ];
 
-export const SORT_OPTIONS: ReadonlyArray<{ value: CategorySort; label: string }> = [
+export const SORT_OPTIONS: ReadonlyArray<{ value: CategorySort; label: DiscoveryOptionLabel }> = [
   { value: "name", label: "Name" },
-  { value: "monthSpending", label: "This month’s spending" },
+  { value: "monthSpending", label: (monthName) => `Spending in ${monthName}` },
   { value: "mostUsed", label: "Most used" },
 ];
 

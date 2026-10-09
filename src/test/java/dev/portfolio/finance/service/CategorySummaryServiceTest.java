@@ -2,19 +2,29 @@ package dev.portfolio.finance.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -26,6 +36,7 @@ import dev.portfolio.finance.entity.BuiltInCategory;
 import dev.portfolio.finance.entity.Category;
 import dev.portfolio.finance.entity.TransactionType;
 import dev.portfolio.finance.entity.User;
+import dev.portfolio.finance.exception.category.CategoryValidationException;
 import dev.portfolio.finance.repository.BudgetRepository;
 import dev.portfolio.finance.repository.CategoryRepository;
 import dev.portfolio.finance.repository.TransactionRepository;
@@ -209,5 +220,129 @@ class CategorySummaryServiceTest {
         when(userRepository.findByEmail("missing@example.com")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getSummary("missing@example.com")).isInstanceOf(NoSuchElementException.class);
+    }
+
+    // ---- Selected month (the clock is pinned to 15 October 2026) ----
+
+    @Test
+    void usesTheRequestedMonthForEveryMonthlyFigureAndKeepsAllTimeValues() {
+        LocalDate augStart = LocalDate.of(2026, 8, 1);
+        LocalDate augEnd = LocalDate.of(2026, 8, 31);
+        when(categoryRepository.findAllByUserIdOrderByNameAscIdAsc(1L)).thenReturn(List.of(
+                category(7, Category.custom(user, "Pet Care", true)),
+                category(8, Category.custom(user, "Quiet", true))));
+        when(transactionRepository.summarizeUsageByCategory(1L, TransactionType.EXPENSE, augStart, augEnd))
+                .thenReturn(List.of(new Usage(7L, 9L, 3L, LocalDate.of(2026, 10, 2),
+                        new BigDecimal("400"), new BigDecimal("90"))));
+        when(budgetRepository.countBudgetsByCategory(1L)).thenReturn(List.of(new BudgetCount(7L, 4L)));
+        when(budgetRepository.findMonthBudgets(1L, 8, 2026))
+                .thenReturn(List.of(new MonthBudget(21L, 7L, new BigDecimal("120.00"))));
+
+        CategorySummaryListResponse summary = service.getSummary(EMAIL, 8, 2026);
+
+        assertThat(summary.month()).isEqualTo(8);
+        assertThat(summary.year()).isEqualTo(2026);
+        assertThat(summary.serverCurrentMonth()).isEqualTo(10);
+        assertThat(summary.serverCurrentYear()).isEqualTo(2026);
+        CategorySummaryResponse pets = summary.categories().getFirst();
+        assertThat(pets.currentMonthTransactionCount()).isEqualTo(3);
+        assertThat(pets.currentMonthSpent()).isEqualTo(new BigDecimal("90.00"));
+        assertThat(pets.currentMonthBudget().budgetId()).isEqualTo(21L);
+        assertThat(pets.currentMonthBudget().amountRemaining()).isEqualTo(new BigDecimal("30.00"));
+        assertThat(pets.currentMonthBudget().percentageUsed()).isEqualTo(new BigDecimal("75.00"));
+        assertThat(pets.currentMonthBudget().status()).isEqualTo(BudgetStatus.WARNING);
+        // All-time values do not follow the month.
+        assertThat(pets.transactionCount()).isEqualTo(9);
+        assertThat(pets.budgetCount()).isEqualTo(4);
+        assertThat(pets.lastTransactionDate()).isEqualTo(LocalDate.of(2026, 10, 2));
+        assertThat(pets.allTimeSpent()).isEqualTo(new BigDecimal("400.00"));
+        assertThat(pets.canDelete()).isFalse();
+        // A category with no activity that month is still listed, with zeros.
+        CategorySummaryResponse quiet = summary.categories().get(1);
+        assertThat(quiet.currentMonthTransactionCount()).isZero();
+        assertThat(quiet.currentMonthSpent()).isEqualTo(new BigDecimal("0.00"));
+        assertThat(quiet.currentMonthBudget()).isNull();
+        verify(transactionRepository).summarizeUsageByCategory(1L, TransactionType.EXPENSE, augStart, augEnd);
+    }
+
+    @Test
+    void readsTheClockOnceSoADefaultRequestAcrossMidnightReportsOneMonth() {
+        // The first reading is the last instant of October; any later one is in November.
+        Clock midnight = new Clock() {
+            private final AtomicInteger reads = new AtomicInteger();
+
+            @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+            @Override public Clock withZone(ZoneId zone) { return this; }
+            @Override public Instant instant() {
+                return reads.getAndIncrement() == 0
+                        ? Instant.parse("2026-10-31T23:59:59.999Z")
+                        : Instant.parse("2026-11-01T00:00:00Z");
+            }
+        };
+        service = new CategorySummaryService(userRepository, categoryRepository, transactionRepository,
+                budgetRepository, new ReportingPeriodProvider(midnight));
+        // Any dates: the assertion below, not a stubbing mismatch, is what must catch a second reading.
+        when(categoryRepository.findAllByUserIdOrderByNameAscIdAsc(1L)).thenReturn(List.of());
+        when(transactionRepository.summarizeUsageByCategory(any(), any(), any(), any())).thenReturn(List.of());
+        when(budgetRepository.countBudgetsByCategory(1L)).thenReturn(List.of());
+        when(budgetRepository.findMonthBudgets(anyLong(), anyInt(), anyInt())).thenReturn(List.of());
+
+        CategorySummaryListResponse summary = service.getSummary(EMAIL, null, null);
+
+        assertThat(summary.month()).isEqualTo(summary.serverCurrentMonth()).isEqualTo(10);
+        assertThat(summary.year()).isEqualTo(summary.serverCurrentYear()).isEqualTo(2026);
+    }
+
+    @Test
+    void reportsTheSameSelectedAndServerMonthByDefault() {
+        stub(List.of(), List.of(), List.of(), List.of());
+
+        CategorySummaryListResponse summary = service.getSummary(EMAIL, null, null);
+
+        assertThat(summary.month()).isEqualTo(summary.serverCurrentMonth()).isEqualTo(10);
+        assertThat(summary.year()).isEqualTo(summary.serverCurrentYear()).isEqualTo(2026);
+    }
+
+    @ParameterizedTest(name = "month={0}, year={1}")
+    @CsvSource({"1, 2000", "12, 2025", "9, 2026", "10, 2026"})
+    void acceptsMonthsFromJanuary2000ToTheCurrentMonth(int month, int year) {
+        when(categoryRepository.findAllByUserIdOrderByNameAscIdAsc(1L)).thenReturn(List.of());
+        when(transactionRepository.summarizeUsageByCategory(any(), any(), any(), any())).thenReturn(List.of());
+        when(budgetRepository.countBudgetsByCategory(1L)).thenReturn(List.of());
+        when(budgetRepository.findMonthBudgets(1L, month, year)).thenReturn(List.of());
+
+        CategorySummaryListResponse summary = service.getSummary(EMAIL, month, year);
+
+        assertThat(summary.month()).isEqualTo(month);
+        assertThat(summary.year()).isEqualTo(year);
+    }
+
+    @ParameterizedTest(name = "month={0}, year={1}")
+    @CsvSource(nullValues = "null", value = {
+            "8, null, year, Month and year must be given together",
+            "null, 2026, month, Month and year must be given together",
+            "0, 2026, month, Month must be between 1 and 12",
+            "13, 2026, month, Month must be between 1 and 12",
+            "5, 1999, year, Year must be 2000 or later",
+            "5, 2027, year, Year must be 2026 or earlier",
+            "11, 2026, month, Choose October 2026 or an earlier month",
+            "12, 2026, month, Choose October 2026 or an earlier month",
+    })
+    void rejectsAnInvalidPeriodBeforeReadingAnyData(Integer month, Integer year, String field, String message) {
+        assertThatThrownBy(() -> service.getSummary(EMAIL, month, year))
+                .isInstanceOfSatisfying(CategoryValidationException.class, ex ->
+                        assertThat(ex.getFields()).containsEntry(field, message));
+
+        verify(userRepository, never()).findByEmail(EMAIL);
+        verifyNoInteractions(categoryRepository, transactionRepository, budgetRepository);
+    }
+
+    @Test
+    void reportsEveryInvalidValueAtOnceInFieldOrder() {
+        assertThatThrownBy(() -> service.getSummary(EMAIL, 0, 1999))
+                .isInstanceOfSatisfying(CategoryValidationException.class, ex ->
+                        assertThat(ex.getFields()).containsExactly(
+                                Map.entry("month", "Month must be between 1 and 12"),
+                                Map.entry("year", "Year must be 2000 or later")));
     }
 }

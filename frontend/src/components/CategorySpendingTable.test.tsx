@@ -31,6 +31,13 @@ describe("CategorySpendingTable", () => {
     expect(screen.getByText(/Share of \$400\.00 in expenses/)).toBeInTheDocument();
   });
 
+  it("names an earlier month instead of this month", () => {
+    render(<CategorySpendingTable categories={[groceriesRow]} monthLabel="May 2025" historical />);
+
+    expect(screen.getByText(/Categories with no spending in May 2025 are not listed\./)).toBeInTheDocument();
+    expect(screen.queryByText(/this month/)).not.toBeInTheDocument();
+  });
+
   it("orders ties by name, then ID", () => {
     renderTable([
       summaryRow({ id: 4, name: "Books", currentMonthSpent: 10 }),

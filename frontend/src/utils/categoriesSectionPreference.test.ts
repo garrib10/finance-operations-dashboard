@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  CATEGORIES_ACTIVE_EXPANDED_KEY,
   CATEGORIES_OTHERS_EXPANDED_KEY,
+  readCategoriesActiveExpanded,
   readCategoriesOthersExpanded,
+  saveCategoriesActiveExpanded,
   saveCategoriesOthersExpanded,
 } from "./categoriesSectionPreference";
 
@@ -51,5 +54,38 @@ describe("categories section preference", () => {
     });
 
     expect(() => saveCategoriesOthersExpanded(true)).not.toThrow();
+  });
+});
+
+describe("active categories section preference", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("uses its own key and defaults to open", () => {
+    expect(CATEGORIES_ACTIVE_EXPANDED_KEY).toBe("fintrack:categories-active-expanded");
+    expect(readCategoriesActiveExpanded()).toBe(true);
+  });
+
+  it.each([["false", false], ["true", true], ["FALSE", true], ["", true], ["0", true]])(
+    "reads %j as %s (only a saved false closes it)", (stored, expanded) => {
+      window.localStorage.setItem(CATEGORIES_ACTIVE_EXPANDED_KEY, stored);
+      expect(readCategoriesActiveExpanded()).toBe(expanded);
+    });
+
+  it("stays open when storage cannot be read, and ignores write failures", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked"); });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+
+    expect(readCategoriesActiveExpanded()).toBe(true);
+    expect(() => saveCategoriesActiveExpanded(false)).not.toThrow();
+  });
+
+  it("saves only its own key", () => {
+    window.localStorage.setItem(CATEGORIES_OTHERS_EXPANDED_KEY, "true");
+    saveCategoriesActiveExpanded(false);
+
+    expect(window.localStorage.getItem(CATEGORIES_ACTIVE_EXPANDED_KEY)).toBe("false");
+    expect(window.localStorage.getItem(CATEGORIES_OTHERS_EXPANDED_KEY)).toBe("true");
   });
 });
