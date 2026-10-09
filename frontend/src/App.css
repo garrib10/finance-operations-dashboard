@@ -2159,6 +2159,27 @@
   flex-shrink: 0;
 }
 
+/* A very narrow card (a 320 px phone) leaves the name only a few letters of width beside
+   the icon and "More actions", so it moves to its own full-width row underneath. */
+.category-card {
+  container-type: inline-size;
+}
+
+@container (max-width: 12rem) {
+  .category-card__header {
+    flex-wrap: wrap;
+  }
+
+  .category-card .category-actions {
+    margin-left: auto;
+  }
+
+  .category-card__title {
+    order: 1;
+    flex-basis: 100%;
+  }
+}
+
 .category-card__figures {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
