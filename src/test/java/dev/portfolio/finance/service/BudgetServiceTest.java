@@ -1235,4 +1235,99 @@ void shouldUpdateBudgetWhenIdentityChangesAndNoDuplicateExists() {
 
         org.mockito.Mockito.verifyNoInteractions(categoryService);
     }
+
+    // ---------------------------------------------------------
+    // MONTH ANALYTICS (GET /api/budgets/analytics)
+    // ---------------------------------------------------------
+
+    private static <T> T withId(T entity, long id) {
+        org.springframework.test.util.ReflectionTestUtils.setField(entity, "id", id);
+        return entity;
+    }
+
+    private record Spending(Long getCategoryId, String getCategoryName, String getCategoryIconKey,
+                            BigDecimal getAmountSpent)
+            implements dev.portfolio.finance.repository.projection.CategorySpendingProjection {
+    }
+
+    @Test
+    void monthAnalyticsReadsTheMonthsBudgetsAndGroupedSpendingOnceEach() {
+        User user = withId(TestDataFactory.createUser(), 7L);
+        Category rent = withId(TestDataFactory.createCategory(user, "Apartment Rent"), 11L);
+        Category pets = withId(TestDataFactory.createCategory(user, "Pet Care"), 12L);
+        Budget rentBudget = withId(TestDataFactory.createBudget(user, rent, new BigDecimal("1200.00"), 2, 2028), 101L);
+        Budget petBudget = withId(TestDataFactory.createBudget(user, pets, new BigDecimal("80.00"), 2, 2028), 102L);
+        when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+        when(budgetRepository.findAllByUserIdAndMonthAndYearOrderByCategoryNameAscCategoryIdAsc(7L, 2, 2028))
+                .thenReturn(List.of(rentBudget, petBudget));
+        // Spending for a category without a budget this month never becomes a row.
+        when(transactionRepository.findSpendingByCategory(7L, TransactionType.EXPENSE,
+                LocalDate.of(2028, 2, 1), LocalDate.of(2028, 2, 29)))
+                .thenReturn(List.of(new Spending(12L, "Pet Care", "paw-print", new BigDecimal("60.50")),
+                        new Spending(99L, "Weekend Trips", "plane", new BigDecimal("45.00"))));
+
+        var response = budgetService.getMonthAnalytics(TEST_EMAIL, "2", "2028");
+
+        assertEquals(2, response.month());
+        assertEquals(2028, response.year());
+        assertEquals(List.of(101L, 102L), response.budgets().stream().map(BudgetAnalyticsResponse::budgetId).toList());
+        BudgetAnalyticsResponse rentRow = response.budgets().get(0);
+        assertEquals(new BigDecimal("0.00"), rentRow.amountSpent()); // No spending: zero, two places.
+        assertEquals(new BigDecimal("1200.00"), rentRow.amountRemaining());
+        assertEquals(BudgetStatus.ON_TRACK, rentRow.status());
+        BudgetAnalyticsResponse petRow = response.budgets().get(1);
+        BudgetMetrics expected = BudgetMetrics.calculate(new BigDecimal("80.00"), new BigDecimal("60.50"));
+        assertEquals(new BigDecimal("60.50"), petRow.amountSpent());
+        assertEquals(expected.amountRemaining(), petRow.amountRemaining());
+        assertEquals(expected.percentageUsed(), petRow.percentageUsed());
+        assertEquals(BudgetStatus.WARNING, petRow.status());
+        assertEquals(12L, petRow.categoryId());
+        assertEquals("Pet Care", petRow.categoryName());
+
+        verify(budgetRepository, org.mockito.Mockito.times(1))
+                .findAllByUserIdAndMonthAndYearOrderByCategoryNameAscCategoryIdAsc(7L, 2, 2028);
+        verify(transactionRepository, org.mockito.Mockito.times(1)).findSpendingByCategory(any(), any(), any(), any());
+        verify(transactionRepository, never()).sumAmountByUserCategoryTypeAndDateRange(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void monthAnalyticsReturnsAnEmptyListForAMonthWithoutBudgets() {
+        User user = withId(TestDataFactory.createUser(), 7L);
+        when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+        when(budgetRepository.findAllByUserIdAndMonthAndYearOrderByCategoryNameAscCategoryIdAsc(7L, 12, 2000))
+                .thenReturn(List.of());
+
+        var response = budgetService.getMonthAnalytics(TEST_EMAIL, "12", "2000");
+
+        assertEquals(12, response.month());
+        assertEquals(List.of(), response.budgets());
+    }
+
+    @ParameterizedTest(name = "month=[{0}], year=[{1}]")
+    @CsvSource(nullValues = "null", value = {
+            "null, 2024, month, Month is required",
+            "0, 2024, month, Month must be between 1 and 12",
+            "13, 2024, month, Month must be between 1 and 12",
+            "x, 2024, month, Month must be a whole number between 1 and 12",
+            "1234567890, 2024, month, Month must be a whole number between 1 and 12",
+            "3, null, year, Year is required",
+            "3, 1999, year, Year must be 2000 or later",
+            "3, 20.24, year, Year must be a whole number",
+    })
+    void monthAnalyticsRejectsAnInvalidMonthOrYearBeforeReadingAnyData(
+            String month, String year, String field, String message) {
+        var error = assertThrows(dev.portfolio.finance.exception.budget.BudgetValidationException.class,
+                () -> budgetService.getMonthAnalytics(TEST_EMAIL, month, year));
+
+        assertEquals(message, error.getFields().get(field));
+        org.mockito.Mockito.verifyNoInteractions(userRepository, budgetRepository, transactionRepository);
+    }
+
+    @Test
+    void monthAnalyticsReportsBothFieldsInOrder() {
+        var error = assertThrows(dev.portfolio.finance.exception.budget.BudgetValidationException.class,
+                () -> budgetService.getMonthAnalytics(TEST_EMAIL, "0", "1999"));
+
+        assertEquals(List.of("month", "year"), List.copyOf(error.getFields().keySet()));
+    }
 }

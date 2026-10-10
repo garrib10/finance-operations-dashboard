@@ -11,8 +11,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import dev.portfolio.finance.dto.budget.BudgetAnalyticsResponse;
+import dev.portfolio.finance.dto.budget.BudgetMonthAnalyticsResponse;
 import dev.portfolio.finance.dto.budget.BudgetResponse;
 import dev.portfolio.finance.dto.budget.CreateBudgetRequest;
 import dev.portfolio.finance.dto.budget.UpdateBudgetRequest;
@@ -57,6 +59,27 @@ public class BudgetController {
                 );
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Every budget of the signed-in user for one month, with analytics, in one request. The
+     * values are read as text and validated in the service, so a missing, malformed, or
+     * out-of-range month or year is a field error without changing how other budget
+     * endpoints report errors.
+     */
+    @GetMapping("/analytics")
+    public ResponseEntity<BudgetMonthAnalyticsResponse> getMonthAnalytics(
+            Authentication authentication,
+            @RequestParam(required = false) String month,
+            @RequestParam(required = false) String year
+    ) {
+        return ResponseEntity.ok(
+                budgetService.getMonthAnalytics(
+                        authentication.getName(),
+                        month,
+                        year
+                )
+        );
     }
 
     @GetMapping("/{id}")
