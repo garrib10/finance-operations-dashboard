@@ -458,6 +458,10 @@ Browser expansion and parallel workers should be added only after serial executi
 
 The monitoring endpoints and their access rules are in [monitoring.md](monitoring.md).
 
+Production availability is watched by an external monitor on `/api/health` (see
+[monitoring.md](monitoring.md#external-uptime-monitoring-and-alerts)); automation should not
+poll production more often than needed, so it never looks like an incident.
+
 Every response carries an `X-Correlation-ID` header. Automation may send its own value (1–64
 characters of `A-Z a-z 0-9 . _ -`) to find its requests in the logs; any other value is
 replaced with a UUID, and the request still proceeds.

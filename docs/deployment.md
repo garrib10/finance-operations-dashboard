@@ -130,6 +130,13 @@ Production logs are one JSON object per line (Spring Boot's Logstash format), wi
 `correlationId` field; every response has an `X-Correlation-ID` header to search for. No
 Railway variable is needed for either.
 
+The external uptime monitor (`FinTrack Production API Health`, every 3 minutes, 30-second
+timeout, alert after 2 consecutive failures, recovery alerts on) checks
+`/api/health` from the monitoring provider; it needs no Railway change. Expect at most one
+failed check during a deploy. Pause it before planned maintenance. Setup, ownership, and
+alert testing are in [monitoring.md](monitoring.md#external-uptime-monitoring-and-alerts);
+incident steps in [production-troubleshooting.md](production-troubleshooting.md).
+
 ## Staging rollout (manual)
 
 1. Open the PR from `feature/v1.2.0-refresh-token-rotation` into `develop`. Wait for

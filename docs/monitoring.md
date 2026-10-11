@@ -6,10 +6,13 @@ FinTrack's monitoring is built in three phases under issue #20:
    safe per-environment settings.
 2. **Metrics and logs:** request and error metrics, authentication-failure counts,
    structured JSON logs, and correlation IDs (sections below).
-3. **External monitoring (planned):** an uptime monitor, alerts, and the operations runbook.
+3. **External monitoring:** the uptime monitor and alert setup, signals, and the operations
+   runbook ([production-troubleshooting.md](production-troubleshooting.md)). The live monitor
+   was configured by the owner in Better Stack on 2026-10-11 (see below).
 
-No external monitoring service, account, credential, or Railway setting is involved yet.
-Metrics stay in memory inside the application and are never sent anywhere.
+The application has no monitoring dependency, account, credential, or Railway setting: the
+external monitor only calls the public health URL. Metrics stay in memory inside the
+application and are never sent anywhere.
 
 ## Endpoints
 
@@ -195,13 +198,135 @@ migration, and security failures still appear at WARN or ERROR. The existing tar
 silences (Tomcat cookie parsing, raw Hibernate error text, validation and response-body
 diagnostics) remain in every profile.
 
-### Known limit
+### Unhandled exceptions
 
-When a request fails with an exception nothing handles, Tomcat also logs it itself, with the
-exception message and stack trace and without the correlation ID (it runs after the request
-context ends). The application's own `http.request.failed` line carries the ID. Catching every
-exception in one handler would remove that second line, but would change the 500 response
-format, so it is left for a follow-up.
+Tomcat would normally log an unhandled exception a second time, with its full message (which
+can contain request data) and no correlation ID. That one logger
+(`org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/].[dispatcherServlet]`) is
+switched off by `MonitoringConfig` once the server starts, using the running server's engine
+and host names (a properties file cannot express the brackets, and the engine name can vary). Instead, `http.request.failed` carries the stack trace with every message replaced
+by `<class> (message removed)`: class names and code locations to find the bug, never the data.
+Tomcat's startup and other container logs are unaffected (`ServerErrorLoggingIntegrationTest`
+checks this on a real server).
+
+One existing behavior to know: when an exception is unhandled, the browser receives `401`
+rather than `500`, because Spring Boot's `/error` page requires sign-in. Logs and the
+`http.server.requests` metric still record it as a 500. Making `/error` public would change
+error responses, so it is left as a follow-up.
+
+## Signals at a glance
+
+| Signal | Where | Access | Normal | Worth investigating |
+| --- | --- | --- | --- | --- |
+| Availability | external monitor on `/api/health`; `/actuator/health/liveness` | public | `200`, under a second once warm | 2+ failed checks in a row |
+| Readiness (database included) | `/actuator/health/readiness` | public | `200 {"status":"UP"}` | `503 {"status":"DOWN"}` |
+| Request volume and latency | `http.server.requests` (count, total, max) per route | access token, local only | steady per route; occasional slow first request after idle | sustained rise in one route's max or mean |
+| Server errors | `http.server.requests` with `outcome=SERVER_ERROR`; `http.request.failed` log lines | metric local only; logs in Railway | none or rare | repeated failures on one route, or many routes at once |
+| Authentication failures | `fintrack.authentication.failures` by `flow`/`reason` | access token, local only | some `access_token`/`expired` (tokens last 5 minutes) and occasional `login`/`invalid_credentials` | a sudden jump, many `refresh_token`/`reused`, or many logins failing |
+| Database | `db` health component | access token, local only | `UP` | `DOWN`, or readiness failing |
+| Connection pool | `hikaricp.connections.active`, `.pending`, `.timeout` | access token, local only | `pending` near 0, `timeout` not growing | `pending` stays above 0, `timeout` grows |
+| Structured logs | Railway service logs (JSON) | Railway project members | INFO lines; no `http.request.failed` | ERROR lines, especially repeated ones |
+| Correlation ID | `X-Correlation-ID` response header; `correlationId` log field | the caller; Railway logs | one per request | the key to find one failed request |
+| Deployments | Railway deployment history | Railway project members | success, short build/start | failed or crash-looping deploys |
+| Monitor and alert history | the uptime provider's dashboard | the monitor owner | green | any incident |
+
+In production the metrics endpoint is off, so request, error, authentication, and pool numbers
+are read locally (or in a future monitoring backend). Production investigation uses the
+external monitor, the public probes, Railway logs (searchable by correlation ID), and Railway
+deployment history. None of these signals may ever contain passwords, tokens, cookies,
+emails, names, amounts, descriptions, category names, or request bodies.
+
+## External uptime monitoring and alerts
+
+**Status:** live since 2026-10-11. The owner created the monitor in their own Better Stack
+account (nothing in the repository or on Railway changed). The same day, a test alert from the
+monitor was received by email, and the monitor reported the API **Up** on its regular
+3-minute checks with no incidents. The provider holds the account and the alert address;
+neither is recorded here.
+
+**Provider:** [Better Stack Uptime](https://betterstack.com/uptime), free plan: HTTPS checks
+as often as every 3 minutes, email alerts, configurable confirmation before alerting,
+recovery alerts, and pause controls, with no code or credentials added to FinTrack.
+Alternative: UptimeRobot (free for personal, non-commercial use, 5-minute checks). Use one
+provider only. Confirm the current plan limits when signing up; they change over time.
+
+### Production monitor
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| Name | `FinTrack Production API Health` | names the app and environment; no personal data |
+| Type / method | HTTPS, `GET` | |
+| URL | `https://finance-operations-dashboard-production.up.railway.app/api/health` | public, minimal, stable since v1.0; no authentication |
+| Expected | status `200` (optionally the body keyword `"status":"ok"`) | |
+| Interval | 3 minutes (free minimum; 5 is also fine) | quick detection, light load |
+| Timeout | 30 seconds | the first request after an idle period took about 9 s (measured 2026-10-11); later ones about 0.2 s |
+| Alert after | 2 consecutive failures (Better Stack: confirmation period 3 minutes) | a single failed poll during a deploy or network blip does not alert |
+| Recovery | on (recovery period 3 minutes) | the owner knows it is over |
+| Notification | email only, to the primary responder (the owner); no call, SMS, or push | |
+| Regions | Europe, North America, Asia, Australia (provider default) | one region's network problem does not look like an outage |
+| Headers / authentication | none | the check needs no credentials, and none are ever stored in the monitor |
+| TLS verification | on | |
+| Redirects | follow HTTPS only (none are expected) | |
+| Alert destination | `<MONITORING_ALERT_EMAIL>`, the owner's email, set in the provider only | never in the repository |
+
+After v1.3.0 is deployed, `https://finance-operations-dashboard-production.up.railway.app/actuator/health/readiness`
+also catches a database outage (`503`) and may replace or join the `/api/health` check. It is
+just as public and minimal.
+
+### Staging
+
+Staging exists on Railway (`<staging Railway origin>`; the URL is not recorded in the
+repository). It is not monitored continuously. When testing the alert path, a temporary
+monitor named `FinTrack Staging API Health` on `https://<staging Railway origin>/api/health` is
+the safe target; pause or delete it afterwards. Temporary pull-request deployments are never
+monitored.
+
+### Testing the alert path safely
+
+1. Use the monitor's **Send test alert**: proves email delivery without any outage. Done
+   2026-10-11: the email arrived and no incident was left open.
+2. Optionally, for the full path, point a temporary staging monitor at a path that returns
+   `404` (for example `/api/health-check-test`) for two intervals, confirm the alert and
+   recovery emails, then delete it.
+
+Never stop production, deploy broken code, or change production settings to test alerts.
+Record whether the email actually arrived (screenshots of the monitor settings and the test
+email are good evidence for the pull request).
+
+### Ownership and response
+
+This is a single-owner portfolio project, so there is no on-call rotation.
+
+- **Owner:** the repository and application owner, who receives the alerts.
+- **Goal (not an SLA):** look within a few hours when an alert arrives during the day.
+- **Acknowledge:** in the provider (acknowledging stops repeat notifications), then follow
+  [production-troubleshooting.md](production-troubleshooting.md).
+- **Planned maintenance:** pause the monitor first, resume it afterwards. Never pause to hide
+  an unexplained alert.
+- **Escalate** (to Railway support or a rollback) when the failure persists after a restart,
+  a deploy is crash-looping, or the database is unreachable.
+- **Recovered:** confirm the recovery email, open the app once, and write a short note (time,
+  cause, fix) in the pull request or issue that fixed it.
+
+### Railway deployments and false alarms
+
+- A deploy starts the new version (Spring Boot, then Flyway migrations, then traffic), which
+  takes tens of seconds. Zero-downtime switching has not been verified, so a check during a
+  deploy may fail once. The two-failure rule exists for that.
+- If checks keep failing after a deploy, treat it as a failed deploy, not a false alarm:
+  check Railway's deployment status and logs (see the runbook).
+- A provider incident (their status page), a DNS or TLS blip, or the first slow request after
+  an idle period can cause a single failure. Repeated failures are always investigated.
+
+### Retention and privacy
+
+- Railway keeps service logs for a period set by the plan; check the project's plan rather
+  than assuming. Do not export or copy logs unless needed for an incident.
+- The uptime provider keeps check and alert history for a plan-dependent period.
+- Metrics are in memory and reset when the application restarts.
+- Logs and metrics are operational aids, not a financial or audit record. Correlation IDs
+  are operational metadata, not user identity. Monitor names, tags, and alert texts never
+  contain secrets or personal data.
 
 ## Configuration
 
@@ -229,6 +354,8 @@ These must never be exposed in any environment: `env`, `configprops`, `beans`, `
 | Database down: readiness `503 {"status":"DOWN"}` with no detail, liveness and `/api/health` still up | `ManagementDatabaseDownTest` |
 | Production profile: health only, status alone even with a token, metrics and info absent | `ProductionManagementConfigTest` |
 | An invalid setting stops startup | `ManagementConfigValidationTest` |
+| Unhandled exception on a real server: logged once with the ID and a message-free stack trace, Tomcat's copy off | `ServerErrorLoggingIntegrationTest` |
+| Production logging policy: JSON, no SQL values, Security at WARN, INFO levels | `ProductionManagementConfigTest` |
 | HTTP timer with route templates (no IDs or query strings), 4xx and 5xx outcomes, the authentication-failure counter per flow and reason (counted once, never for successes, logout, or a missing cookie), connection-pool meters tagged by pool only, no request value in any tag | `MonitoringMetricsIntegrationTest`, `AuthenticationMetricsTest` |
 | Correlation IDs: accepted and replaced values, response header on success and errors, logging context set during and cleared after success, handled and unhandled failures, distinct per request, never a credential | `CorrelationIdFilterTest`, `CorrelationAndLogSafetyIntegrationTest` |
 | No private value in the logs; failed requests logged once with the ID and class but not the message | `CorrelationAndLogSafetyIntegrationTest` |
