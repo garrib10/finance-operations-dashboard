@@ -1,0 +1,78 @@
+# Labels added automatically to pull requests by .github/workflows/labeler.yml.
+# Only existing repository labels are used. Labels that depend on a change's purpose
+# rather than its files (accessibility, ui/ux) are still added by hand.
+
+backend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/main/**"
+          - "pom.xml"
+          - "mvnw"
+          - "mvnw.cmd"
+
+frontend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "frontend/**"
+
+database:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/main/resources/db/migration/**"
+          - "src/main/java/db/migration/**"
+
+testing:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/test/**"
+          - "frontend/src/test/**"
+          - "frontend/src/**/*.test.ts"
+          - "frontend/src/**/*.test.tsx"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "**/*.md"
+
+security:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/main/java/**/security/**"
+
+# Matched by file name; changes to shared files such as api.ts may still need a manual label.
+authentication:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*[Aa]uth*"
+          - "**/*[Ss]ession*"
+          - "**/*[Tt]oken*"
+          - "**/*[Ll]ogin*"
+          - "**/*[Rr]egister*"
+
+account:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*[Aa]ccount*"
+          - "**/*[Pp]rofile*"
+          - "**/*[Pp]assword*"
+
+github_actions:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pom.xml"
+          - "frontend/package.json"
+          - "frontend/package-lock.json"
+
+enhancement:
+  - head-branch:
+      - "^feature/"
+
+bug:
+  - head-branch:
+      - "^fix/"

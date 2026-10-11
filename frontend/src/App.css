@@ -12,40 +12,387 @@
   margin-top: 1.5rem;
 }
 
-.app-header {
-  background-color: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.app-header__content {
-  width: min(100% - 2rem, var(--content-width));
-  min-height: 64px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 2rem;
-}
-
 .app-brand {
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--color-primary);
 }
 
-.app-nav {
+/* Public pages (Login, Register, session restoration) */
+
+.public-header {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.public-header__content {
+  width: min(100% - 2rem, var(--content-width));
+  min-height: var(--topbar-height);
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 2rem;
+}
+
+.public-nav {
   display: flex;
   align-items: center;
   gap: 1.5rem;
 }
 
-.app-nav a {
+.public-nav a {
   color: var(--color-text-muted);
   font-weight: 500;
 }
 
-.app-nav a:hover {
+.public-nav a:hover {
   color: var(--color-primary);
+}
+
+/*
+ * Signed-in application shell. Above 1100px the sidebar is a sticky column in normal
+ * grid flow, so content never sits underneath it and the page breakpoints, which
+ * switch at 1100px, keep describing the content area. At 1100px and below the sidebar
+ * is hidden and the top bar's menu button opens the navigation drawer instead.
+ * DESKTOP_NAV_QUERY in navigation.ts must match these breakpoints.
+ */
+.app-layout {
+  min-height: 100vh;
+}
+
+.app-layout__body {
+  min-width: 0;
+}
+
+.app-sidebar {
+  display: none;
+}
+
+.app-sidebar__header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.primary-nav__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.primary-nav__link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem 0.5rem calc(0.75rem + 3px);
+  color: var(--color-text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+}
+
+.primary-nav__link:hover {
+  color: var(--color-primary);
+  background-color: var(--color-background);
+}
+
+/* The current page is marked by a bar and weight as well as color (kept in forced colors). */
+.primary-nav__link[aria-current="page"] {
+  padding-left: 0.75rem;
+  color: var(--color-primary);
+  font-weight: 700;
+  background-color: var(--color-primary-soft);
+  border-left: 3px solid var(--color-primary);
+}
+
+.primary-nav__icon {
+  flex-shrink: 0;
+}
+
+/* Desktop-only sidebar parts: the collapse toggle, compact brand, and tooltips. */
+.app-sidebar__brand-mark,
+.app-sidebar__toggle,
+.sidebar-tooltip {
+  display: none;
+}
+
+.app-topbar {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app-topbar__content {
+  width: min(100% - 2rem, var(--content-width));
+  min-height: var(--topbar-height);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-topbar__content .account-menu {
+  margin-left: auto;
+}
+
+.app-topbar__menu,
+.mobile-nav__close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.app-topbar__menu:hover,
+.mobile-nav__close:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+/*
+ * Mobile navigation drawer: a native modal <dialog>, which provides focus containment,
+ * an inert background, and Escape handling. Only the slide-in is animated.
+ */
+.mobile-nav {
+  inset: 0 auto 0 0;
+  width: min(18rem, 85vw);
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 0;
+  border-right: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+.mobile-nav::backdrop {
+  background-color: rgb(15 23 42 / 0.45);
+}
+
+.mobile-nav[open] {
+  animation: mobile-nav-in 200ms ease-out;
+}
+
+.mobile-nav[open]::backdrop {
+  animation: mobile-nav-backdrop-in 200ms ease-out;
+}
+
+.mobile-nav__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  height: 100%;
+  padding: 1rem 0.75rem;
+  overflow-y: auto;
+}
+
+.mobile-nav__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-left: 0.75rem;
+}
+
+/* Page scrolling is locked while the drawer is open. */
+:root.scroll-locked {
+  overflow: hidden;
+}
+
+@keyframes mobile-nav-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes mobile-nav-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (width > 1100px) {
+  .app-layout {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  }
+
+  .app-sidebar {
+    display: flex;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100dvh;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.5rem;
+    padding: 1.25rem 0.75rem;
+    /* Not a scroll container, so tooltips can extend past the column edge. The
+       content (brand row and three links) fits even short desktop windows. */
+    background-color: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+  }
+
+  /* The drawer controls belong to narrow screens only. */
+  .app-topbar__menu,
+  .app-topbar__brand {
+    display: none;
+  }
+
+  .app-sidebar__brand {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 0.75rem;
+  }
+
+  .app-sidebar {
+    z-index: var(--z-sidebar);
+  }
+
+  .primary-nav__link {
+    position: relative;
+  }
+
+  .app-sidebar__toggle {
+    position: relative;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    color: var(--color-text-muted);
+    background: none;
+    border: 0;
+    border-radius: var(--radius-sm);
+  }
+
+  .app-sidebar__toggle:hover {
+    color: var(--color-primary);
+    background-color: var(--color-background);
+  }
+
+  .app-sidebar__toggle-icon {
+    flex-shrink: 0;
+  }
+
+  /*
+   * Collapsed sidebar: icons only. Width changes instantly (no animation) so charts
+   * reflow once. Labels use the .visually-hidden declarations, scoped here so the
+   * preference never hides labels at 1100px and below.
+   */
+  .app-layout[data-sidebar-collapsed="true"] {
+    grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
+  }
+
+  /*
+   * Collapsed header: the "F" and the expand button share one spot. Hovering the
+   * header, or focusing the button with the keyboard, swaps the F for the button.
+   * The button stays focusable and named throughout; only its opacity changes.
+   */
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__header {
+    display: grid;
+    place-items: center;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__header > * {
+    grid-area: 1 / 1;
+    transition: opacity 150ms ease;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__toggle {
+    z-index: 1; /* local: above the brand it overlaps within the header cell */
+    opacity: 0;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__header:hover .app-sidebar__toggle,
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__toggle:focus-visible {
+    opacity: 1;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__header:hover .app-sidebar__brand,
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__header:has(.app-sidebar__toggle:focus-visible) .app-sidebar__brand {
+    opacity: 0;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__brand {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__brand-name {
+    display: none;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__brand-mark {
+    display: inline;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar .primary-nav__link {
+    justify-content: center;
+    gap: 0;
+    padding: 0.5rem;
+  }
+
+  /* Keep the icon centred when the 3px current-page bar is present. */
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar .primary-nav__link[aria-current="page"] {
+    padding-left: calc(0.5rem - 3px);
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar .primary-nav__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Decorative tooltip (aria-hidden): the hidden label is the accessible name. */
+  .sidebar-tooltip {
+    position: absolute;
+    top: 50%;
+    left: calc(100% + 0.75rem);
+    padding: 0.375rem 0.625rem;
+    color: #ffffff;
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+    background-color: var(--color-text);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  /* Link tooltips appear only when collapsed; the icon-only toggle always has one. */
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar .primary-nav__link:is(:hover, :focus-visible) .sidebar-tooltip,
+  .app-sidebar__toggle:is(:hover, :focus-visible) .sidebar-tooltip {
+    display: block;
+  }
 }
 
 .app-main {
@@ -128,15 +475,6 @@
   font-weight: 600;
 }
 
-.button--primary {
-  background-color: var(--color-primary);
-  color: #ffffff;
-}
-
-.button--primary:hover:not(:disabled) {
-  background-color: var(--color-primary-dark);
-}
-
 .button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
@@ -208,8 +546,13 @@
 }
 
 .account-menu__name {
+  /* Display names can be 100 characters; truncate visually (the button's accessible
+     name and the open panel keep the full name) so the top bar never overflows. */
+  max-width: 14rem;
+  overflow: hidden;
   font-weight: 600;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .account-menu__chevron {
@@ -221,7 +564,7 @@
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  z-index: 100;
+  z-index: var(--z-dropdown);
   width: min(18rem, calc(100vw - 2rem));
   padding: 1rem;
   background-color: var(--color-surface);
@@ -237,6 +580,7 @@
   margin-bottom: 0.75rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
 }
 
 .account-menu__identity span {
@@ -258,6 +602,50 @@
   background-color: var(--color-background);
   color: var(--color-text);
   border: 1px solid var(--color-border);
+}
+
+/*
+ * The app's one main-action look on every page (sign-in and registration included), the
+ * same as the Categories card's "+ Add transaction" link: blue text on the soft blue tint
+ * with a light blue border. Create buttons add a "+".
+ */
+.button--tinted {
+  color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+  border: 1px solid var(--color-info-border);
+}
+
+.button--tinted:hover:not(:disabled) {
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary);
+}
+
+/* A create action's "+" beside its text. */
+.button--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+/* Delete on Budgets and Transactions: the light button with red text, like the Categories
+   page's red Delete. The text says what it does, so colour is never the only signal. */
+.button--secondary.button--destructive {
+  color: var(--color-danger);
+}
+
+.button--secondary.button--destructive:hover:not(:disabled) {
+  color: var(--color-danger);
+  background-color: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+}
+
+/* Edit on budget cards and transaction rows: light until hovered, then the tinted blue of
+   the main buttons (Delete does the same in red). */
+.button--secondary.button--edit:hover:not(:disabled) {
+  color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+  border-color: var(--color-info-border);
 }
 
 .button--secondary:hover {
@@ -297,7 +685,8 @@
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  /* minmax(0, …) lets wide tables scroll inside their panel instead of widening the page. */
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 1.5rem;
   margin-bottom: 1.5rem;
 }
@@ -407,7 +796,7 @@
 
 .budget-details {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
   margin: 0 0 1rem;
 }
@@ -552,7 +941,7 @@
 
 .budget-period-filter {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 220px));
+  grid-template-columns: repeat(3, minmax(0, 220px));
   gap: 1rem;
   margin-top: 1.5rem;
 }
@@ -695,11 +1084,11 @@
 
 @media (max-width: 1100px) {
   .dashboard-summary {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .dashboard-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .transaction-filters {
@@ -707,11 +1096,11 @@
   }
 
   .budget-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .budget-charts-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -719,7 +1108,7 @@
 
 @media (max-width: 700px) {
   .dashboard-summary {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .dashboard-panel {
@@ -727,12 +1116,12 @@
   }
 
   .budget-details {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .transaction-form,
   .transaction-filters {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .transaction-form > div:last-child,
@@ -748,7 +1137,7 @@
   .budget-form,
   .budget-period-filter,
   .budget-card__content {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .budget-form > div:last-child {
@@ -775,32 +1164,10 @@
 }
 
 @media (max-width: 640px) {
-  .app-header__content {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem 0;
-  }
-
-  .app-nav {
-    width: 100%;
-    gap: 1rem;
-    overflow-x: auto;
-  }
-
-  .account-menu,
-  .account-menu__trigger {
-    width: 100%;
-  }
-
+  /* Compact avatar-only trigger; its accessible name still includes the user's name. */
+  .account-menu__name,
   .account-menu__chevron {
-    margin-left: auto;
-  }
-
-  .account-menu__panel {
-    left: 0;
-    right: auto;
-    width: 100%;
+    display: none;
   }
 
   .app-main {
@@ -976,4 +1343,1130 @@
   border-radius: var(--radius-sm);
   background: var(--color-background);
   color: var(--color-text);
+}
+
+/* ---------------------------------------------------------------- Categories (#19) */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.category-label {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
+  /* Align the name's first line with neighbouring text, not the icon's bottom edge. */
+  vertical-align: top;
+}
+
+.category-label__name {
+  overflow-wrap: anywhere;
+}
+
+/* Offset the icon's top margin so it never makes the label taller than one text line. */
+.category-label .category-icon {
+  margin-bottom: -0.15em;
+}
+
+.category-icon {
+  flex-shrink: 0;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.15em;
+  color: var(--color-primary);
+}
+
+/* The category control spans the form row so the new-category fields have room. */
+.category-select {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  min-width: 0;
+}
+
+/* Field icons sit inside the control on the left, like a search box: the category's own
+   icon, and the Type, Amount, Description, Date and budget icons. */
+.category-select__control,
+.icon-field {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.category-select__control > svg,
+.icon-field > svg {
+  position: absolute;
+  top: 50%;
+  left: 0.85rem;
+  margin: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* Doubled class so this outranks page rules such as ".budget-form select". */
+.category-select__control.category-select__control > select,
+.icon-field.icon-field > input,
+.icon-field.icon-field > select {
+  width: 100%;
+  padding-left: 2.6rem;
+}
+
+/* An icon that waits for input (Amount, Description): no gap while the field is empty. */
+.icon-field.icon-field--empty > input {
+  padding-left: 0.75rem;
+}
+
+.field-icon {
+  color: var(--color-primary);
+}
+
+.category-icon--placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Budget form: Category + Monthly Limit, then Month + Year, then the buttons. The
+   category only spans the row while its new-category fields are open. */
+.budget-form .category-select:not(:has(.category-create)) {
+  grid-column: auto;
+  display: block;
+}
+
+.budget-form > div:last-child {
+  grid-column: 1 / -1;
+}
+
+.icon-label,
+.transaction-type-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.transaction-type-icon {
+  flex-shrink: 0;
+}
+
+.transaction-type-icon--income {
+  color: var(--color-success);
+}
+
+.transaction-type-icon--expense {
+  color: var(--color-danger);
+}
+
+.category-create {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.category-create legend {
+  padding: 0 0.25rem;
+  font-weight: 600;
+}
+
+.field-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.icon-picker-field {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.icon-picker__label {
+  font-weight: 600;
+}
+
+.icon-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 0.375rem;
+}
+
+.icon-picker__option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  cursor: pointer;
+}
+
+.icon-picker__option .category-icon {
+  margin-top: 0;
+}
+
+/* Selected is shown by border weight and fill, not by color alone. */
+.icon-picker__option:has(.icon-picker__input:checked) {
+  border: 3px solid var(--color-primary);
+  background-color: var(--color-background);
+}
+
+.icon-picker__option:has(.icon-picker__input:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.icon-picker[aria-invalid="true"] {
+  padding: 0.25rem;
+  border: 2px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+}
+
+.button--small {
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.button--danger {
+  background-color: var(--color-danger);
+  color: #ffffff;
+}
+
+/* Category create and edit forms, and the inline delete confirmation (Categories page). */
+.category-form {
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+}
+
+.category-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.category-delete-confirm {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+}
+
+.app-main .category-delete-confirm__message {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.category-badge {
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.data-table td .category-label {
+  white-space: normal;
+}
+
+@media (max-width: 700px) {
+  .category-select {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .budget-period-filter {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Self-dismissing success banners, stacked at the top of the window. */
+.status-banner-stack {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  z-index: var(--z-banner);
+  width: min(48rem, calc(100% - 2rem));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.status-banner__message {
+  flex: 1;
+  margin: 0;
+}
+
+.status-banner--visible {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  padding: 0.65rem 0.75rem 0.65rem 1rem;
+  color: var(--color-success);
+  font-size: 0.95rem;
+  font-weight: 500;
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  pointer-events: auto;
+  animation: status-banner-in 160ms ease-out;
+}
+
+.status-banner__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--color-success);
+  background-color: var(--color-success-soft);
+  border-radius: 50%;
+}
+
+.status-banner__dismiss {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--color-success);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+
+.status-banner__dismiss:hover {
+  background-color: var(--color-success-soft);
+}
+
+/* Persistent notices in the page flow: a visible label and icon carry the severity,
+   the colour only reinforces it. No animation, so nothing to reduce for motion. */
+.inline-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 1.5rem;
+  padding: 0.85rem 0.85rem 0.85rem 1rem;
+  color: var(--color-text);
+  background-color: var(--color-primary-soft);
+  border: 1px solid var(--color-info-border);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+}
+
+.inline-notice:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.inline-notice--warning {
+  background-color: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  border-left-color: var(--color-warning);
+}
+
+.inline-notice--error {
+  background-color: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+  border-left-color: var(--color-danger);
+}
+
+.inline-notice--info {
+  border-left-color: var(--color-primary);
+}
+
+.inline-notice__icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: var(--color-primary);
+}
+
+.inline-notice--warning .inline-notice__icon,
+.inline-notice--warning .inline-notice__label {
+  color: var(--color-warning);
+}
+
+.inline-notice--error .inline-notice__icon,
+.inline-notice--error .inline-notice__label {
+  color: var(--color-danger);
+}
+
+.inline-notice__message {
+  flex: 1 1 14rem;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.inline-notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.inline-notice__dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  color: var(--color-text-muted);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+
+.inline-notice__dismiss:hover {
+  color: var(--color-text);
+  background-color: rgb(15 23 42 / 0.06);
+}
+
+.inline-notice__dismiss:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@keyframes status-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-banner--visible {
+    animation: none;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] .app-sidebar__header > * {
+    transition: none;
+  }
+
+  .mobile-nav[open],
+  .mobile-nav[open]::backdrop {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Categories page (#100) */
+
+.category-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0 0 2rem;
+}
+
+.category-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 1.1rem 1.25rem;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.category-stat dt {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.category-stat dd {
+  margin: 0;
+}
+
+.category-stat__value {
+  color: var(--color-text);
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.category-stat__value--name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.category-stat__value--name .category-icon {
+  flex-shrink: 0;
+  margin-top: 0;
+}
+
+.category-stat__detail {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+/* Reporting month (issue #103): two selects and Back to current month, wrapping on phones. */
+.category-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin: 0 0 1.5rem;
+}
+
+.category-period .form-field {
+  flex: 0 1 11rem;
+  min-width: 0;
+}
+
+.category-period select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.75rem;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.category-period select:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.category-period select:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.app-main .category-period__hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* Spending distribution: a plain table with an in-row bar that repeats the share. */
+.category-spending {
+  margin: 0 0 2rem;
+}
+
+.category-spending h2 {
+  margin: 0 0 0.35rem;
+}
+
+.app-main .category-spending__intro,
+.app-main .category-spending__note {
+  margin: 0 0 0.75rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.app-main .category-spending__note {
+  margin: 0.75rem 0 0;
+}
+
+.category-spending__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.category-spending__table th,
+.category-spending__table td {
+  padding: 0.6rem 0.5rem;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.category-spending__table thead th {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Category takes the room; Spent and Share keep a steady width. */
+.category-spending__table th:nth-child(2),
+.category-spending__table td:nth-child(2) {
+  width: 7.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.category-spending__table th:nth-child(3),
+.category-spending__table td:nth-child(3) {
+  width: 32%;
+}
+
+.category-spending__table tbody th {
+  font-weight: 600;
+}
+
+.category-spending__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.category-spending__name .category-icon {
+  margin-top: 0;
+}
+
+.category-spending__share {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+
+.category-spending__bar {
+  display: block;
+  height: 0.4rem;
+  margin-top: 0.3rem;
+  overflow: hidden;
+  background-color: var(--color-background);
+  border-radius: 999px;
+}
+
+.category-spending__bar > span {
+  display: block;
+  height: 100%;
+  background-color: var(--color-primary);
+  border-radius: inherit;
+}
+
+/* Search, filter, and sort for the category cards. */
+.category-toolbar {
+  margin: 0 0 1rem;
+}
+
+.category-toolbar__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.category-toolbar__controls .form-field {
+  flex: 1 1 11rem;
+  min-width: 0;
+}
+
+.category-toolbar__controls .category-toolbar__search {
+  flex-basis: 15rem;
+}
+
+.category-toolbar__controls select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.75rem;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.category-toolbar__controls select:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Phones: columns sized to their content, so Spent and Share take only what they need and
+   the name gets the rest; names wrap between words, never mid-word. */
+@media (max-width: 480px) {
+  .category-spending__table {
+    table-layout: auto;
+    font-size: 0.9rem;
+  }
+
+  .category-spending__table th,
+  .category-spending__table td {
+    padding: 0.55rem 0.3rem;
+  }
+
+  .category-spending__table th:nth-child(2),
+  .category-spending__table td:nth-child(2),
+  .category-spending__table th:nth-child(3),
+  .category-spending__table td:nth-child(3) {
+    width: 1%;
+    white-space: nowrap;
+  }
+
+  .category-spending__name {
+    gap: 0.35rem;
+    overflow-wrap: break-word;
+  }
+
+  .category-spending__bar {
+    min-width: 3rem;
+  }
+}
+
+.app-main .category-toolbar__count {
+  margin: 0.75rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.app-main .category-toolbar__note {
+  margin: 0.25rem 0 0;
+}
+
+/* Categories notices keep a plain 1px border (no thick left accent), like the card warnings. */
+.categories-page .inline-notice {
+  border-left-width: 1px;
+}
+
+.categories-page .inline-notice--error {
+  border-left-color: var(--color-danger-border);
+}
+
+.categories-page .inline-notice--warning {
+  border-left-color: var(--color-warning-border);
+}
+
+.categories-page .inline-notice--info {
+  border-left-color: var(--color-info-border);
+}
+
+.categories-page__no-results {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 1.25rem;
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.app-main .categories-page__no-results p {
+  margin: 0;
+}
+
+.categories-page__list-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.categories-page__list-header h2 {
+  margin: 0;
+}
+
+/* Active this month, then Other categories (issue #102). Instant show/hide, no motion. */
+.categories-section + .categories-section {
+  margin-top: 2rem;
+}
+
+.categories-section__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.categories-section h2 {
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+  overflow-wrap: anywhere;
+}
+
+.categories-section__header h2 {
+  margin: 0;
+}
+
+.categories-section__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.categories-section__toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* 20.5rem keeps each card wide enough for its two links on one row; narrower windows get
+   fewer, wider columns instead of cramped ones (one column on phones). */
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20.5rem), 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.category-grid > li {
+  display: flex;
+  min-width: 0;
+}
+
+.category-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+  padding: 1.25rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.category-card__header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.category-card__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+  border-radius: var(--radius-md);
+}
+
+.category-card__icon-svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.category-card__title {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 0.6rem;
+  min-width: 0;
+}
+
+/* break-word (not anywhere) keeps whole words together, so the badge wraps first. */
+.category-card__name {
+  min-width: 0;
+  margin: 0;
+  font-size: 1.05rem;
+  overflow-wrap: break-word;
+}
+
+.category-card .category-badge {
+  flex-shrink: 0;
+}
+
+/* A very narrow card (a 320 px phone) leaves the name only a few letters of width beside
+   the icon and "More actions", so it moves to its own full-width row underneath. */
+.category-card {
+  container-type: inline-size;
+}
+
+@container (max-width: 12rem) {
+  .category-card__header {
+    flex-wrap: wrap;
+  }
+
+  .category-card .category-actions {
+    margin-left: auto;
+  }
+
+  .category-card__title {
+    order: 1;
+    flex-basis: 100%;
+  }
+}
+
+.category-card__figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.category-card__figures div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.category-card__figures dt {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.category-card__figures dd {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.category-card__budget {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.category-card__budget-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-main .category-card__note,
+.app-main .category-card__usage {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+/* Keep "Last used <date>" together when the activity line wraps. */
+.category-card__last-used {
+  white-space: nowrap;
+}
+
+.app-main .category-card__usage {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 1100px) {
+  .category-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .category-summary-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.category-card__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* Card links: transactions is the stronger, tinted action; budgets is quieter. */
+/* Both links share the row evenly; when they cannot fit side by side (narrow cards),
+   each takes the full width instead of leaving a ragged second line. */
+.category-card__link {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 44px;
+  /* Compact enough that "View transactions" and "Edit budget" share a row in a
+     three-column card, like the other link pairs. */
+  padding: 0.5rem 0.55rem;
+  white-space: nowrap;
+  color: var(--color-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.category-card__link:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.category-card__link--primary {
+  color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+  border-color: var(--color-info-border);
+}
+
+.category-card__link--primary:hover {
+  color: var(--color-primary-dark);
+}
+
+.category-card__link:focus-visible,
+.category-actions__trigger:focus-visible,
+.category-actions__item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Card warning: spending this month with no budget. The InlineNotice warning colours,
+   tightened for a card: an even border (no accent bar) and a plain inline link, which as
+   part of a sentence needs no 44px box (WCAG target-size exception for inline links). */
+.category-card__warning .inline-notice {
+  flex-wrap: nowrap;
+  margin: 0;
+  padding: 0.7rem 0.75rem;
+  font-size: 0.9rem;
+  border-left-width: 1px;
+  border-left-color: var(--color-warning-border);
+}
+
+/* The text sits beside the icon at any card width (it wraps inside instead). */
+.category-card__warning .inline-notice__message {
+  flex: 1 1 0;
+}
+
+.category-card__warning-link {
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.category-card__warning-link:hover {
+  color: var(--color-primary-dark);
+}
+
+.category-card__warning-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* "More actions": the header (full card width) is the positioning context, so the panel
+   sits just below it, however many lines the name wraps to, and never exceeds the card. */
+.category-card__header {
+  position: relative;
+}
+
+.category-actions__trigger {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  color: var(--color-text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.category-actions__trigger:hover,
+.category-actions__trigger[aria-expanded="true"] {
+  color: var(--color-text);
+  background-color: var(--color-background);
+  border-color: var(--color-border);
+}
+
+.category-actions__panel {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  z-index: 5;
+  display: grid;
+  gap: 0.25rem;
+  width: min(15rem, 100%);
+  padding: 0.4rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.category-actions__panel[hidden] {
+  display: none;
+}
+
+.category-actions__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+
+.category-actions__item:hover:not([aria-disabled="true"]) {
+  background-color: var(--color-background);
+}
+
+.category-actions__item--danger {
+  color: var(--color-danger);
+}
+
+.app-main .category-actions__reason {
+  margin: 0;
+  padding: 0 0.75rem 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+/* In-use Delete stays focusable (aria-disabled) so its reason is reachable. */
+.category-card [aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+/* Headings that receive focus after a change, so keyboard users can see where they are. */
+.category-card__name:focus-visible,
+#categories-list-heading:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+.categories-page__create {
+  margin-bottom: 1.5rem;
+}
+
+.categories-page__create h3 {
+  margin: 0;
 }

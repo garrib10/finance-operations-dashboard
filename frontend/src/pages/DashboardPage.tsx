@@ -1,32 +1,13 @@
+import { InlineNotice } from "../components/InlineNotice";
+import { TransactionTypeLabel } from "../components/TransactionTypeIcon";
 import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
 import { ApiError } from "../services/api";
 import { getDashboard } from "../services/dashboardService";
 import type { DashboardResponse } from "../types/dashboard";
 import { formatCurrency, formatDate } from "../utils/formatters";
-
-function formatBudgetStatus(status: string): string {
-  switch (status) {
-    case "ON_TRACK":
-      return "On Track";
-
-    case "CAUTION":
-      return "Caution";
-
-    case "WARNING":
-      return "Warning";
-
-    case "OVER_BUDGET":
-      return "Over Budget";
-
-    default:
-      return status;
-  }
-}
-
-function clampProgressPercentage(percentage: number): number {
-  return Math.min(Math.max(percentage, 0), 100);
-}
+import { CategoryLabel } from "../components/CategoryIcon";
+import { clampProgressPercentage, formatBudgetStatus } from "../utils/budgetStatus";
 
 function DashboardPage() {
   const { user } = useAuth();
@@ -72,9 +53,7 @@ function DashboardPage() {
       <section className="page">
         <h1>Dashboard</h1>
 
-        <p className="form-error" role="alert">
-          {errorMessage}
-        </p>
+        <InlineNotice variant="error">{errorMessage}</InlineNotice>
       </section>
     );
   }
@@ -185,9 +164,11 @@ function DashboardPage() {
                     <tr key={transaction.id}>
                       <td>{transaction.description}</td>
 
-                      <td>{transaction.categoryName}</td>
+                      <td>
+                        <CategoryLabel name={transaction.categoryName} iconKey={transaction.categoryIconKey} />
+                      </td>
 
-                      <td>{transaction.type}</td>
+                      <td><TransactionTypeLabel type={transaction.type} /></td>
 
                       <td>{formatDate(transaction.transactionDate, user?.preferences?.dateFormat)}</td>
 
@@ -218,7 +199,7 @@ function DashboardPage() {
                   className="category-spending-item"
                   key={category.categoryId}
                 >
-                  <span>{category.categoryName}</span>
+                  <CategoryLabel name={category.categoryName} iconKey={category.categoryIconKey} />
 
                   <strong>{formatCurrency(category.amountSpent)}</strong>
                 </div>
@@ -246,7 +227,9 @@ function DashboardPage() {
             {dashboard.budgetSummaries.map((budget) => (
               <article className="budget-summary-card" key={budget.budgetId}>
                 <div className="budget-summary-card__header">
-                  <h3>{budget.categoryName}</h3>
+                  <h3>
+                    <CategoryLabel name={budget.categoryName} iconKey={budget.categoryIconKey} />
+                  </h3>
 
                   <span
                     className={`budget-status budget-status--${budget.status.toLowerCase()}`}

@@ -8,6 +8,9 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 import dev.portfolio.finance.dto.error.ApiErrorResponse;
+import dev.portfolio.finance.monitoring.AuthenticationMetrics;
+import dev.portfolio.finance.monitoring.AuthenticationMetrics.Flow;
+import dev.portfolio.finance.monitoring.AuthenticationMetrics.Reason;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import tools.jackson.databind.json.JsonMapper;
@@ -19,9 +22,11 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
     public static final String AUTHENTICATION_REQUIRED = "AUTHENTICATION_REQUIRED";
 
     private final JsonMapper jsonMapper;
+    private final AuthenticationMetrics metrics;
 
-    public RestAuthenticationEntryPoint(JsonMapper jsonMapper) {
+    public RestAuthenticationEntryPoint(JsonMapper jsonMapper, AuthenticationMetrics metrics) {
         this.jsonMapper = jsonMapper;
+        this.metrics = metrics;
     }
 
     @Override
@@ -33,6 +38,12 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
         boolean expired = Boolean.TRUE.equals(
                 request.getAttribute(JwtAuthenticationFilter.ACCESS_TOKEN_EXPIRED_ATTRIBUTE));
+
+        // The one place a protected request is refused, so each refusal is counted once and a
+        // bad token on a public endpoint is not. Only the header's presence is read.
+        String authorization = request.getHeader("Authorization");
+        boolean bearer = authorization != null && authorization.startsWith("Bearer ");
+        metrics.failure(Flow.ACCESS_TOKEN, expired ? Reason.EXPIRED : bearer ? Reason.INVALID : Reason.MISSING);
 
         ApiErrorResponse errorResponse = new ApiErrorResponse(
                 LocalDateTime.now(),

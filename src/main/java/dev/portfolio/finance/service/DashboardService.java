@@ -10,6 +10,7 @@ import dev.portfolio.finance.dto.dashboard.BudgetSummaryResponse;
 import dev.portfolio.finance.dto.dashboard.CategorySpendingResponse;
 import dev.portfolio.finance.dto.dashboard.DashboardResponse;
 import dev.portfolio.finance.dto.dashboard.RecentTransactionResponse;
+import dev.portfolio.finance.entity.CategoryIcon;
 import dev.portfolio.finance.entity.Transaction;
 import dev.portfolio.finance.entity.TransactionType;
 import dev.portfolio.finance.entity.User;
@@ -24,17 +25,20 @@ public class DashboardService {
     private final TransactionRepository transactionRepository;
     private final BudgetRepository budgetRepository;
     private final BudgetService budgetService;
+    private final ReportingPeriodProvider reportingPeriodProvider;
 
     public DashboardService(
             UserRepository userRepository,
             TransactionRepository transactionRepository,
             BudgetRepository budgetRepository,
-            BudgetService budgetService
+            BudgetService budgetService,
+            ReportingPeriodProvider reportingPeriodProvider
     ) {
         this.userRepository = userRepository;
         this.transactionRepository = transactionRepository;
         this.budgetRepository = budgetRepository;
         this.budgetService = budgetService;
+        this.reportingPeriodProvider = reportingPeriodProvider;
     }
 
     @Transactional(readOnly = true)
@@ -60,13 +64,11 @@ public class DashboardService {
         BigDecimal currentBalance =
                 totalIncome.subtract(totalExpenses);
 
-        LocalDate today = LocalDate.now();
+        ReportingPeriod period = reportingPeriodProvider.currentMonth();
 
-        LocalDate startDate = today.withDayOfMonth(1);
+        LocalDate startDate = period.start();
 
-        LocalDate endDate = startDate.withDayOfMonth(
-                startDate.lengthOfMonth()
-        );
+        LocalDate endDate = period.end();
 
         BigDecimal monthlyIncome =
                 transactionRepository.sumAmountByUserTypeAndDateRange(
@@ -106,6 +108,9 @@ public class DashboardService {
                                 new CategorySpendingResponse(
                                         projection.getCategoryId(),
                                         projection.getCategoryName(),
+                                        CategoryIcon.fromStoredKey(
+                                                projection.getCategoryIconKey()
+                                        ).key(),
                                         projection.getAmountSpent()
                                 )
                         )
@@ -118,8 +123,8 @@ public class DashboardService {
                         )
                         .stream()
                         .filter(budget ->
-                                budget.getMonth() == today.getMonthValue()
-                                        && budget.getYear() == today.getYear()
+                                budget.getMonth() == period.month()
+                                        && budget.getYear() == period.year()
                         )
                         .map(budget -> {
                             BudgetAnalyticsResponse analytics =
@@ -132,6 +137,7 @@ public class DashboardService {
                                     analytics.budgetId(),
                                     analytics.categoryId(),
                                     analytics.categoryName(),
+                                    analytics.categoryIconKey(),
                                     analytics.monthlyLimit(),
                                     analytics.amountSpent(),
                                     analytics.amountRemaining(),
@@ -160,6 +166,7 @@ public class DashboardService {
                 transaction.getId(),
                 transaction.getCategory().getId(),
                 transaction.getCategory().getName(),
+                transaction.getCategory().getIcon().key(),
                 transaction.getType(),
                 transaction.getAmount(),
                 transaction.getDescription(),

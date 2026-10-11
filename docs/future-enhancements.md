@@ -10,12 +10,10 @@
 ## Budgets
 
 - 50%, 75%, 100% threshold alerts
-- Budget progress bars
 
 ## Categories
 
 - displayOrder field
-- Icons
 - Colors
 
 ## Recurring Expenses
@@ -24,7 +22,10 @@
 - Rent/Mortgage reminders
 - Monthly recurring transactions
 
+## Performance
+
+- Code-split the frontend bundle (route-level `React.lazy`) to get under Vite's 500 KB chunk warning
+
 ## Misc
 
 - CSV export
-- Pagination

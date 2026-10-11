@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "../context/AuthProvider";
-import AppHeader from "../components/AppHeader";
+import { AccountMenu } from "../components/AccountMenu";
 import * as accountService from "../services/accountService";
 import * as authService from "../services/authService";
 import { ApiError } from "../services/api";
@@ -43,7 +43,7 @@ afterEach(() => {
 async function setup(user: UserResponse = accountUser) {
   vi.mocked(authService.refreshSession).mockResolvedValue({ accessToken: "test-session", tokenType: "Bearer", expiresIn: 300 });
   vi.mocked(authService.getCurrentUser).mockResolvedValue(user);
-  const view = render(<MemoryRouter><AuthProvider><AppHeader /><AccountSettingsPage /></AuthProvider></MemoryRouter>);
+  const view = render(<MemoryRouter><AuthProvider><AccountMenu /><AccountSettingsPage /></AuthProvider></MemoryRouter>);
   await screen.findByRole("button", { name: /account menu for River Walker/i });
   return { ...view, events: userEvent.setup() };
 }
@@ -264,7 +264,7 @@ describe("Account settings profile photo", () => {
     });
     choose(jpeg());
     await events.click(within(section()).getByRole("button", { name: "Upload photo" }));
-    expect(await screen.findByRole("link", { name: "Login" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: /account menu/i })).not.toBeInTheDocument());
     expect(screen.queryByRole("form", { name: "Profile photo" })).not.toBeInTheDocument();
   });
 
@@ -365,8 +365,8 @@ describe("photo preservation across other account changes", () => {
     fireEvent.change(screen.getByLabelText("New password", { exact: true }), { target: { value: "new password value" } });
     fireEvent.change(screen.getByLabelText("Confirm new password", { exact: true }), { target: { value: "new password value" } });
     await events.click(screen.getByRole("button", { name: "Change password" }));
-    // Every session was revoked: the header signs out and no stale photo remains on screen.
-    expect(await screen.findByRole("link", { name: "Login" })).toBeInTheDocument();
+    // Every session was revoked: the account menu signs out and no stale photo remains on screen.
+    await waitFor(() => expect(screen.queryByRole("button", { name: /account menu/i })).not.toBeInTheDocument());
     expect(headerImage()).toBeNull();
     expect(screen.queryByRole("img", { name: "Profile photo for River Walker" })).not.toBeInTheDocument();
     expect(authService.logoutSession).not.toHaveBeenCalled();

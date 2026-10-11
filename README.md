@@ -11,6 +11,7 @@
 ![Railway](https://img.shields.io/badge/Railway-0B0D0E?logo=railway&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Vercel-black?logo=vercel)
 ![Cloudinary](https://img.shields.io/badge/Cloudinary-3448C5?logo=cloudinary&logoColor=white)
+![Better Stack](https://img.shields.io/badge/Better_Stack-5B63D3?logo=betterstack&logoColor=white)
 
 FinTrack is a production-deployed full-stack personal finance application built with Java, Spring Boot, React, TypeScript, and MySQL. It provides secure account access, transaction and budget management, financial analytics, and a responsive dashboard.
 
@@ -38,11 +39,21 @@ The project demonstrates layered backend architecture, short-lived JWTs with rot
 - Same-origin Vercel `/api` proxy, so the refresh cookie is always first-party
 - BCrypt password hashing
 - User-scoped transactions, categories, budgets, and dashboard data
+- Custom categories with approved icons, created together with a transaction or budget in one
+  database transaction and reusable everywhere; database-enforced per-user name uniqueness and
+  ownership
+- Dedicated Categories page: any month's activity and spending distribution (this month by
+  default, earlier months through shareable URLs), categories active that month shown first,
+  no-budget warnings, search, filters, and sorting, accessible card actions, and shortcuts
+  into each category's transactions and that month's budget, backed by a fixed-query summary
+  API
+- Responsive application shell: a collapsible desktop sidebar that remembers its state and
+  an accessible mobile navigation drawer, with keyboard and reduced-motion support
 - Search, filtering, sorting, pagination, and financial analytics
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
-- **732 passing backend tests** (709 unit + 23 MySQL integration) with **98.78% instruction coverage** and **96.49% branch coverage**
-- **540 passing frontend tests** across **33 test files** with **100% statement, branch, function, and line coverage**
+- **950 passing backend tests** (911 unit + 39 MySQL integration) with **98.86% instruction coverage** and **95.69% branch coverage**
+- **927 passing frontend tests** across **58 test files** with **99.58% statement, 98.84% branch, 99.81% function, and 100% line coverage**
 
 ---
 
@@ -51,11 +62,11 @@ The project demonstrates layered backend architecture, short-lived JWTs with rot
 | Area             | Technologies                                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------------------------------- |
 | Backend          | Java 21, Spring Boot 4.1, Spring Web MVC, Spring Security, Spring Data JPA, Hibernate, Bean Validation, Maven |
-| Frontend         | React 19, TypeScript 6, Vite, React Router, Recharts, custom CSS                                              |
+| Frontend         | React 19, TypeScript 6, Vite, React Router, Recharts, Lucide icons, custom CSS                                |
 | Database         | MySQL, Flyway                                                                                                 |
 | Image Storage    | Cloudinary (optional, backend-only profile photos)                                                            |
 | Authentication   | JWT, BCrypt                                                                                                   |
-| Backend Testing  | JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, JaCoCo                                 |
+| Backend Testing  | JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, Testcontainers (MySQL), JaCoCo        |
 | Frontend Testing | Vitest, React Testing Library, jest-dom, jsdom                                                                |
 | Deployment       | Vercel, Railway                                                                                               |
 
@@ -136,7 +147,8 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 
 - Create, view, edit, and delete income and expense transactions
 - Search transactions by description
-- Filter by type, amount, and date
+- Filter by type, category, amount, and date
+- Choose an existing category or create a custom one (name and icon) while adding or editing
 - Sort by amount, transaction date, or creation date
 - Paginated transaction results
 - Deterministic pagination: transactions with equal values in the selected sort field are ordered by transaction ID in the same direction.
@@ -145,16 +157,47 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 
 ### Categories
 
-- Default financial categories created for new users
-- Category-based transaction and budget organization
-- Duplicate category-name prevention
-- Authenticated-user category ownership
-- Backend API support for category management
+- 13 built-in categories with icons created for every new user; built-ins cannot be renamed or deleted
+- Custom categories with a name and an approved icon, created from the transaction or budget form and
+  saved in the same database transaction as the record
+- New categories are immediately reusable in every form and filter
+- Rename or re-icon a custom category everywhere it is used, without changing its ID or any totals
+- Delete unused custom categories; categories still used by a transaction or budget are protected
+- Names are compared after Unicode normalization and lowercasing, so equivalent duplicates are rejected
+  per user (enforced by a database constraint, including under concurrency)
+- Strict ownership: another user's category is indistinguishable from a missing one and can never be
+  referenced by a transaction or budget, also enforced by composite database foreign keys
+- Category icons beside the names on transactions, budgets, filters, and the dashboard; unknown icons fall
+  back to a generic tag
+
+**Categories page** (`/categories`, in the sidebar and mobile drawer):
+
+- Month and Year selects (this month by default, back to January 2000, never a future
+  month); an earlier month is a shareable URL (`/categories?month=8&year=2026`) that survives
+  refresh and Back/Forward, with "Back to current month" to return
+- Summary strip: category counts, the month's top category, categories over budget, and
+  categories spending without a budget
+- This month's spending distribution as an accessible table with share bars
+- "Active this month" first (spending or a budget this month), then a collapsible "Other
+  categories" section that remembers whether it is open; each category appears once
+- A card per category with its icon, built-in or custom badge, spending and share, budget
+  progress and status, this month's transactions, and last-used date
+- A warning with a Set budget link on categories spending this month without a budget
+- Search (ignores case and surrounding spaces, Unicode-normalized), filters (Custom,
+  Built-in, Unused, No budget in the month), and sorting (name, the month's spending, most
+  used); the summary always covers every category
+- Create, rename, re-icon, and delete custom categories through each card's accessible
+  "More actions" button; Delete is unavailable, with the reason, when a category is in use
+- Shortcuts to the category's transactions (or to add its first one) and to set or edit its
+  budget for the month shown, opening Budgets on that month
+- Status feedback: success confirmations, and persistent, labelled warnings and errors that
+  never rely on colour alone; field errors stay beside their inputs
 
 ### Budgets
 
 - Create, edit, and delete monthly category budgets
-- Filter budgets by month and year
+- Filter budgets by month, year, and category
+- Choose an existing category or create a custom one while creating or editing a budget
 - Prevent duplicate budgets for the same category and period
 - Calculate spending, remaining balance, and utilization
 - Display On Track, Caution, Warning, and Over Budget statuses
@@ -164,13 +207,18 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 
 - Display all-time and current-month financial totals
 - Calculate the current balance
-- Show recent transactions
-- Group current-month spending by category
+- Show recent transactions with category icons
+- Group current-month spending by category (grouped by category ID, so renames never split totals)
 - Visualize budget progress and utilization with Recharts
 - Support useful loading, error, and empty states
 
 ### Responsive Frontend
 
+- Desktop sidebar navigation with icons and a clearly marked current page
+- Collapsible icon-only sidebar mode with tooltips, saved per device
+- Mobile and tablet navigation drawer (1100px and below) built on the native modal
+  `<dialog>`, with focus handling, Escape and backdrop dismissal, and scroll locking
+- Skip link, labelled navigation landmarks, and reduced-motion support
 - Desktop, tablet, and mobile layouts
 - Centralized, type-safe API communication
 - Reusable currency and date formatting
@@ -205,14 +253,29 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 
 ---
 
+## Monitoring
+
+- Public health checks: `/api/health`, plus `/actuator/health/liveness` and
+  `/actuator/health/readiness` (readiness includes the database), each returning status only.
+- Detailed health and metrics are never public; production exposes health status only.
+- Metrics for request volume, latency, server errors, and authentication failures, with
+  bounded labels and no personal or financial data.
+- Structured JSON logs in production, with an `X-Correlation-ID` on every response to find a
+  request's log lines.
+- An external uptime monitor with a repeated-failure alert.
+
+See [Monitoring](docs/monitoring.md) and [Production troubleshooting](docs/production-troubleshooting.md).
+
+---
+
 ## Testing & Quality
 
-| Test Suite        | Results                                                 |
-| ----------------- | ------------------------------------------------------- |
-| Backend           | **732 tests passing** (709 unit, 23 MySQL integration)  |
-| Backend Coverage  | **98.78% instruction coverage, 96.49% branch coverage** |
-| Frontend          | **540 tests passing across 33 test files**              |
-| Frontend Coverage | **100% statement, branch, function, and line coverage** |
+| Test Suite        | Results                                                             |
+| ----------------- | ------------------------------------------------------------------- |
+| Backend           | **950 tests passing** (911 unit, 39 MySQL integration)              |
+| Backend Coverage  | **98.86% instruction coverage, 95.69% branch coverage**             |
+| Frontend          | **927 tests passing across 58 test files**                          |
+| Frontend Coverage | **99.58% statements, 98.84% branches, 99.81% functions, 100% lines** |
 
 For branch behavior, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
@@ -233,13 +296,18 @@ Coverage includes:
 - Spring Security configuration
 - User ownership and cross-user data isolation
 - Transaction search, filtering, sorting, and pagination
-- Category initialization and duplicate prevention
+- Category normalization, built-in protection, icons, rename, and in-use deletion rules
+- The category usage summary: ownership, month boundaries, expense-only spending, budget
+  parity with the dashboard, and a fixed query count
+- Atomic category creation with transactions and budgets (rollback verified on the database)
+- Flyway V6 on a production-shaped MySQL schema, including preflight failures and recovery
 - Budget calculations, analytics, and status behavior
 - Dashboard aggregation
 - Full authenticated application workflows
 - Flyway clean-schema migrations, existing-schema adoption, migration history, and failure handling
 - Refresh-token rotation, reuse revocation, logout, and password-change revoke-all
 - Real MySQL races (login, refresh, logout, password change) in both lock orders
+- Real MySQL category races (duplicate names, rename versus create, delete versus new reference)
 
 Unit and most integration tests use a dedicated `test` profile with H2 in MySQL mode. `*IT` tests run against a real MySQL 8.4 container through Testcontainers during `verify`, so Docker must be running (locally, for example, Colima).
 
@@ -274,6 +342,14 @@ Coverage includes:
 - Profile-photo preview, validation, upload/replace/remove states, avatar fallback, and
   header synchronization
 - Preference-aware date rendering and all transaction request paths
+- Category selection, custom-category creation, icon picker, category filters, server field
+  messages beside their inputs, icon fallback, and stale-session category state
+- The Categories page: loading, error, and empty states; create, edit, and delete workflows
+  with focus management; the card actions disclosure; current-month activity; no-budget
+  warnings; Active and Other sections with the saved preference; search, filters, sorting,
+  and the spending table; deep links; and status notices
+- Responsive navigation: public versus signed-in layouts, current-page state, sidebar collapse
+  and saved preference, every mobile-drawer close path, focus return, and scroll-lock cleanup
 
 Run the frontend suite:
 
@@ -288,27 +364,33 @@ npm run test:coverage
 
 ### Dashboard
 
-The dashboard summarizes income, expenses, recent activity, category spending, and monthly budget performance.
+The dashboard summarizes income, expenses, recent activity, category spending, and monthly budget performance, with sidebar navigation to every page.
 
-<img src="assets/screenshots/dashboard.png" alt="FinTrack dashboard showing financial summaries, recent transactions, spending by category, and monthly budgets" width="1000">
+<img src="assets/screenshots/dashboard.png" alt="FinTrack dashboard with sidebar navigation, financial summaries, recent transactions with category icons, spending by category, and monthly budget cards" width="1000">
 
 ### Budget Analytics
 
-Budget comparison and utilization charts show spending progress across budget categories.
+Budget comparison and utilization charts show spending progress across budget categories, with every category labelled.
 
-<img src="assets/screenshots/budget-analytics.png" alt="FinTrack charts comparing monthly budgets with spending and showing budget utilization percentages" width="1000">
+<img src="assets/screenshots/budget-analytics.png" alt="FinTrack charts comparing monthly budget limits with spending and showing budget utilization percentages for six categories" width="1000">
 
 ### Budget Management
 
-Users can create monthly budgets, select reporting periods, review analytics, and monitor budget status.
+Users can create monthly budgets, select reporting periods, filter by category, review analytics, and monitor budget status.
 
-<img src="assets/screenshots/budgets.png" alt="FinTrack budget management page showing analytics and budget status cards" width="1000">
+<img src="assets/screenshots/budgets.png" alt="FinTrack budget management page showing the create form, period and category filters, analytics charts, and budget status cards" width="1000">
 
 ### Transaction Management
 
 Users can record, edit, delete, search, filter, sort, and paginate through income and expense transactions.
 
-<img src="assets/screenshots/transactions.png" alt="FinTrack transaction management page showing entry, filtering, and transaction history features" width="1000">
+<img src="assets/screenshots/transactions.png" alt="FinTrack transaction management page showing the add form, filters, and transaction history with category icons" width="1000">
+
+### Categories
+
+The Categories page shows how each built-in and custom category is used in a month: spending share, budget progress, activity, and warnings for spending without a budget.
+
+<img src="assets/screenshots/categories.png" alt="FinTrack categories page showing a monthly summary, a spending table with share bars, and category cards with budget status and no-budget warnings" width="1000">
 
 ---
 
@@ -332,11 +414,12 @@ The health, registration, and login endpoints are public. All other endpoints re
 | Transactions   | `GET`    | `/api/transactions/{id}`      | Get a transaction                               |
 | Transactions   | `PUT`    | `/api/transactions/{id}`      | Update a transaction                            |
 | Transactions   | `DELETE` | `/api/transactions/{id}`      | Delete a transaction                            |
-| Categories     | `POST`   | `/api/categories`             | Create a category                               |
+| Categories     | `POST`   | `/api/categories`             | Create a custom category                        |
 | Categories     | `GET`    | `/api/categories`             | Get all categories                              |
 | Categories     | `GET`    | `/api/categories/{id}`        | Get a category                                  |
-| Categories     | `PUT`    | `/api/categories/{id}`        | Update a category                               |
-| Categories     | `DELETE` | `/api/categories/{id}`        | Delete a category                               |
+| Categories     | `PUT`    | `/api/categories/{id}`        | Rename or re-icon a custom category             |
+| Categories     | `DELETE` | `/api/categories/{id}`        | Delete an unused custom category                |
+| Categories     | `GET`    | `/api/categories/summary`     | Per-category usage; optional `month`/`year`     |
 | Budgets        | `POST`   | `/api/budgets`                | Create a monthly budget                         |
 | Budgets        | `GET`    | `/api/budgets`                | Get budgets for a selected period               |
 | Budgets        | `GET`    | `/api/budgets/{id}`           | Get a budget                                    |
@@ -352,6 +435,11 @@ http://localhost:8080/swagger-ui/index.html
 ```
 
 Swagger/OpenAPI is intentionally disabled in production.
+
+Category rules, stable error codes (`CATEGORY_DUPLICATE`, `CATEGORY_NOT_FOUND`, `CATEGORY_BUILT_IN`,
+`CATEGORY_IN_USE`), the transaction category filter (`GET /api/transactions?categoryId=`), and the
+`categoryId` / `newCategory` contract for transaction and budget writes are documented in
+[Categories API](docs/categories-api.md).
 
 ### Example Requests
 
@@ -475,7 +563,7 @@ Start the Spring Boot API:
 ./scripts/run-local.sh
 ```
 
-Flyway applies pending database migrations during application startup. V3 adds display names and persisted account preferences, and V5 adds the refresh-session and token-history tables. For setup, adoption, and migration rules, see [Database Migrations](docs/database-migrations.md).
+Flyway applies pending database migrations during application startup. V3 adds display names and persisted account preferences, V5 adds the refresh-session and token-history tables, and V6 (a Java migration) adds category normalization, built-in and icon metadata, and ownership constraints. For setup, adoption, and migration rules, see [Database Migrations](docs/database-migrations.md).
 
 The backend runs at `http://localhost:8080`.
 
@@ -506,8 +594,7 @@ The frontend runs at `http://localhost:5173`.
 
 ## Future Improvements
 
-- Add a custom-category workflow where selecting Other displays a field for entering and saving a new category
-- Add production monitoring and structured application metrics
+- Code-split the frontend bundle by route
 
 ---
 

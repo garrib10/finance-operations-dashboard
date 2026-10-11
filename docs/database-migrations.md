@@ -56,7 +56,11 @@ reviewed on September 20, 2026.
 - Foreign keys to `users.id` and `categories.id`
 
 All application tables use the InnoDB engine, the `utf8mb4` character set,
-and the `utf8mb4_unicode_ci` collation.
+and the `utf8mb4_unicode_ci` collation as written in V1. Databases that were created by
+Hibernate before Flyway and then baselined (production) use the server default,
+`utf8mb4_0900_ai_ci`, and Hibernate-generated foreign-key and index names (`FK…`); later
+migrations must not depend on V1's constraint names other than the ones Hibernate also
+used (`uk_category_user_name`, `uk_budget_user_category_month_year`, `uk_users_email`).
 
 ## Migration Naming
 
@@ -74,6 +78,13 @@ Examples:
 - `V2__add_transaction_lookup_index.sql`
 
 Migration versions must be unique and applied in ascending order.
+
+A migration that cannot be expressed portably in SQL is a Java migration in
+`src/main/java/db/migration` (package `db.migration`), for example
+`V6__add_category_normalization_builtin_and_icons.java`. The existing
+`classpath:db/migration` location discovers both kinds. A Java migration must
+return a fixed `getChecksum()` so Flyway can detect edits, and it must not call
+application code, so later application changes cannot alter it.
 
 ## Migration Rules
 
@@ -145,10 +156,11 @@ Never mark a failed migration successful without verifying its complete schema.
 
 ### Staging migration checks
 
-The automated migration suite uses H2 in MySQL mode, not a MySQL server. There is
-no configured disposable MySQL/Testcontainers workflow in this repository.
-A previous user-run local MySQL 9.7 recovery validated V3, but does not replace
-clean-install and populated-V2 rehearsal on the staging MySQL version.
+When V3 was written, the automated suite used only H2 in MySQL mode. Since v1.2.0,
+`./mvnw clean verify` also runs `*IT` tests against a disposable MySQL 8.4 container
+(Testcontainers): they apply V1 through the latest migration on startup and exercise
+the newest migrations on populated schemas. A rehearsal against a restored copy of the
+target database is still recommended before a migration that rewrites existing rows.
 
 Before deployment, use an isolated disposable database or restored copy, never a
 shared production schema, to:
@@ -188,9 +200,8 @@ future schema corrections require a new versioned migration.
 Automated tests use H2 in MySQL mode and compare all preexisting user and financial
 columns before/after a populated V3 upgrade, including microsecond timestamps.
 They also check the nullable 255-character column and repeat migration behavior.
-The SQL uses a simple nullable VARCHAR addition shared by MySQL and H2. Rehearse
-clean and populated V3 upgrades against the target MySQL version before deployment;
-this phase does not run migrations on local/shared or hosted MySQL databases.
+The SQL uses a simple nullable VARCHAR addition shared by MySQL and H2. The MySQL
+`*IT` suite now applies V4 on every run as part of V1 through the latest migration.
 
 ## V5: refresh sessions and token history
 
@@ -261,8 +272,8 @@ They also check column types and nullability, primary keys, foreign keys and del
 rules, the named indexes, the unique hash constraint, all CHECK constraints, cascade
 deletion, and idempotent repeat migration. A separate test applies Hibernate's
 MySQL schema-validation type matching to the V5 column types, so production
-`ddl-auto=validate` accepts the new entities. As with V3 and V4, rehearse clean and
-populated-V4 upgrades against the target MySQL version before deployment.
+`ddl-auto=validate` accepts the new entities. The MySQL `*IT` suite below covers the
+same upgrade on a real server.
 
 ### MySQL verification and session cleanup
 
@@ -279,3 +290,132 @@ Rows are removed only by the daily cleanup job: a family is deleted once
 `idx_refresh_sessions_expires_at`, and its token history is removed by
 `ON DELETE CASCADE`. Revocation alone never deletes anything. Only token hashes are
 ever stored. V1–V5 are immutable once applied; any schema change needs V6 or later.
+
+## V6: category normalization, built-in metadata, icons, and ownership
+
+`V6__add_category_normalization_builtin_and_icons.java` is phase 1 of issue #19
+(custom categories). See [categories](categories.md) for the policy it stores.
+
+### Why Java
+
+The backfill must compute `normalized_name` with exactly the same rules on MySQL and
+H2 (Unicode NFC, Java whitespace classes, locale-independent lowercasing), which SQL
+functions such as `LOWER(TRIM(name))` cannot guarantee. V6 carries its own frozen copy
+of the normalization and of the 13 canonical names and icons; it never calls
+`CategoryNameNormalizer` or `BuiltInCategory`. Its checksum is fixed at `1060001`.
+Flyway records it with type `JDBC`. **Never edit V6 once released**; a later policy
+change needs V7+ to re-normalize stored rows.
+
+### Added `categories` columns
+
+| Column            | Definition                                          | Notes |
+| ----------------- | --------------------------------------------------- | ----- |
+| `normalized_name` | `VARCHAR(300) NOT NULL`, MySQL `utf8mb4_0900_bin`   | Internal comparison value; never returned by the API. 300 allows for lowercase expansion of a 100-unit name |
+| `built_in`        | `BIT(1) NOT NULL`                                   | Backend-controlled. `BIT(1)` like `budget_enabled`, because Hibernate's MySQL validation expects `bit` for `boolean`; MySQL `BOOLEAN` is `TINYINT(1)` |
+| `icon_key`        | `VARCHAR(64) NOT NULL`, MySQL `utf8mb4_0900_bin`    | Approved semantic key only |
+
+`utf8mb4_0900_bin` compares exactly: case, accents, and trailing spaces are significant
+(NO PAD). The existing `name` column keeps its original collation, and display names
+are not changed.
+
+### Constraints and indexes
+
+| Object | Definition | Purpose |
+| --- | --- | --- |
+| `uk_categories_user_normalized_name` | `UNIQUE (user_id, normalized_name)` | Authoritative per-user name uniqueness; replaces `uk_category_user_name (user_id, name)`, which is dropped only after the replacement exists |
+| `uk_categories_id_user` | `UNIQUE (id, user_id)` | Target of the composite ownership keys |
+| `idx_transactions_category_user`, `idx_budgets_category_user` | `(category_id, user_id)` | Required child indexes for the composite keys |
+| `fk_transactions_category_owner`, `fk_budgets_category_owner` | `(category_id, user_id) → categories (id, user_id)` | A transaction or budget can only reference a category owned by the same user |
+| `ck_categories_icon_key_format` | `CHECK (REGEXP_LIKE(icon_key, '^[a-z0-9]+(-[a-z0-9]+)*$', 'c'))` | Rejects markup, URLs, paths, class lists, and uppercase; the application enforces the exact catalog |
+
+Existing category foreign keys and indexes are left in place, so deleting a referenced
+category is still rejected (no cascade). Production's are Hibernate-generated names
+(`FK…`) rather than the V1 names, so V6 never refers to them. The monthly budget unique
+key is unchanged. `idx_*_category_id` style single-column indexes are now redundant
+with the new composite indexes; removing them is left for a later cleanup migration.
+
+### Order of operations and preflight
+
+MySQL DDL is not transactional, so V6 checks everything **before** its first DDL
+statement:
+
+1. **Schema state**: the three new columns, five constraints, and two indexes must not
+   exist (a partial earlier run), and `uk_category_user_name` must exist as
+   `UNIQUE (user_id, name)`.
+2. **Names**: every legacy name must normalize (not null or blank, no non-whitespace
+   control characters, no malformed surrogates, at most 100 UTF-16 units after
+   sanitizing).
+3. **Collisions**: no user may have two categories with the same normalized name
+   (for example `Eating Out` and `eating  out`, or composed and decomposed `Café`).
+   The legacy key could not prevent these on MySQL: it is accent- and case-insensitive
+   but not whitespace-normalizing.
+4. **Ownership**: no transaction or budget may reference a category owned by another
+   user, or a missing category.
+
+If any check fails, V6 throws before changing anything:
+`V6 preflight failed; no schema or data changes were made. … ids [..]`. The message
+lists only row IDs and fixed reasons, never names, descriptions, amounts, or
+credentials. V6 never merges, renames, reassigns, or inserts categories and never
+rewrites transactions or budgets; an operator fixes the listed rows by hand. On MySQL,
+Flyway still records a failed V6 row in `flyway_schema_history`, so recovery is: fix
+the rows, run `flyway repair`, and restart (this path is covered by a MySQL test).
+
+After preflight: add the columns as nullable, backfill every row with one `UPDATE` per
+ID, verify that no row is left unfilled (categories created by a still-running old
+instance during the migration fail it here), make the columns `NOT NULL`, then add the
+constraints and indexes in the order shown above.
+
+### Backfill and built-in classification
+
+For every existing category, V6 preserves the ID, owner, display `name`,
+`budget_enabled`, `created_at`, and `updated_at`, and every transaction and budget
+reference. It sets:
+
+- `normalized_name`: the frozen V6 normalization of `name`.
+- `built_in = true` and the approved icon when `normalized_name` equals a canonical
+  seeded name (`housing`, `groceries`, `dining`, `transportation`, `utilities`,
+  `insurance`, `healthcare`, `entertainment`, `shopping`, `travel`, `other`, `income`,
+  `savings`). Otherwise `built_in = false` and `icon_key = 'tag'`.
+
+Known limitation: whether a legacy row was actually seeded cannot be reconstructed. A
+row whose name matches a canonical name (in any case or spacing) is treated as
+built-in, and a renamed default is treated as custom. V6 does not insert missing
+defaults and does not rename anything to force a match.
+
+### Clean install, upgrade, and verification
+
+A clean install applies V1–V6. A populated V5 database applies only V6, and a restart
+applies nothing. Tests cover, on H2: clean install, a pinned-checksum check that
+V1–V5 are unchanged, a populated V5 upgrade comparing every pre-V6 column of `users`,
+`categories`, `transactions`, and `budgets`, classification and icons, parity between
+the frozen and application normalizers, every preflight failure (collision, blank,
+control character, malformed, cross-owner, missing reference, partial schema, missing
+legacy key), and the new constraints. On MySQL 8.4 (`CategoryV6MySqlIT`): the same
+upgrade on a **production-shaped** schema (Hibernate `FK…` names, `utf8mb4_0900_ai_ci`
+tables, V1 baseline), column collations, exact binary uniqueness (`café`/`cafe`,
+`food`/`FOOD`, `food`/`food `), composite keys, restricted deletes, the icon CHECK,
+the preflight failure and `repair` recovery, registration seeding, and two concurrent
+equivalent creates leaving exactly one row. Hibernate `ddl-auto=validate` accepts the
+entity on MySQL. H2 results alone are never taken as MySQL evidence.
+
+### Deploying V6 (Railway)
+
+- V6 needs no new variables or secrets. Flyway runs it on application startup with the
+  normal `migrate`/`validate` behavior; nothing else is required.
+- Keep `FLYWAY_BASELINE_ON_MIGRATE` unset or `false`: staging and production already have
+  Flyway history, and baselining is only for the one-time adoption of a database.
+- **Never run `flyway clean`** (or `spring.flyway.clean-disabled=false`) against a shared,
+  staging, or production database. Recovery is roll-forward: fix the reported rows,
+  `flyway repair` if MySQL recorded a failed V6 row, and restart.
+- Take a fresh backup first, and rehearse V6 against a restored copy of the database: the
+  preflight then reports any duplicate or invalid legacy names before the real deploy.
+- Deploy the backend before the frontend, at a quiet time. While V6 runs, an older
+  instance may still be serving; once the new columns are required, the old code cannot
+  insert categories (for example during registration) until the new instance takes over.
+- After deploy, the logs should show `Successfully applied 1 migration … now at version
+  v6` (or "up to date" on restart) and no Hibernate validation errors.
+- Older builds cannot use a V6 schema (they do not set the new required columns), so a
+  rollback means restoring the pre-V6 backup together with the previous backend and
+  frontend, not dropping columns by hand.
+
+V1–V6 are immutable once released; any schema change needs V7 or later.

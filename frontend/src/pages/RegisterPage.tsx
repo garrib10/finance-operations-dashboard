@@ -137,7 +137,7 @@ function RegisterPage() {
         )}
 
         <button
-          className="button button--primary"
+          className="button button--tinted"
           type="submit"
           disabled={isSubmitting}
         >

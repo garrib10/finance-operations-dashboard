@@ -2,7 +2,7 @@ import { act, render, renderHook, screen, waitFor } from "@testing-library/react
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
-import AppHeader from "../components/AppHeader";
+import { AccountMenu } from "../components/AccountMenu";
 import { AuthProvider } from "./AuthProvider";
 import { useAuth } from "./AuthContext";
 import * as authService from "../services/authService";
@@ -220,9 +220,9 @@ function SaveProfileProbe() {
   return <button onClick={() => void updateProfile(profileRequest)}>Save test profile</button>;
 }
 
-it("updates the real AppHeader immediately after a profile save", async () => {
+it("updates the real AccountMenu immediately after a profile save", async () => {
   profile.mockResolvedValue(savedUser);
-  render(<MemoryRouter><AuthProvider><AppHeader /><SaveProfileProbe /></AuthProvider></MemoryRouter>);
+  render(<MemoryRouter><AuthProvider><AccountMenu /><SaveProfileProbe /></AuthProvider></MemoryRouter>);
   await screen.findByRole("button", { name: "Open account menu for River Walker" });
   await userEvent.click(screen.getByRole("button", { name: "Save test profile" }));
   expect(await screen.findByRole("button", { name: "Open account menu for New Identity" })).toHaveTextContent("NI");
@@ -327,10 +327,10 @@ function PhotoProbe() {
   </>;
 }
 
-it("updates the real AppHeader avatar after photo upload and removal", async () => {
+it("updates the real AccountMenu avatar after photo upload and removal", async () => {
   uploadPhoto.mockResolvedValue({ ...accountUser, profilePhotoUrl: photoUrl });
   removePhoto.mockResolvedValue(accountUser);
-  const { container } = render(<MemoryRouter><AuthProvider><AppHeader /><PhotoProbe /></AuthProvider></MemoryRouter>);
+  const { container } = render(<MemoryRouter><AuthProvider><AccountMenu /><PhotoProbe /></AuthProvider></MemoryRouter>);
   const trigger = await screen.findByRole("button", { name: "Open account menu for River Walker" });
   expect(trigger).toHaveTextContent("RW");
   await userEvent.click(screen.getByRole("button", { name: "Upload test photo" }));

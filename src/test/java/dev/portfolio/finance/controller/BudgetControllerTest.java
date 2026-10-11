@@ -327,6 +327,7 @@ void shouldReturnAllBudgets()
                             1L,
                             1L,
                             "Groceries",
+                            "shopping-cart",
                             new java.math.BigDecimal("700.00"),
                             9,
                             2026,
@@ -337,6 +338,7 @@ void shouldReturnAllBudgets()
                             2L,
                             2L,
                             "Dining",
+                            "utensils",
                             new java.math.BigDecimal("400.00"),
                             9,
                             2026,
@@ -382,6 +384,7 @@ void shouldUpdateBudgetWhenRequestIsValid()
                     1L,
                     2L,
                     "Dining",
+                    "utensils",
                     new java.math.BigDecimal("900.00"),
                     10,
                     2026,
@@ -407,4 +410,52 @@ void shouldUpdateBudgetWhenRequestIsValid()
                     any(UpdateBudgetRequest.class)
             );
 }
+
+    @Test
+    void shouldReturnOneMonthsBudgetsWithAnalytics() throws Exception {
+        when(budgetService.getMonthAnalytics(TEST_EMAIL, "3", "2024")).thenReturn(
+                new dev.portfolio.finance.dto.budget.BudgetMonthAnalyticsResponse(3, 2024, java.util.List.of(
+                        new dev.portfolio.finance.dto.budget.BudgetAnalyticsResponse(10L, 4L, "Pet Care", "paw-print",
+                                new java.math.BigDecimal("80.00"), new java.math.BigDecimal("50.00"),
+                                new java.math.BigDecimal("30.00"), new java.math.BigDecimal("62.50"),
+                                dev.portfolio.finance.entity.BudgetStatus.CAUTION, 3, 2024))));
+
+        mockMvc.perform(get("/api/budgets/analytics").param("month", "3").param("year", "2024")
+                        .principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.month").value(3))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.year").value(2024))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.budgets[0].budgetId").value(10))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.budgets[0].status").value("CAUTION"));
+
+        verify(budgetService).getMonthAnalytics(TEST_EMAIL, "3", "2024");
+    }
+
+    @Test
+    void shouldReportMonthAnalyticsFieldErrorsInTheValidationShape() throws Exception {
+        when(budgetService.getMonthAnalytics(TEST_EMAIL, null, "2024")).thenThrow(
+                new dev.portfolio.finance.exception.budget.BudgetValidationException(
+                        java.util.Map.of("month", "Month is required")));
+
+        mockMvc.perform(get("/api/budgets/analytics").param("year", "2024").principal(authentication))
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.error").value("Validation Failed"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.fields.month").value("Month is required"));
+    }
+
+    @Test
+    void shouldNotTreatAnalyticsAsABudgetId() throws Exception {
+        when(budgetService.getMonthAnalytics(TEST_EMAIL, "1", "2030")).thenReturn(
+                new dev.portfolio.finance.dto.budget.BudgetMonthAnalyticsResponse(1, 2030, java.util.List.of()));
+
+        mockMvc.perform(get("/api/budgets/analytics").param("month", "1").param("year", "2030")
+                        .principal(authentication))
+                .andExpect(status().isOk());
+
+        verify(budgetService, never()).getBudgetById(any(), any());
+    }
 }

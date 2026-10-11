@@ -16,6 +16,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
+import java.time.Duration;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,7 +50,18 @@ class AccountPhotoWorkflowIntegrationTest {
     @Autowired private PasswordEncoder encoder;
     @Autowired private JwtService jwt;
     @Autowired private JsonMapper mapper;
-    private final HttpClient client = HttpClient.newHttpClient();
+    /*
+     * Bounded, separate timeouts. Connecting to the local server is quick, so 10 s only
+     * catches a server that is not listening. A request gets 60 s: the first request a fresh
+     * server handles pays one-time class loading and JIT warm-up, which took about 2 s for
+     * the 2 MiB upload on a moderately loaded machine and over 6 s for a tiny request under
+     * heavy CPU contention, and a 30 s limit was hit once on a machine at load ~60-90 with
+     * Docker and coverage running (issue #104). Later requests take well under a second,
+     * and a request that truly hangs still fails within a minute.
+     */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
+    private final HttpClient client = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
     private User a;
     private User b;
     private String token;
@@ -71,9 +84,15 @@ class AccountPhotoWorkflowIntegrationTest {
         }).when(storage).delete(any());
     }
 
+    /** Each test gets its own client; closing it stops its selector thread and connections. */
+    @AfterEach
+    void closeClient() {
+        client.close();
+    }
+
     private HttpResponse<String> request(String method, String path, String type, byte[] body, String bearer) throws Exception {
         var builder = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
-                .timeout(java.time.Duration.ofSeconds(30)).header("Content-Type", type)
+                .timeout(REQUEST_TIMEOUT).header("Content-Type", type)
                 .method(method, HttpRequest.BodyPublishers.ofByteArray(body));
         if (bearer != null) builder.header("Authorization", "Bearer " + bearer);
         if (path.equals("/api/auth/login")) {
@@ -153,6 +172,8 @@ class AccountPhotoWorkflowIntegrationTest {
                 multipart(new String[]{"photo", "extra"}, new byte[][]{new byte[1700000], new byte[1700000]}), token), 413);
         assertThat(key()).isEqualTo(previous);
         verify(storage, times(1)).store(any(), any());
+        // The rejected bodies leave neither the client nor the server unusable.
+        assertThat(json("GET", "/api/auth/me", Map.of()).statusCode()).isEqualTo(200);
     }
 
     @Test

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { SubmitEvent as ReactSubmitEvent } from "react";
 import {
   Bar,
@@ -14,24 +15,48 @@ import { ApiError } from "../services/api";
 import {
   createBudget,
   deleteBudget,
-  getBudgetAnalytics,
-  getBudgets,
+  getMonthBudgetAnalytics,
   updateBudget,
 } from "../services/budgetService";
 
-import { getCategories } from "../services/categoryService";
+import { CATEGORY_DUPLICATE, CATEGORY_NOT_FOUND } from "../services/categoryService";
+import { useCategories } from "../context/CategoryContext";
+import { CategoryIcon, CategoryLabel } from "../components/CategoryIcon";
+import { CalendarDays, CalendarRange, Plus, Tags, Wallet } from "lucide-react";
+import { IconField } from "../components/IconField";
+import { InlineNotice } from "../components/InlineNotice";
+import { CategoryRefreshNotice } from "../components/CategoryRefreshNotice";
+import { StatusBanner } from "../components/StatusBanner";
+import { CategorySelect } from "../components/CategorySelect";
+import { categoryAxisProps } from "../utils/budgetChartAxis";
+import {
+  CATEGORY_SELECTION_FIELDS,
+  CREATE_CATEGORY_VALUE,
+  DUPLICATE_CATEGORY_MESSAGE,
+  EMPTY_CATEGORY_DRAFT,
+  buildCategorySelection,
+  findEquivalentCategory,
+  focusFirstInvalid,
+  splitFieldErrors,
+  validateCategoryName,
+  withoutFieldError,
+  type CategoryDraft,
+} from "../utils/categoryForm";
+import { CATEGORY_PARAM, categoryLinkKey, resolveCategoryLink } from "../utils/categoryDeepLink";
+import { MONTH_PARAM, YEAR_PARAM, parsePeriodParams } from "../utils/reportingPeriod";
 import type {
   BudgetAnalyticsResponse,
-  BudgetResponse,
-  BudgetStatus,
+  BudgetMonthAnalyticsResponse,
   CreateBudgetRequest,
   UpdateBudgetRequest,
 } from "../types/budget";
 
 import type { CategoryResponse } from "../types/category";
 import { formatCurrency } from "../utils/formatters";
+import { formatBudgetStatus } from "../utils/budgetStatus";
 
 interface BudgetFormState {
+  /** A category ID, CREATE_CATEGORY_VALUE, or "" when nothing is chosen. */
   categoryId: string;
   monthlyLimit: string;
   month: string;
@@ -45,6 +70,11 @@ interface BudgetChartData {
   utilization: number;
 }
 
+/** Server fields shown beside a control; anything else goes to the form summary. */
+const BUDGET_FIELDS = [...CATEGORY_SELECTION_FIELDS, "monthlyLimit", "month", "year"] as const;
+
+const NEW_CATEGORY_ERRORS = ["newCategory", "newCategory.name", "newCategory.iconKey"];
+
 const monthOptions = Array.from({ length: 12 }, (_, index) => ({
   value: index + 1,
   label: new Intl.DateTimeFormat("en-US", {
@@ -54,10 +84,22 @@ const monthOptions = Array.from({ length: 12 }, (_, index) => ({
 
 const currentYear = new Date().getFullYear();
 
+/**
+ * 2000 (the earliest budget year) to ten years ahead, for both the form and Budget Period.
+ * Only the shown month is loaded, so the years are no longer taken from every budget the
+ * user has; this range keeps past budgets reachable and leaves room to plan ahead.
+ */
 const defaultYearOptions = Array.from(
-  { length: 7 },
-  (_, index) => currentYear - 3 + index,
+  { length: currentYear + 10 - 2000 + 1 },
+  (_, index) => 2000 + index,
 );
+
+const LOAD_ERROR = "Unable to load budget information. Please try again.";
+const REFRESH_WARNING =
+  "Budget saved, but the budget list could not be refreshed. Reload the page to see the latest data.";
+
+/** The outcome of the month load identified by `key` (month, year, and reload count). */
+type MonthLoad = { key: string; status: "ready" } | { key: string; status: "error"; message: string };
 
 function getInitialBudgetForm(): BudgetFormState {
   const today = new Date();
@@ -77,148 +119,218 @@ function formatBudgetMonth(month: number, year: number): string {
   }).format(new Date(year, month - 1, 1));
 }
 
-function formatBudgetStatus(status: BudgetStatus): string {
-  switch (status) {
-    case "ON_TRACK":
-      return "On Track";
-
-    case "CAUTION":
-      return "Caution";
-
-    case "WARNING":
-      return "Warning";
-
-    case "OVER_BUDGET":
-      return "Over Budget";
-  }
-}
-
 function BudgetPage() {
-  const [budgets, setBudgets] = useState<BudgetResponse[]>([]);
+  // The last month that loaded. It is shown only while it is the month on screen, so
+  // switching months never shows one month's budgets under another month's label.
+  const [monthData, setMonthData] = useState<BudgetMonthAnalyticsResponse | null>(null);
+  const [monthLoad, setMonthLoad] = useState<MonthLoad | null>(null);
+  // Bumped to load the shown month again (after a save or delete, or Try again).
+  const [reloadCount, setReloadCount] = useState(0);
+  // The load a save started, so its failure says the save worked but the list is stale.
+  const saveRefreshKey = useRef<string | null>(null);
 
-  const yearOptions = Array.from(
-    new Set([...defaultYearOptions, ...budgets.map((budget) => budget.year)]),
-  ).sort((firstYear, secondYear) => firstYear - secondYear);
-
-  const [analytics, setAnalytics] = useState<
-    Record<number, BudgetAnalyticsResponse>
-  >({});
-
-  const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const { categories, status: categoryStatus, reload: reloadCategories } = useCategories();
   const [form, setForm] = useState<BudgetFormState>(getInitialBudgetForm);
+  const [categoryDraft, setCategoryDraft] = useState<CategoryDraft>(EMPTY_CATEGORY_DRAFT);
+  const [existingMatch, setExistingMatch] = useState<CategoryResponse | undefined>();
   const [editingBudgetId, setEditingBudgetId] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [formErrorMessage, setFormErrorMessage] = useState("");
   const [refreshWarning, setRefreshWarning] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
+  const [failureAttempt, setFailureAttempt] = useState(0);
 
+  const submittingRef = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const formErrorRef = useRef<HTMLParagraphElement>(null);
   const formHeadingRef = useRef<HTMLHeadingElement>(null);
   const editTriggerIdRef = useRef<number | null>(null);
   const pendingFocusTriggerIdRef = useRef<number | null>(null);
 
-  const today = new Date();
-  const [viewMonth, setViewMonth] = useState(String(today.getMonth() + 1));
-  const [viewYear, setViewYear] = useState(String(today.getFullYear()));
+  // ?month=&year= (from a Categories budget link) opens that month; anything else opens
+  // today's month as before. Checked with the Categories parser, so both pages agree on
+  // what a valid month is (one of each, plain numbers, month 1-12, year 2000 or later).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const periodParams = parsePeriodParams(searchParams);
+  const linkedPeriod = periodParams.kind === "period" ? periodParams.period : null;
+  const linkedPeriodKey = linkedPeriod ? `${linkedPeriod.year}-${linkedPeriod.month}` : null;
+  const [viewMonth, setViewMonth] = useState(() => String(linkedPeriod?.month ?? new Date().getMonth() + 1));
+  const [viewYear, setViewYear] = useState(() => String(linkedPeriod?.year ?? new Date().getFullYear()));
+  const [viewCategoryId, setViewCategoryId] = useState("");
 
-  const filteredBudgets = budgets.filter(
-    (budget) =>
-      budget.month === Number(viewMonth) && budget.year === Number(viewYear),
-  );
-
-  const budgetChartData = filteredBudgets
-    .map((budget) => {
-      const budgetAnalytics = analytics[budget.id];
-
-      if (!budgetAnalytics) {
-        return null;
-      }
-
-      return {
-        category: budget.categoryName,
-        limit: budgetAnalytics.monthlyLimit,
-        spent: budgetAnalytics.amountSpent,
-        utilization: budgetAnalytics.percentageUsed,
-      };
-    })
-    .filter((item): item is BudgetChartData => item !== null);
-
-  async function loadBudgetData(): Promise<void> {
-    const budgetResponse = await getBudgets();
-
-    if (budgetResponse.length === 0) {
-      setBudgets([]);
-      setAnalytics({});
-      return;
+  // A different linked month (Back/Forward between links) moves the view there once.
+  const [appliedPeriodKey, setAppliedPeriodKey] = useState(linkedPeriodKey);
+  if (linkedPeriodKey !== appliedPeriodKey) {
+    setAppliedPeriodKey(linkedPeriodKey);
+    if (linkedPeriod) {
+      setViewMonth(String(linkedPeriod.month));
+      setViewYear(String(linkedPeriod.year));
     }
-
-    const analyticsResponse = await Promise.all(
-      budgetResponse.map((budget) => getBudgetAnalytics(budget.id)),
-    );
-
-    const analyticsByBudgetId = analyticsResponse.reduce<
-      Record<number, BudgetAnalyticsResponse>
-    >((result, budgetAnalytics) => {
-      result[budgetAnalytics.budgetId] = budgetAnalytics;
-
-      return result;
-    }, {});
-
-    setBudgets(budgetResponse);
-    setAnalytics(analyticsByBudgetId);
   }
 
+  // The form offers the same years, plus a saved budget's year if it is outside them.
+  const formYearOptions = Array.from(
+    new Set([...defaultYearOptions, ...(Number(form.year) >= 2000 ? [Number(form.year)] : [])]),
+  ).sort((firstYear, secondYear) => firstYear - secondYear);
+
+  // The linked year may be outside the usual range, so it is always offered.
+  const yearOptions = Array.from(
+    new Set([...defaultYearOptions, Number(viewYear)]),
+  ).sort((firstYear, secondYear) => firstYear - secondYear);
+
+  // An invalid month is dropped (the category link still applies, to today's month). A
+  // linked month describes the page only until the user shows another month (or a save
+  // moves there): the whole link is then used up, so its category is dropped too and the
+  // URL is plain /budgets again. Replaced, never pushed, so Back still leaves the page.
+  const periodLinkInvalid = periodParams.kind === "invalid";
+  const periodLinkLeft = linkedPeriod !== null && linkedPeriodKey === appliedPeriodKey
+    && (String(linkedPeriod.month) !== viewMonth || String(linkedPeriod.year) !== viewYear);
+
   useEffect(() => {
-    async function loadPageData(): Promise<void> {
-      try {
-        setIsLoading(true);
-        setErrorMessage("");
+    if (!periodLinkInvalid && !periodLinkLeft) return;
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.delete(MONTH_PARAM);
+      next.delete(YEAR_PARAM);
+      if (periodLinkLeft) next.delete(CATEGORY_PARAM);
+      return next;
+    }, { replace: true });
+  }, [periodLinkInvalid, periodLinkLeft, setSearchParams]);
 
-        const [budgetResponse, categoryResponse] = await Promise.all([
-          getBudgets(),
-          getCategories(),
-        ]);
+  /**
+   * A category deleted elsewhere can no longer be chosen or filtered on. Until the list
+   * has loaded, a stored ID (an edit, say) is kept as is.
+   */
+  function availableCategoryId(id: string): string {
+    if (!id || id === CREATE_CATEGORY_VALUE || categoryStatus !== "ready") return id;
+    return categories.some((category) => String(category.id) === id) ? id : "";
+  }
 
-        setBudgets(budgetResponse);
+  const formCategoryId = availableCategoryId(form.categoryId);
+  const activeViewCategoryId = availableCategoryId(viewCategoryId);
 
-        setCategories(categoryResponse);
+  const loadKey = `${viewYear}-${viewMonth}#${reloadCount}`;
+  const shownMonth = monthData && monthData.month === Number(viewMonth) && monthData.year === Number(viewYear)
+    ? monthData
+    : null;
+  const loadStatus = monthLoad?.key !== loadKey ? "loading" : monthLoad.status;
+  const periodBudgets = shownMonth?.budgets ?? [];
 
-        if (budgetResponse.length === 0) {
-          setAnalytics({});
+  // Client-side category filter over the loaded month.
+  const filteredBudgets = activeViewCategoryId
+    ? periodBudgets.filter((budget) => String(budget.categoryId) === activeViewCategoryId)
+    : periodBudgets;
+
+  const viewCategory = categories.find((category) => String(category.id) === viewCategoryId);
+
+  const budgetChartData: BudgetChartData[] = filteredBudgets.map((budget) => ({
+    category: budget.categoryName,
+    limit: budget.monthlyLimit,
+    spent: budget.amountSpent,
+    utilization: budget.percentageUsed,
+  }));
+
+  /**
+   * One request per month shown (GET /api/budgets/analytics), never one per budget. A newer
+   * month or reload aborts the older request, and only the newest may change state, so a
+   * late answer can never replace the month on screen; an abort is never an error.
+   */
+  useEffect(() => {
+    const key = loadKey;
+    const controller = new AbortController();
+    getMonthBudgetAnalytics({ month: Number(viewMonth), year: Number(viewYear) }, controller.signal).then(
+      (response) => {
+        if (controller.signal.aborted) return;
+        if (saveRefreshKey.current === key) saveRefreshKey.current = null;
+        setMonthData(response);
+        setMonthLoad({ key, status: "ready" });
+      },
+      (error: unknown) => {
+        if (controller.signal.aborted) return;
+        if (saveRefreshKey.current === key) {
+          // The save itself worked; only the refresh failed.
+          saveRefreshKey.current = null;
+          setRefreshWarning(REFRESH_WARNING);
+          setMonthLoad({ key, status: "ready" });
           return;
         }
+        setMonthLoad({ key, status: "error", message: error instanceof ApiError ? error.message : LOAD_ERROR });
+      },
+    );
+    return () => controller.abort();
+  }, [loadKey, viewMonth, viewYear]);
 
-        const analyticsResponse = await Promise.all(
-          budgetResponse.map((budget) => getBudgetAnalytics(budget.id)),
-        );
+  /** Loads the shown month again, optionally moving to the month a save was for. */
+  function refreshMonth(period?: { month: number; year: number }, afterSave = false): void {
+    const month = period ? String(period.month) : viewMonth;
+    const year = period ? String(period.year) : viewYear;
+    if (afterSave) saveRefreshKey.current = `${year}-${month}#${reloadCount + 1}`;
+    setViewMonth(month);
+    setViewYear(year);
+    setReloadCount((count) => count + 1);
+  }
 
-        const analyticsByBudgetId = analyticsResponse.reduce<
-          Record<number, BudgetAnalyticsResponse>
-        >((result, budgetAnalytics) => {
-          result[budgetAnalytics.budgetId] = budgetAnalytics;
+  // After a failed submit, focus the first invalid control in form order, else the summary.
+  useEffect(() => {
+    if (!failureAttempt) return;
 
-          return result;
-        }, {});
-
-        setAnalytics(analyticsByBudgetId);
-      } catch (error) {
-        if (error instanceof ApiError) {
-          setErrorMessage(error.message);
-        } else {
-          setErrorMessage(
-            "Unable to load budget information. Please try again.",
-          );
-        }
-      } finally {
-        setIsLoading(false);
-      }
+    if (!focusFirstInvalid(formRef.current)) {
+      formErrorRef.current?.focus();
     }
+  }, [failureAttempt]);
 
-    void loadPageData();
-  }, []);
+  // ?category={id} from the Categories page: edit that category's budget for the
+  // displayed month (the linked ?month=&year= when given) if it has one, otherwise start
+  // a new budget with it preselected. Resolved against the user's own categories; invalid
+  // links are dropped silently.
+  const categoryLink = resolveCategoryLink(searchParams.get(CATEGORY_PARAM), categoryStatus, categories);
+  // The month is part of the link: Back/Forward to the same category in another month
+  // opens that month's budget.
+  const linkKey = categoryLinkKey(categoryLink);
+  const handledKey = `${linkKey}@${linkedPeriodKey ?? "today"}`;
+  // The link handled last, so reloads and re-renders never reopen the form.
+  const handledLinkKey = useRef<string | null>(null);
+
+  const applyCategoryLink = useEffectEvent(() => {
+    const removeParam = () => setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.delete(CATEGORY_PARAM);
+      return next;
+    }, { replace: true });
+
+    if (categoryLink.kind === "invalid") {
+      removeParam();
+      return;
+    }
+    if (categoryLink.kind !== "valid") return;
+
+    const existing = periodBudgets.find((budget) => String(budget.categoryId) === categoryLink.id);
+
+    if (existing) {
+      handleEditBudget(existing); // The existing edit flow scrolls to and focuses the form.
+    } else if (categoryLink.category.budgetEnabled) {
+      setEditingBudgetId(null);
+      setForm((current) => ({ ...current, categoryId: categoryLink.id, month: viewMonth, year: viewYear }));
+      formHeadingRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      formHeadingRef.current?.focus({ preventScroll: true });
+    } else {
+      removeParam(); // This category does not take budgets, so there is nothing to start.
+    }
+  });
+
+  useEffect(() => {
+    // Waits for the shown month's budgets, so an existing budget is edited, not duplicated.
+    if (!shownMonth || linkKey === "pending" || linkKey === "none" || handledLinkKey.current === handledKey) {
+      if (linkKey === "none") handledLinkKey.current = null;
+      return;
+    }
+    handledLinkKey.current = handledKey;
+    applyCategoryLink();
+  }, [shownMonth, linkKey, handledKey]);
 
   useEffect(() => {
     if (editingBudgetId === null) {
@@ -252,6 +364,10 @@ function BudgetPage() {
   function resetForm(): void {
     setForm(getInitialBudgetForm());
 
+    setCategoryDraft(EMPTY_CATEGORY_DRAFT);
+
+    setExistingMatch(undefined);
+
     setEditingBudgetId(null);
 
     setFormErrorMessage("");
@@ -267,10 +383,11 @@ function BudgetPage() {
     resetForm();
   }
 
-  function handleEditBudget(budget: BudgetResponse): void {
-    editTriggerIdRef.current = budget.id;
+  function handleEditBudget(budget: BudgetAnalyticsResponse): void {
+    editTriggerIdRef.current = budget.budgetId;
+    setSaveMessage("");
 
-    setEditingBudgetId(budget.id);
+    setEditingBudgetId(budget.budgetId);
 
     setForm({
       categoryId: String(budget.categoryId),
@@ -279,9 +396,32 @@ function BudgetPage() {
       year: String(budget.year),
     });
 
+    setCategoryDraft(EMPTY_CATEGORY_DRAFT);
+
+    setExistingMatch(undefined);
+
     setFormErrorMessage("");
 
     setValidationErrors({});
+  }
+
+  function updateField<K extends keyof BudgetFormState>(field: K, value: BudgetFormState[K]): void {
+    setForm((current) => ({ ...current, [field]: value }));
+    setValidationErrors((current) => withoutFieldError(current, field));
+  }
+
+  function handleCategoryChange(value: string): void {
+    setForm((current) => ({ ...current, categoryId: value }));
+    setExistingMatch(undefined);
+    setValidationErrors((current) => value === CREATE_CATEGORY_VALUE
+      ? withoutFieldError(current, "categoryId")
+      : withoutFieldError(current, "categoryId", ...NEW_CATEGORY_ERRORS));
+  }
+
+  function failValidation(fieldErrors: Record<string, string>, summary: string): void {
+    setValidationErrors(fieldErrors);
+    setFormErrorMessage(summary);
+    setFailureAttempt((attempt) => attempt + 1);
   }
 
   async function handleSubmit(
@@ -289,32 +429,48 @@ function BudgetPage() {
   ): Promise<void> {
     event.preventDefault();
 
+    // Synchronous guard: a second submit before React re-renders is ignored.
+    if (submittingRef.current) return;
+
     const isEditing = editingBudgetId !== null;
+    const creatingCategory = formCategoryId === CREATE_CATEGORY_VALUE;
 
     setFormErrorMessage("");
 
     setRefreshWarning("");
 
+    setSaveMessage("");
+
     setValidationErrors({});
 
-    if (!form.categoryId) {
-      setFormErrorMessage("Please select a category.");
+    setExistingMatch(undefined);
 
-      return;
+    const clientErrors: Record<string, string> = {};
+
+    if (!formCategoryId) {
+      clientErrors.categoryId = "Please select a category.";
+    } else if (creatingCategory) {
+      const nameError = validateCategoryName(categoryDraft.name);
+      if (nameError) clientErrors["newCategory.name"] = nameError;
     }
 
     if (!form.monthlyLimit || Number(form.monthlyLimit) <= 0) {
-      setFormErrorMessage("Monthly limit must be greater than 0.");
+      clientErrors.monthlyLimit = "Monthly limit must be greater than 0.";
+    }
 
+    if (Object.keys(clientErrors).length) {
+      failValidation(clientErrors, "Please check the highlighted fields.");
       return;
     }
 
     const request: CreateBudgetRequest | UpdateBudgetRequest = {
-      categoryId: Number(form.categoryId),
+      ...buildCategorySelection(formCategoryId, categoryDraft),
       monthlyLimit: Number(form.monthlyLimit),
       month: Number(form.month),
       year: Number(form.year),
     };
+
+    submittingRef.current = true;
 
     setIsSubmitting(true);
 
@@ -325,46 +481,50 @@ function BudgetPage() {
         await createBudget(request);
       }
     } catch (error) {
-      if (error instanceof ApiError) {
-        if (error.validationErrors) {
-          setValidationErrors(error.validationErrors);
-        } else {
-          setFormErrorMessage(error.message);
-        }
+      if (error instanceof ApiError && error.code === CATEGORY_DUPLICATE && creatingCategory) {
+        failValidation({ "newCategory.name": DUPLICATE_CATEGORY_MESSAGE },
+          "That category already exists. Nothing was saved.");
+        const latest = await reloadCategories();
+        setExistingMatch(latest ? findEquivalentCategory(latest, categoryDraft.name) : undefined);
+      } else if (error instanceof ApiError && error.code === CATEGORY_NOT_FOUND) {
+        failValidation({ categoryId: "This category is no longer available. Choose another category." },
+          "Please check the highlighted fields.");
+        void reloadCategories();
+      } else if (error instanceof ApiError && error.validationErrors) {
+        const { fieldErrors, otherMessages } = splitFieldErrors(error.validationErrors, BUDGET_FIELDS);
+        failValidation(fieldErrors, otherMessages.join(" ") || "Please check the highlighted fields.");
+      } else if (error instanceof ApiError) {
+        failValidation({}, error.message);
       } else {
-        setFormErrorMessage(
+        failValidation({},
           isEditing
             ? "Unable to update the budget. Please try again."
             : "Unable to create the budget. Please try again.",
         );
       }
 
+      submittingRef.current = false;
       setIsSubmitting(false);
       return;
     }
 
-    /*
-     * Move the displayed budget period to the month/year
-     * that was successfully created or updated.
-     */
-    setViewMonth(String(request.month));
-
-    setViewYear(String(request.year));
+    setViewCategoryId("");
 
     resetForm();
 
-    try {
-      await loadBudgetData();
-    } catch {
-      setRefreshWarning(
-        "Budget saved, but the budget list could not be refreshed. Reload the page to see the latest data.",
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
+    setSaveMessage(isEditing ? "Budget updated." : "Budget created.");
+
+    // A new category is now reusable everywhere (a failed category refresh shows its own
+    // notice and never rejects).
+    if (creatingCategory) await reloadCategories();
+
+    // Show the month that was saved: one request for that month, never one per budget.
+    refreshMonth({ month: request.month, year: request.year }, true);
+    submittingRef.current = false;
+    setIsSubmitting(false);
   }
 
-  async function handleDeleteBudget(budget: BudgetResponse): Promise<void> {
+  async function handleDeleteBudget(budget: BudgetAnalyticsResponse): Promise<void> {
     const confirmed = window.confirm(
       `Delete the ${budget.categoryName} budget?`,
     );
@@ -375,14 +535,17 @@ function BudgetPage() {
 
     try {
       setErrorMessage("");
+      setSaveMessage("");
 
-      await deleteBudget(budget.id);
+      await deleteBudget(budget.budgetId);
 
-      if (editingBudgetId === budget.id) {
+      if (editingBudgetId === budget.budgetId) {
         resetForm();
       }
 
-      await loadBudgetData();
+      setSaveMessage("Budget deleted.");
+
+      refreshMonth(); // The same month again, in one request.
     } catch (error) {
       if (error instanceof ApiError) {
         setErrorMessage(error.message);
@@ -392,15 +555,7 @@ function BudgetPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <section>
-        <h1>Budgets</h1>
-
-        <p>Loading budgets...</p>
-      </section>
-    );
-  }
+  const shownMonthLabel = formatBudgetMonth(Number(viewMonth), Number(viewYear));
 
   return (
     <section>
@@ -410,121 +565,136 @@ function BudgetPage() {
         <p>Manage monthly spending limits and track budgets by category.</p>
       </div>
 
-      {errorMessage && <p role="alert">{errorMessage}</p>}
+      {errorMessage && <InlineNotice variant="error">{errorMessage}</InlineNotice>}
 
-      {refreshWarning && (
-        <p className="form-error" role="status">
-          {refreshWarning}
-        </p>
-      )}
+      {/* A refresh warning also confirms the save, so it replaces the banner and stays. */}
+      {refreshWarning && <InlineNotice variant="warning">{refreshWarning}</InlineNotice>}
+
+      <StatusBanner message={refreshWarning ? "" : saveMessage} onDismiss={() => setSaveMessage("")} />
+
+      <CategoryRefreshNotice />
 
       <section>
         <h2 ref={formHeadingRef} tabIndex={-1}>
-          {editingBudgetId !== null ? "Edit Budget" : "Create Budget"}
+          {editingBudgetId !== null ? "Edit budget" : "Create budget"}
         </h2>
 
-        <form className="budget-form" onSubmit={handleSubmit}>
-          <label className="form-field">
-            <span>Category</span>
+        <form ref={formRef} className="budget-form" onSubmit={handleSubmit} noValidate>
+          <CategorySelect
+            id="budget-category"
+            value={formCategoryId}
+            onChange={handleCategoryChange}
+            draft={categoryDraft}
+            onNameChange={(name) => {
+              setCategoryDraft((current) => ({ ...current, name }));
+              setExistingMatch(undefined);
+              setValidationErrors((current) => withoutFieldError(current, "newCategory.name", "newCategory"));
+            }}
+            onNameBlur={() => {
+              const nameError = validateCategoryName(categoryDraft.name);
+              if (nameError) setValidationErrors((current) => ({ ...current, "newCategory.name": nameError }));
+            }}
+            onIconChange={(iconKey) => {
+              setCategoryDraft((current) => ({ ...current, iconKey }));
+              setValidationErrors((current) => withoutFieldError(current, "newCategory.iconKey"));
+            }}
+            errors={{
+              selection: validationErrors.categoryId ?? validationErrors.newCategory,
+              name: validationErrors["newCategory.name"],
+              iconKey: validationErrors["newCategory.iconKey"],
+            }}
+            disabled={isSubmitting}
+            existingMatch={existingMatch}
+            onUseExisting={(category) => {
+              handleCategoryChange(String(category.id));
+              setFormErrorMessage("");
+            }}
+          />
 
-            <select
-              value={form.categoryId}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  categoryId: event.target.value,
-                })
-              }
-            >
-              <option value="">Select category</option>
+          <div className="form-field">
+            <label htmlFor="budget-monthly-limit">Monthly limit</label>
 
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-
-            {validationErrors.categoryId && (
-              <span className="form-error">{validationErrors.categoryId}</span>
-            )}
-          </label>
-
-          <label className="form-field">
-            <span>Monthly Limit</span>
-
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={form.monthlyLimit}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  monthlyLimit: event.target.value,
-                })
-              }
-              placeholder="500.00"
-            />
+            <IconField icon={Wallet}>
+              <input
+                id="budget-monthly-limit"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={form.monthlyLimit}
+                aria-invalid={validationErrors.monthlyLimit ? true : undefined}
+                aria-describedby={validationErrors.monthlyLimit ? "budget-monthly-limit-error" : undefined}
+                onChange={(event) => updateField("monthlyLimit", event.target.value)}
+                placeholder="500.00"
+              />
+            </IconField>
 
             {validationErrors.monthlyLimit && (
-              <span className="form-error">
+              <p id="budget-monthly-limit-error" className="field-error">
                 {validationErrors.monthlyLimit}
-              </span>
+              </p>
             )}
-          </label>
+          </div>
 
-          <label className="form-field">
-            <span>Month</span>
+          <div className="form-field">
+            <label htmlFor="budget-month">Month</label>
 
-            <select
-              value={form.month}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  month: event.target.value,
-                })
-              }
-            >
-              {monthOptions.map((month) => (
-                <option key={month.value} value={month.value}>
-                  {month.label}
-                </option>
-              ))}
-            </select>
+            <IconField icon={CalendarDays}>
+              <select
+                id="budget-month"
+                value={form.month}
+                aria-invalid={validationErrors.month ? true : undefined}
+                aria-describedby={validationErrors.month ? "budget-month-error" : undefined}
+                onChange={(event) => updateField("month", event.target.value)}
+              >
+                {monthOptions.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+            </IconField>
 
             {validationErrors.month && (
-              <span className="form-error">{validationErrors.month}</span>
+              <p id="budget-month-error" className="field-error">{validationErrors.month}</p>
             )}
-          </label>
+          </div>
 
-          <label className="form-field">
-            <span>Year</span>
+          <div className="form-field">
+            <label htmlFor="budget-year">Year</label>
 
-            <input
-              type="number"
-              min="2000"
-              value={form.year}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  year: event.target.value,
-                })
-              }
-            />
+            <IconField icon={CalendarRange}>
+              {/* The same years as Budget Period, plus the edited budget's own year. */}
+              <select
+                id="budget-year"
+                value={form.year}
+                aria-invalid={validationErrors.year ? true : undefined}
+                aria-describedby={validationErrors.year ? "budget-year-error" : undefined}
+                onChange={(event) => updateField("year", event.target.value)}
+              >
+                {formYearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </IconField>
 
             {validationErrors.year && (
-              <span className="form-error">{validationErrors.year}</span>
+              <p id="budget-year-error" className="field-error">{validationErrors.year}</p>
             )}
-          </label>
+          </div>
 
           <div>
-            <button type="submit" className="button" disabled={isSubmitting}>
+            <button
+              type="submit"
+              className={editingBudgetId !== null ? "button button--tinted" : "button button--tinted button--icon"}
+              disabled={isSubmitting}
+            >
               {isSubmitting
                 ? "Saving..."
                 : editingBudgetId !== null
-                  ? "Update Budget"
-                  : "Create Budget"}
+                  ? "Update budget"
+                  : <><Plus aria-hidden="true" focusable="false" size={16} />Create budget</>}
             </button>
 
             {editingBudgetId !== null && (
@@ -534,14 +704,14 @@ function BudgetPage() {
                 onClick={handleCancelEdit}
                 disabled={isSubmitting}
               >
-                Cancel Edit
+                Cancel edit
               </button>
             )}
           </div>
         </form>
 
         {formErrorMessage && (
-          <p role="alert" className="form-error">
+          <p ref={formErrorRef} role="alert" className="form-error" tabIndex={-1}>
             {formErrorMessage}
           </p>
         )}
@@ -549,7 +719,7 @@ function BudgetPage() {
 
       <section className="budget-filter-section">
         <div>
-          <h2>Budget Period</h2>
+          <h2>Budget period</h2>
 
           <p>View budgets for a specific month.</p>
         </div>
@@ -562,31 +732,59 @@ function BudgetPage() {
           <label className="form-field">
             <span>Month</span>
 
-            <select
-              value={viewMonth}
-              onChange={(event) => setViewMonth(event.target.value)}
-            >
-              {monthOptions.map((month) => (
-                <option key={month.value} value={month.value}>
-                  {month.label}
-                </option>
-              ))}
-            </select>
+            <IconField icon={CalendarDays}>
+              <select
+                value={viewMonth}
+                onChange={(event) => setViewMonth(event.target.value)}
+              >
+                {monthOptions.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+            </IconField>
           </label>
           <label className="form-field">
             <span>Year</span>
 
-            <select
-              value={viewYear}
-              onChange={(event) => setViewYear(event.target.value)}
-            >
-              {yearOptions.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
+            <IconField icon={CalendarRange}>
+              <select
+                value={viewYear}
+                onChange={(event) => setViewYear(event.target.value)}
+              >
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </IconField>
           </label>
+          <div className="form-field">
+            <label htmlFor="budget-filter-category">Filter by category</label>
+
+            <div className="category-select__control">
+              {/* The chosen category's own icon; a generic one for "All categories". */}
+              {viewCategory
+                ? <CategoryIcon iconKey={viewCategory.iconKey} />
+                : <Tags className="category-icon category-icon--placeholder" aria-hidden="true" focusable="false" size={18} />}
+
+              <select
+                id="budget-filter-category"
+                value={viewCategory ? viewCategoryId : ""}
+                onChange={(event) => setViewCategoryId(event.target.value)}
+              >
+                <option value="">All categories</option>
+
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -594,7 +792,7 @@ function BudgetPage() {
         <div className="budget-charts-grid">
           <section className="budget-chart-section">
             <div>
-              <h2>Budget vs. Spending</h2>
+              <h2>Budget vs. spending</h2>
 
               <p>Compare monthly limits with actual spending by category.</p>
             </div>
@@ -612,7 +810,7 @@ function BudgetPage() {
                 >
                   <CartesianGrid strokeDasharray="3 3" />
 
-                  <XAxis dataKey="category" />
+                  <XAxis {...categoryAxisProps} />
 
                   <YAxis tickFormatter={(value) => `$${value}`} />
 
@@ -622,14 +820,14 @@ function BudgetPage() {
 
                   <Bar
                     dataKey="limit"
-                    name="Monthly Limit"
+                    name="Monthly limit"
                     fill="var(--color-primary)"
                     radius={[6, 6, 0, 0]}
                   />
 
                   <Bar
                     dataKey="spent"
-                    name="Amount Spent"
+                    name="Amount spent"
                     fill="var(--color-text-muted)"
                     radius={[6, 6, 0, 0]}
                   />
@@ -640,7 +838,7 @@ function BudgetPage() {
 
           <section className="budget-chart-section">
             <div>
-              <h2>Budget Utilization</h2>
+              <h2>Budget utilization</h2>
 
               <p>Percentage of each monthly budget currently used.</p>
             </div>
@@ -658,7 +856,7 @@ function BudgetPage() {
                 >
                   <CartesianGrid strokeDasharray="3 3" />
 
-                  <XAxis dataKey="category" />
+                  <XAxis {...categoryAxisProps} />
 
                   <YAxis tickFormatter={(value) => `${value}%`} />
 
@@ -680,82 +878,92 @@ function BudgetPage() {
       )}
 
       <section>
-        <h2>Monthly Budgets</h2>
+        <h2>Monthly budgets</h2>
 
-        {filteredBudgets.length === 0 ? (
+        {/* The month's area alone waits or fails; the heading, form, and month selects stay. */}
+        {!shownMonth && loadStatus === "loading" ? (
+          <p className="empty-state" role="status">Loading budgets for {shownMonthLabel}…</p>
+        ) : !shownMonth && monthLoad?.key === loadKey && monthLoad.status === "error" ? (
+          <InlineNotice
+            variant="error"
+            action={{ label: "Try again", onClick: () => refreshMonth() }}
+          >
+            {monthLoad.message}
+          </InlineNotice>
+        ) : periodBudgets.length === 0 ? (
           <p className="empty-state">
             No budgets found for{" "}
             {formatBudgetMonth(Number(viewMonth), Number(viewYear))}.
           </p>
+        ) : filteredBudgets.length === 0 ? (
+          <p className="empty-state">
+            No {viewCategory?.name ?? "matching"} budget for{" "}
+            {formatBudgetMonth(Number(viewMonth), Number(viewYear))}. Choose “All categories” to
+            see the other budgets for this month.
+          </p>
         ) : (
           <div className="budget-grid">
             {filteredBudgets.map((budget) => {
-              const budgetAnalytics = analytics[budget.id];
-
               return (
                 <article
-                  key={budget.id}
+                  key={budget.budgetId}
                   className="budget-card"
-                  data-testid={`budget-card-${budget.id}`}
+                  data-testid={`budget-card-${budget.budgetId}`}
                 >
                   {" "}
                   <div className="budget-card__header">
                     <div>
-                      <h3>{budget.categoryName}</h3>
+                      <h3>
+                        <CategoryLabel name={budget.categoryName} iconKey={budget.categoryIconKey} />
+                      </h3>
 
                       <span>
                         {formatBudgetMonth(budget.month, budget.year)}
                       </span>
                     </div>
 
-                    {budgetAnalytics && (
-                      <span
-                        className={`budget-status budget-status--${budgetAnalytics.status.toLowerCase()}`}
-                      >
-                        {formatBudgetStatus(budgetAnalytics.status)}
-                      </span>
-                    )}
+                    <span
+                      className={`budget-status budget-status--${budget.status.toLowerCase()}`}
+                    >
+                      {formatBudgetStatus(budget.status)}
+                    </span>
                   </div>
                   <div className="budget-card__content">
                     <div>
-                      <span>Monthly Limit:</span>
+                      <span>Monthly limit:</span>
 
                       <strong>{formatCurrency(budget.monthlyLimit)}</strong>
                     </div>
 
-                    {budgetAnalytics && (
-                      <>
-                        <div>
-                          <span>Amount Spent:</span>
+                    <div>
+                      <span>Amount spent:</span>
 
-                          <strong>
-                            {formatCurrency(budgetAnalytics.amountSpent)}
-                          </strong>
-                        </div>
+                      <strong>
+                        {formatCurrency(budget.amountSpent)}
+                      </strong>
+                    </div>
 
-                        <div>
-                          <span>Remaining:</span>
+                    <div>
+                      <span>Remaining:</span>
 
-                          <strong>
-                            {formatCurrency(budgetAnalytics.amountRemaining)}
-                          </strong>
-                        </div>
+                      <strong>
+                        {formatCurrency(budget.amountRemaining)}
+                      </strong>
+                    </div>
 
-                        <div>
-                          <span>Used:</span>
+                    <div>
+                      <span>Used:</span>
 
-                          <strong>
-                            {budgetAnalytics.percentageUsed.toFixed(1)}%
-                          </strong>
-                        </div>
-                      </>
-                    )}
+                      <strong>
+                        {budget.percentageUsed.toFixed(1)}%
+                      </strong>
+                    </div>
                   </div>
                   <div className="budget-card__actions">
                     <button
                       type="button"
-                      className="button button--secondary"
-                      data-budget-edit-id={budget.id}
+                      className="button button--secondary button--edit"
+                      data-budget-edit-id={budget.budgetId}
                       onClick={() => handleEditBudget(budget)}
                     >
                       Edit
@@ -763,7 +971,7 @@ function BudgetPage() {
 
                     <button
                       type="button"
-                      className="button button--secondary"
+                      className="button button--secondary button--destructive"
                       onClick={() => {
                         void handleDeleteBudget(budget);
                       }}

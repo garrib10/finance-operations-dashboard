@@ -10,11 +10,15 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import dev.portfolio.finance.dto.category.CategoryResponse;
+import dev.portfolio.finance.dto.category.CategorySummaryListResponse;
 import dev.portfolio.finance.dto.category.CreateCategoryRequest;
 import dev.portfolio.finance.service.CategoryService;
+import dev.portfolio.finance.service.CategorySummaryService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import org.springframework.web.bind.annotation.PathVariable;
 import dev.portfolio.finance.dto.category.UpdateCategoryRequest;
 
@@ -23,11 +27,14 @@ import dev.portfolio.finance.dto.category.UpdateCategoryRequest;
 public class CategoryController {
 
     private final CategoryService categoryService;
+    private final CategorySummaryService categorySummaryService;
 
     public CategoryController(
-            CategoryService categoryService
+            CategoryService categoryService,
+            CategorySummaryService categorySummaryService
     ) {
         this.categoryService = categoryService;
+        this.categorySummaryService = categorySummaryService;
     }
 
     @PostMapping
@@ -58,10 +65,26 @@ public class CategoryController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Usage of the signed-in user's categories for the server's current month, or for an
+     * earlier month when both {@code month} and {@code year} are given (validated in the
+     * service; malformed values are reported by name in {@code CategoryExceptionHandler}).
+     */
+    @GetMapping("/summary")
+    public ResponseEntity<CategorySummaryListResponse> getCategorySummary(
+            Authentication authentication,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer year
+    ) {
+        return ResponseEntity.ok(
+                categorySummaryService.getSummary(authentication.getName(), month, year)
+        );
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<CategoryResponse> getCategoryById(
             Authentication authentication,
-            @PathVariable Long id
+            @PathVariable @Positive Long id
     ) {
         CategoryResponse response =
                 categoryService.getCategoryById(
@@ -75,7 +98,7 @@ public class CategoryController {
     @PutMapping("/{id}")
     public ResponseEntity<CategoryResponse> updateCategory(
             Authentication authentication,
-            @PathVariable Long id,
+            @PathVariable @Positive Long id,
             @Valid @RequestBody UpdateCategoryRequest request
     ) {
         CategoryResponse response =
@@ -91,7 +114,7 @@ public class CategoryController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCategory(
             Authentication authentication,
-            @PathVariable Long id
+            @PathVariable @Positive Long id
     ) {
         categoryService.deleteCategory(
                 authentication.getName(),
