@@ -18,6 +18,17 @@ public interface BudgetRepository
             Long userId
     );
 
+    /**
+     * This user's budgets for one month with their categories in the same statement, ordered
+     * by category name (database collation), then category ID (unique within a month).
+     */
+    @EntityGraph(attributePaths = "category")
+    List<Budget> findAllByUserIdAndMonthAndYearOrderByCategoryNameAscCategoryIdAsc(
+            Long userId,
+            int month,
+            int year
+    );
+
     Optional<Budget> findByIdAndUserId(
             Long id,
             Long userId

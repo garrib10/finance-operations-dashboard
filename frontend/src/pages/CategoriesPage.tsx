@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CategoryCard } from "../components/CategoryCard";
@@ -487,9 +487,10 @@ function CategoriesPage() {
               <button
                 id={CREATE_BUTTON_ID}
                 type="button"
-                className="button button--primary"
+                className="button button--tinted button--icon"
                 onClick={() => startWorkflow({ kind: "create" })}
               >
+                <Plus aria-hidden="true" focusable="false" size={16} />
                 Create category
               </button>
             )}
@@ -507,6 +508,7 @@ function CategoriesPage() {
                 onSubmit={handleCreate}
                 onCancel={() => close(CREATE_BUTTON_ID)}
                 focusNameOnOpen
+                createIcon
               />
             </div>
           )}

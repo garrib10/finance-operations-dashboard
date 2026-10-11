@@ -24,6 +24,13 @@ export interface BudgetResponse {
   updatedAt: string;
 }
 
+/** GET /api/budgets/analytics: one month's budgets with analytics, ordered by category name. */
+export interface BudgetMonthAnalyticsResponse {
+  month: number;
+  year: number;
+  budgets: BudgetAnalyticsResponse[];
+}
+
 export interface BudgetAnalyticsResponse {
   budgetId: number;
   categoryId: number;

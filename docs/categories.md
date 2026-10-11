@@ -455,10 +455,10 @@ user's ID behaves exactly like a missing one.
   existing edit form; otherwise, for a category that takes budgets, the create form opens
   with the category preselected for the displayed month (nothing is saved automatically).
   A category that does not take budgets is ignored. Focus moves to the form heading ("Edit
-  Budget" or "Create Budget") once the budgets have loaded; an ignored link moves no focus.
+  Budget" or "Create budget") once the budgets have loaded; an ignored link moves no focus.
 - **Budgets month (issue #103):** `?month={m}&year={yyyy}` (checked by the same parser as
   Categories: one of each, plain whole numbers, month 1–12, year 2000 or later) opens that
-  month in the Budget Period selects, and the category link then uses that month's budget
+  month in the Budget period selects, and the category link then uses that month's budget
   (never another month's). The link stays in the URL, so a refresh or a copied URL opens the
   same form, and Back/Forward between links follow the month. An invalid month is removed
   with a history replacement and the category applies to today's month; an unknown or

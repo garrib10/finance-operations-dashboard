@@ -5,6 +5,7 @@ import {
   deleteBudget,
   getBudget,
   getBudgetAnalytics,
+  getMonthBudgetAnalytics,
   getBudgets,
   updateBudget,
 } from "./budgetService";
@@ -100,6 +101,22 @@ describe("budgetService", () => {
     expect(mockApiRequest).toHaveBeenNthCalledWith(2, "/api/budgets/12", {
       method: "PUT",
       body: '{"newCategory":{"name":"Date Night"},"monthlyLimit":60,"month":10,"year":2026}',
+    });
+  });
+
+  it("loads one month's budgets with analytics in one request, always with both values", async () => {
+    await getMonthBudgetAnalytics({ month: 3, year: 2024 });
+
+    expect(mockApiRequest).toHaveBeenCalledExactlyOnceWith("/api/budgets/analytics?month=3&year=2024");
+  });
+
+  it("passes the abort signal through for the month request", async () => {
+    const controller = new AbortController();
+
+    await getMonthBudgetAnalytics({ month: 12, year: 2030 }, controller.signal);
+
+    expect(mockApiRequest).toHaveBeenCalledExactlyOnceWith("/api/budgets/analytics?month=12&year=2030", {
+      signal: controller.signal,
     });
   });
 });

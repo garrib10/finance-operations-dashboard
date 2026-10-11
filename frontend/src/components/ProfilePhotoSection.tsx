@@ -144,7 +144,7 @@ export function ProfilePhotoSection() {
     <p ref={alertRef} id="profile-photo-error" role="alert" tabIndex={-1} className="form-error">{error}</p>
     <p ref={statusRef} role="status" tabIndex={-1}>{status}</p>
     <div className="account-actions">
-      <button className="button button--primary" disabled={pending}>{uploadLabel}</button>
+      <button className="button button--tinted" disabled={pending}>{uploadLabel}</button>
       {hasPhoto && <button type="button" className="button button--danger" disabled={pending} onClick={handleRemove}>
         {operation === "removing" ? "Removing…" : "Remove photo"}
       </button>}

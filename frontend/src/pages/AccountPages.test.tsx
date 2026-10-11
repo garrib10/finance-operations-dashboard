@@ -39,6 +39,20 @@ function passwords(current = "old password value", next = "new password value", 
 }
 beforeEach(() => { vi.resetAllMocks(); localStorage.clear(); clearAccessToken(); });
 
+describe("Main buttons", () => {
+  it("use the app's tinted blue on Profile and Settings", async () => {
+    await setup("profile");
+    expect(screen.getByRole("button", { name: "Save profile" })).toHaveClass("button--tinted");
+  });
+
+  it("use the tinted blue for the photo, preferences, and password forms on Settings", async () => {
+    await setup("settings");
+    expect(screen.getByRole("button", { name: "Upload photo" })).toHaveClass("button--tinted");
+    expect(screen.getByRole("button", { name: "Save preferences" })).toHaveClass("button--tinted");
+    expect(screen.getByRole("button", { name: "Change password" })).toHaveClass("button--tinted");
+  });
+});
+
 describe("Profile form", () => {
   it("prefills canonical values, trims only approved fields, updates header, and focuses success", async () => {
     const user = await setup("profile");

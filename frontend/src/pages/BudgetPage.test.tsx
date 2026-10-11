@@ -1,8 +1,8 @@
 vi.mock("../context/AuthContext", () => ({ useAuth: vi.fn() }));
 import { useAuth } from "../context/AuthContext";
-import { accountContext, accountUser } from "../test/accountFixtures";
+import { accountContext, accountUser, deferred } from "../test/accountFixtures";
 import type { ReactNode } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,11 +14,12 @@ import {
   deleteBudget,
   getBudgetAnalytics,
   getBudgets,
+  getMonthBudgetAnalytics,
   updateBudget,
 } from "../services/budgetService";
 import { getCategories } from "../services/categoryService";
 
-import type { BudgetAnalyticsResponse, BudgetResponse } from "../types/budget";
+import type { BudgetAnalyticsResponse, BudgetMonthAnalyticsResponse, BudgetResponse } from "../types/budget";
 import type { CategoryResponse } from "../types/category";
 
 vi.mock("../services/budgetService", () => ({
@@ -26,6 +27,7 @@ vi.mock("../services/budgetService", () => ({
   deleteBudget: vi.fn(),
   getBudgetAnalytics: vi.fn(),
   getBudgets: vi.fn(),
+  getMonthBudgetAnalytics: vi.fn(),
   updateBudget: vi.fn(),
 }));
 
@@ -59,8 +61,23 @@ vi.mock("recharts", () => ({
   Bar: ({ name }: { name?: string }) => <div>{name}</div>,
 }));
 
-const mockGetBudgets = vi.mocked(getBudgets);
-const mockGetBudgetAnalytics = vi.mocked(getBudgetAnalytics);
+/*
+ * The page loads one month at a time (GET /api/budgets/analytics). These two fixtures
+ * describe the user's budgets and each budget's analytics; the month endpoint mock answers
+ * from them for whichever month is asked for. The old per-budget calls stay mocked only to
+ * prove the page never makes them.
+ */
+const budgetsFixture = vi.fn<() => Promise<BudgetResponse[]>>();
+const analyticsFixture = vi.fn<(id: number) => Promise<BudgetAnalyticsResponse>>();
+const mockGetMonth = vi.mocked(getMonthBudgetAnalytics);
+
+function serveMonthsFromFixtures(): void {
+  mockGetMonth.mockImplementation(async ({ month, year }): Promise<BudgetMonthAnalyticsResponse> => {
+    const inMonth = (await budgetsFixture()).filter((budget) => budget.month === month && budget.year === year);
+    const budgets = await Promise.all(inMonth.map((budget) => analyticsFixture(budget.id)));
+    return { month, year, budgets };
+  });
+}
 const mockCreateBudget = vi.mocked(createBudget);
 const mockUpdateBudget = vi.mocked(updateBudget);
 const mockDeleteBudget = vi.mocked(deleteBudget);
@@ -145,7 +162,7 @@ const categories: CategoryResponse[] = [
 ];
 
 function mockAnalyticsForLoadedBudgets(): void {
-  mockGetBudgetAnalytics.mockImplementation(async (id: number) => {
+  analyticsFixture.mockImplementation(async (id: number) => {
     if (id === groceriesBudget.id) {
       return groceriesAnalytics;
     }
@@ -171,6 +188,8 @@ describe("BudgetPage", () => {
     });
 
     mockGetCategories.mockResolvedValue(categories);
+    budgetsFixture.mockResolvedValue([]);
+    serveMonthsFromFixtures();
     mockCreateBudget.mockResolvedValue(groceriesBudget);
     mockUpdateBudget.mockResolvedValue(groceriesBudget);
     mockDeleteBudget.mockResolvedValue(undefined);
@@ -180,23 +199,29 @@ describe("BudgetPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows the loading state while budget data is being fetched", () => {
-    mockGetBudgets.mockReturnValue(new Promise(() => {}));
+  it("keeps the page, form, and month controls while the month's budgets load", () => {
+    budgetsFixture.mockReturnValue(new Promise(() => {}));
     mockGetCategories.mockReturnValue(new Promise(() => {}));
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    expect(screen.getByText("Loading budgets...")).toBeInTheDocument();
+    const monthName = new Intl.DateTimeFormat("en-US", { month: "long" }).format(today);
+    expect(screen.getByText(`Loading budgets for ${monthName} ${currentYear}…`)).toHaveAttribute("role", "status");
+    expect(screen.getAllByRole("heading", { level: 1 }).map((heading) => heading.textContent)).toEqual(["Budgets"]);
+    expect(screen.getByRole("heading", { name: "Create budget" })).toBeInTheDocument();
+    expect(screen.getByTestId("budget-period-filter")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Month")[1]).toBeEnabled();
+    expect(screen.queryByTestId(/^budget-card-/)).not.toBeInTheDocument();
   });
 
   it("renders budgets, analytics, statuses, and charts for the selected period", async () => {
-    mockGetBudgets.mockResolvedValue([groceriesBudget, diningBudget]);
+    budgetsFixture.mockResolvedValue([groceriesBudget, diningBudget]);
     mockAnalyticsForLoadedBudgets();
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     expect(
-      await screen.findByRole("heading", { name: "Monthly Budgets" }),
+      await screen.findByRole("heading", { name: "Monthly budgets" }),
     ).toBeInTheDocument();
 
     expect(
@@ -226,11 +251,11 @@ describe("BudgetPage", () => {
     expect(screen.getByText("30.0%")).toBeInTheDocument();
 
     expect(
-      screen.getByRole("heading", { name: "Budget vs. Spending" }),
+      screen.getByRole("heading", { name: "Budget vs. spending" }),
     ).toBeInTheDocument();
 
     expect(
-      screen.getByRole("heading", { name: "Budget Utilization" }),
+      screen.getByRole("heading", { name: "Budget utilization" }),
     ).toBeInTheDocument();
 
     expect(screen.getAllByTestId("bar-chart")).toHaveLength(2);
@@ -272,8 +297,8 @@ describe("BudgetPage", () => {
       13: "OVER_BUDGET",
     } as const;
 
-    mockGetBudgets.mockResolvedValue(statusBudgets);
-    mockGetBudgetAnalytics.mockImplementation(async (id: number) => ({
+    budgetsFixture.mockResolvedValue(statusBudgets);
+    analyticsFixture.mockImplementation(async (id: number) => ({
       ...groceriesAnalytics,
       budgetId: id,
       categoryName:
@@ -288,29 +313,27 @@ describe("BudgetPage", () => {
     expect(screen.getByText("Over Budget")).toBeInTheDocument();
   });
 
-  it("renders a budget when its analytics record is unavailable", async () => {
-    mockGetBudgets.mockResolvedValue([groceriesBudget]);
-    mockGetBudgetAnalytics.mockResolvedValue({
-      ...groceriesAnalytics,
-      budgetId: 999,
-    });
+  it("loads the month in one request, however many budgets it has, and never per budget", async () => {
+    const many: BudgetResponse[] = Array.from({ length: 12 }, (_, index) => ({
+      ...groceriesBudget, id: 100 + index, categoryId: 100 + index, categoryName: `Category ${index}`,
+    }));
+    budgetsFixture.mockResolvedValue(many);
+    analyticsFixture.mockImplementation(async (id) => ({ ...groceriesAnalytics, budgetId: id, categoryName: `Category ${id - 100}` }));
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    const budgetCard = await screen.findByTestId("budget-card-1");
-
-    expect(budgetCard).toHaveTextContent("Groceries");
-    expect(budgetCard).toHaveTextContent("$500.00");
-    expect(budgetCard).not.toHaveTextContent("On Track");
-    expect(
-      screen.queryByRole("heading", { name: "Budget vs. Spending" }),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByTestId("budget-card-111")).toBeInTheDocument();
+    expect(screen.getAllByTestId(/^budget-card-/)).toHaveLength(12);
+    expect(mockGetMonth).toHaveBeenCalledOnce();
+    expect(mockGetMonth).toHaveBeenCalledWith({ month: currentMonth, year: currentYear }, expect.any(AbortSignal));
+    expect(getBudgets).not.toHaveBeenCalled();
+    expect(getBudgetAnalytics).not.toHaveBeenCalled();
   });
 
   it("filters budgets by month and shows the empty state for a period with no budgets", async () => {
     const user = userEvent.setup();
 
-    mockGetBudgets.mockResolvedValue([groceriesBudget, diningBudget]);
+    budgetsFixture.mockResolvedValue([groceriesBudget, diningBudget]);
     mockAnalyticsForLoadedBudgets();
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
@@ -329,15 +352,15 @@ describe("BudgetPage", () => {
     ).not.toBeInTheDocument();
 
     expect(
-      screen.queryByRole("heading", { name: "Budget vs. Spending" }),
+      screen.queryByRole("heading", { name: "Budget vs. spending" }),
     ).not.toBeInTheDocument();
 
     expect(
-      screen.queryByRole("heading", { name: "Budget Utilization" }),
+      screen.queryByRole("heading", { name: "Budget utilization" }),
     ).not.toBeInTheDocument();
   });
 
-  it("includes years from saved budgets outside the default year range", async () => {
+  it("offers every year from 2000, so budgets from any earlier year can be shown", async () => {
     const user = userEvent.setup();
     const savedBudgetYear = currentYear - 10;
 
@@ -355,20 +378,20 @@ describe("BudgetPage", () => {
       year: savedBudgetYear,
     };
 
-    mockGetBudgets.mockResolvedValue([archivedBudget]);
-    mockGetBudgetAnalytics.mockResolvedValue(archivedAnalytics);
+    budgetsFixture.mockResolvedValue([archivedBudget]);
+    analyticsFixture.mockResolvedValue(archivedAnalytics);
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    await screen.findByRole("heading", { name: "Create Budget" });
+    await screen.findByRole("heading", { name: "Create budget" });
 
     const filterYearSelect = screen.getAllByLabelText("Year")[1];
 
-    expect(
-      screen.getByRole("option", {
-        name: String(savedBudgetYear),
-      }),
-    ).toBeInTheDocument();
+    // Both the form and Budget period offer every year from 2000.
+    for (const yearSelect of screen.getAllByLabelText("Year")) {
+      expect(within(yearSelect).getByRole("option", { name: String(savedBudgetYear) })).toBeInTheDocument();
+      expect(within(yearSelect).getAllByRole("option")[0]).toHaveTextContent("2000");
+    }
 
     await user.selectOptions(filterYearSelect, String(savedBudgetYear));
 
@@ -384,20 +407,20 @@ describe("BudgetPage", () => {
   it("creates a budget and reloads the budget data", async () => {
     const user = userEvent.setup();
 
-    mockGetBudgets
+    budgetsFixture
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([groceriesBudget]);
 
-    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    analyticsFixture.mockResolvedValue(groceriesAnalytics);
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    await screen.findByRole("heading", { name: "Create Budget" });
+    await screen.findByRole("heading", { name: "Create budget" });
 
     await user.selectOptions(screen.getByLabelText("Category"), "1");
-    await user.type(screen.getByLabelText("Monthly Limit"), "500");
+    await user.type(screen.getByLabelText("Monthly limit"), "500");
 
-    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+    await user.click(screen.getByRole("button", { name: "Create budget" }));
 
     await waitFor(() => {
       expect(mockCreateBudget).toHaveBeenCalledWith({
@@ -409,20 +432,20 @@ describe("BudgetPage", () => {
     });
 
     await waitFor(() => {
-      expect(mockGetBudgets).toHaveBeenCalledTimes(2);
+      expect(mockGetMonth).toHaveBeenCalledTimes(2);
     });
   });
 
   it("validates the category and monthly limit before submitting", async () => {
     const user = userEvent.setup();
-    mockGetBudgets.mockResolvedValue([]);
+    budgetsFixture.mockResolvedValue([]);
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    await screen.findByRole("heading", { name: "Create Budget" });
+    await screen.findByRole("heading", { name: "Create budget" });
 
     const form = screen
-      .getByRole("button", { name: "Create Budget" })
+      .getByRole("button", { name: "Create budget" })
       .closest("form");
     expect(form).not.toBeNull();
 
@@ -437,10 +460,10 @@ describe("BudgetPage", () => {
     expect(category).toHaveFocus();
 
     await user.selectOptions(screen.getByLabelText("Category"), "1");
-    await user.type(screen.getByLabelText("Monthly Limit"), "0");
+    await user.type(screen.getByLabelText("Monthly limit"), "0");
     fireEvent.submit(form!);
 
-    const monthlyLimit = screen.getByLabelText("Monthly Limit");
+    const monthlyLimit = screen.getByLabelText("Monthly limit");
     await waitFor(() => expect(monthlyLimit).toHaveAccessibleDescription(
       "Monthly limit must be greater than 0.",
     ));
@@ -455,7 +478,7 @@ describe("BudgetPage", () => {
     const nextMonth = currentMonth === 12 ? 11 : currentMonth + 1;
     const nextYear = currentYear + 1;
 
-    mockGetBudgets.mockResolvedValue([]);
+    budgetsFixture.mockResolvedValue([]);
     mockCreateBudget.mockRejectedValue(
       new ApiError("Validation failed.", 400, {
         categoryId: "Category is invalid.",
@@ -467,19 +490,18 @@ describe("BudgetPage", () => {
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    await screen.findByRole("heading", { name: "Create Budget" });
+    await screen.findByRole("heading", { name: "Create budget" });
 
     await user.selectOptions(screen.getByLabelText("Category"), "1");
-    await user.type(screen.getByLabelText("Monthly Limit"), "500");
+    await user.type(screen.getByLabelText("Monthly limit"), "500");
     await user.selectOptions(
       screen.getAllByLabelText("Month")[0],
       String(nextMonth),
     );
 
     const yearInput = screen.getAllByLabelText("Year")[0];
-    await user.clear(yearInput);
-    await user.type(yearInput, String(nextYear));
-    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+    await user.selectOptions(yearInput, String(nextYear));
+    await user.click(screen.getByRole("button", { name: "Create budget" }));
 
     expect(await screen.findByText("Category is invalid.")).toBeInTheDocument();
     expect(screen.getByText("Monthly limit is invalid.")).toBeInTheDocument();
@@ -497,42 +519,42 @@ describe("BudgetPage", () => {
   it("preserves the create form and skips refresh when creation fails", async () => {
     const user = userEvent.setup();
 
-    mockGetBudgets.mockResolvedValue([]);
+    budgetsFixture.mockResolvedValue([]);
     mockCreateBudget.mockRejectedValue(new Error("Request failed"));
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    await screen.findByRole("heading", { name: "Create Budget" });
+    await screen.findByRole("heading", { name: "Create budget" });
 
     await user.selectOptions(screen.getByLabelText("Category"), "1");
-    await user.type(screen.getByLabelText("Monthly Limit"), "500");
-    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+    await user.type(screen.getByLabelText("Monthly limit"), "500");
+    await user.click(screen.getByRole("button", { name: "Create budget" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Unable to create the budget. Please try again.",
     );
 
-    expect(mockGetBudgets).toHaveBeenCalledOnce();
+    expect(mockGetMonth).toHaveBeenCalledOnce();
     expect(screen.getByLabelText("Category")).toHaveValue("1");
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500);
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(500);
   });
 
   it("reports a refresh warning after a successful create", async () => {
     const user = userEvent.setup();
 
-    mockGetBudgets
+    budgetsFixture
       .mockResolvedValueOnce([groceriesBudget])
       .mockRejectedValueOnce(new Error("Refresh failed"));
 
-    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    analyticsFixture.mockResolvedValue(groceriesAnalytics);
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Groceries" });
 
     await user.selectOptions(screen.getByLabelText("Category"), "2");
-    await user.type(screen.getByLabelText("Monthly Limit"), "200");
-    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+    await user.type(screen.getByLabelText("Monthly limit"), "200");
+    await user.click(screen.getByRole("button", { name: "Create budget" }));
 
     expect((await screen.findByText(/Budget saved, but the budget list could not be refreshed\./)).closest("[role='status']"))
       .toHaveTextContent(/^Warning: /);
@@ -544,7 +566,7 @@ describe("BudgetPage", () => {
       screen.getByRole("heading", { name: "Groceries" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Category")).toHaveValue("");
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(null);
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(null);
     expect(
       screen.queryByText(/Unable to create the budget/i),
     ).not.toBeInTheDocument();
@@ -553,8 +575,8 @@ describe("BudgetPage", () => {
   it("loads a budget into edit mode and updates it", async () => {
     const user = userEvent.setup();
 
-    mockGetBudgets.mockResolvedValue([groceriesBudget]);
-    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    budgetsFixture.mockResolvedValue([groceriesBudget]);
+    analyticsFixture.mockResolvedValue(groceriesAnalytics);
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
@@ -566,7 +588,7 @@ describe("BudgetPage", () => {
 
     await user.click(editButton);
 
-    const formHeading = screen.getByRole("heading", { name: "Edit Budget" });
+    const formHeading = screen.getByRole("heading", { name: "Edit budget" });
 
     expect(formHeading).toBeInTheDocument();
     expect(formHeading).toHaveAttribute("tabindex", "-1");
@@ -581,14 +603,14 @@ describe("BudgetPage", () => {
     });
 
     expect(screen.getByLabelText("Category")).toHaveValue("1");
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500);
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(500);
 
-    const monthlyLimitInput = screen.getByLabelText("Monthly Limit");
+    const monthlyLimitInput = screen.getByLabelText("Monthly limit");
 
     await user.clear(monthlyLimitInput);
     await user.type(monthlyLimitInput, "600");
 
-    await user.click(screen.getByRole("button", { name: "Update Budget" }));
+    await user.click(screen.getByRole("button", { name: "Update budget" }));
 
     await waitFor(() => {
       expect(mockUpdateBudget).toHaveBeenCalledWith(1, {
@@ -598,13 +620,17 @@ describe("BudgetPage", () => {
         year: currentYear,
       });
     });
+    // One refresh of the same month, not a request per budget.
+    await waitFor(() => expect(mockGetMonth).toHaveBeenCalledTimes(2));
+    expect(mockGetMonth).toHaveBeenLastCalledWith({ month: currentMonth, year: currentYear }, expect.any(AbortSignal));
+    expect(getBudgetAnalytics).not.toHaveBeenCalled();
   });
 
   it("preserves edit mode and skips refresh when updating fails", async () => {
     const user = userEvent.setup();
 
-    mockGetBudgets.mockResolvedValue([groceriesBudget]);
-    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    budgetsFixture.mockResolvedValue([groceriesBudget]);
+    analyticsFixture.mockResolvedValue(groceriesAnalytics);
     mockUpdateBudget.mockRejectedValue(new Error("Request failed"));
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
@@ -612,18 +638,18 @@ describe("BudgetPage", () => {
     await screen.findByRole("heading", { name: "Groceries" });
     await user.click(screen.getByRole("button", { name: "Edit" }));
 
-    const monthlyLimitInput = screen.getByLabelText("Monthly Limit");
+    const monthlyLimitInput = screen.getByLabelText("Monthly limit");
     await user.clear(monthlyLimitInput);
     await user.type(monthlyLimitInput, "600");
-    await user.click(screen.getByRole("button", { name: "Update Budget" }));
+    await user.click(screen.getByRole("button", { name: "Update budget" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Unable to update the budget. Please try again.",
     );
 
-    expect(mockGetBudgets).toHaveBeenCalledOnce();
+    expect(mockGetMonth).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("heading", { name: "Edit Budget" }),
+      screen.getByRole("heading", { name: "Edit budget" }),
     ).toBeInTheDocument();
     expect(monthlyLimitInput).toHaveValue(600);
   });
@@ -635,11 +661,11 @@ describe("BudgetPage", () => {
       monthlyLimit: 600,
     };
 
-    mockGetBudgets
+    budgetsFixture
       .mockResolvedValueOnce([groceriesBudget])
       .mockResolvedValueOnce([updatedBudget]);
 
-    mockGetBudgetAnalytics
+    analyticsFixture
       .mockResolvedValueOnce(groceriesAnalytics)
       .mockRejectedValueOnce(new Error("Analytics refresh failed"));
 
@@ -648,10 +674,10 @@ describe("BudgetPage", () => {
     await screen.findByRole("heading", { name: "Groceries" });
     await user.click(screen.getByRole("button", { name: "Edit" }));
 
-    const monthlyLimitInput = screen.getByLabelText("Monthly Limit");
+    const monthlyLimitInput = screen.getByLabelText("Monthly limit");
     await user.clear(monthlyLimitInput);
     await user.type(monthlyLimitInput, "600");
-    await user.click(screen.getByRole("button", { name: "Update Budget" }));
+    await user.click(screen.getByRole("button", { name: "Update budget" }));
 
     expect((await screen.findByText(/Budget saved, but the budget list could not be refreshed\./)).closest("[role='status']"))
       .toHaveTextContent(/^Warning: /);
@@ -660,7 +686,7 @@ describe("BudgetPage", () => {
 
     expect(mockUpdateBudget).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("heading", { name: "Create Budget" }),
+      screen.getByRole("heading", { name: "Create budget" }),
     ).toBeInTheDocument();
     expect(screen.getByText("$500.00")).toBeInTheDocument();
     expect(screen.queryByText("$600.00")).not.toBeInTheDocument();
@@ -672,8 +698,8 @@ describe("BudgetPage", () => {
   it("cancels edit mode, resets the form, and restores focus", async () => {
     const user = userEvent.setup();
 
-    mockGetBudgets.mockResolvedValue([groceriesBudget]);
-    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    budgetsFixture.mockResolvedValue([groceriesBudget]);
+    analyticsFixture.mockResolvedValue(groceriesAnalytics);
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
@@ -682,23 +708,23 @@ describe("BudgetPage", () => {
     await user.click(screen.getByRole("button", { name: "Edit" }));
 
     expect(
-      screen.getByRole("heading", { name: "Edit Budget" }),
+      screen.getByRole("heading", { name: "Edit budget" }),
     ).toBeInTheDocument();
 
     expect(screen.getByLabelText("Category")).toHaveValue("1");
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500);
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(500);
 
-    await user.click(screen.getByRole("button", { name: "Cancel Edit" }));
+    await user.click(screen.getByRole("button", { name: "Cancel edit" }));
 
     expect(
-      screen.getByRole("heading", { name: "Create Budget" }),
+      screen.getByRole("heading", { name: "Create budget" }),
     ).toBeInTheDocument();
 
     expect(screen.getByLabelText("Category")).toHaveValue("");
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(null);
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(null);
 
     expect(
-      screen.queryByRole("button", { name: "Cancel Edit" }),
+      screen.queryByRole("button", { name: "Cancel edit" }),
     ).not.toBeInTheDocument();
 
     await waitFor(() => {
@@ -709,11 +735,11 @@ describe("BudgetPage", () => {
   it("deletes a budget after confirmation", async () => {
     const user = userEvent.setup();
 
-    mockGetBudgets
+    budgetsFixture
       .mockResolvedValueOnce([groceriesBudget])
       .mockResolvedValueOnce([]);
 
-    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    analyticsFixture.mockResolvedValue(groceriesAnalytics);
 
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 
@@ -730,7 +756,7 @@ describe("BudgetPage", () => {
     });
 
     await waitFor(() => {
-      expect(mockGetBudgets).toHaveBeenCalledTimes(2);
+      expect(mockGetMonth).toHaveBeenCalledTimes(2);
     });
 
     expect(await screen.findByText("Budget deleted.")).toHaveAttribute("role", "status");
@@ -739,10 +765,10 @@ describe("BudgetPage", () => {
   it("resets edit mode when the budget being edited is deleted", async () => {
     const user = userEvent.setup();
 
-    mockGetBudgets
+    budgetsFixture
       .mockResolvedValueOnce([groceriesBudget])
       .mockResolvedValueOnce([]);
-    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    analyticsFixture.mockResolvedValue(groceriesAnalytics);
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
@@ -752,9 +778,9 @@ describe("BudgetPage", () => {
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Create Budget" }),
+      await screen.findByRole("heading", { name: "Create budget" }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Cancel Edit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel edit" })).toBeNull();
   });
 
   it.each([
@@ -769,8 +795,8 @@ describe("BudgetPage", () => {
   ])("reports a budget deletion failure", async (error, expectedMessage) => {
     const user = userEvent.setup();
 
-    mockGetBudgets.mockResolvedValue([groceriesBudget]);
-    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    budgetsFixture.mockResolvedValue([groceriesBudget]);
+    analyticsFixture.mockResolvedValue(groceriesAnalytics);
     mockDeleteBudget.mockRejectedValue(error);
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
@@ -785,8 +811,8 @@ describe("BudgetPage", () => {
   it("does not delete a budget when confirmation is cancelled", async () => {
     const user = userEvent.setup();
 
-    mockGetBudgets.mockResolvedValue([groceriesBudget]);
-    mockGetBudgetAnalytics.mockResolvedValue(groceriesAnalytics);
+    budgetsFixture.mockResolvedValue([groceriesBudget]);
+    analyticsFixture.mockResolvedValue(groceriesAnalytics);
 
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
 
@@ -807,7 +833,7 @@ describe("BudgetPage", () => {
   it("shows a duplicate-budget business-rule error returned by the API", async () => {
     const user = userEvent.setup();
 
-    mockGetBudgets.mockResolvedValue([]);
+    budgetsFixture.mockResolvedValue([]);
 
     mockCreateBudget.mockRejectedValue(
       new ApiError("Budget already exists for this category and month", 409),
@@ -815,12 +841,12 @@ describe("BudgetPage", () => {
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    await screen.findByRole("heading", { name: "Create Budget" });
+    await screen.findByRole("heading", { name: "Create budget" });
 
     await user.selectOptions(screen.getByLabelText("Category"), "1");
-    await user.type(screen.getByLabelText("Monthly Limit"), "500");
+    await user.type(screen.getByLabelText("Monthly limit"), "500");
 
-    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+    await user.click(screen.getByRole("button", { name: "Create budget" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Budget already exists for this category and month",
@@ -828,7 +854,7 @@ describe("BudgetPage", () => {
   });
 
   it("shows an API error when the budget page cannot load", async () => {
-    mockGetBudgets.mockRejectedValue(
+    budgetsFixture.mockRejectedValue(
       new ApiError("Unable to load budgets.", 500),
     );
 
@@ -840,12 +866,151 @@ describe("BudgetPage", () => {
   });
 
   it("shows a fallback error when the budget page cannot load", async () => {
-    mockGetBudgets.mockRejectedValue(new Error("Network unavailable"));
+    budgetsFixture.mockRejectedValue(new Error("Network unavailable"));
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Unable to load budget information. Please try again.",
     );
+  });
+
+  describe("one request per month", () => {
+    const periodMonth = () => screen.getAllByLabelText("Month")[1];
+    const other = currentMonth === 1 ? 2 : 1;
+    const another = currentMonth === 3 ? 4 : 3;
+    const monthName = (month: number) => new Intl.DateTimeFormat("en-US", { month: "long" }).format(new Date(2026, month - 1, 1));
+
+    it("loads a newly chosen month in one request and shows only that month", async () => {
+      const user = userEvent.setup();
+      budgetsFixture.mockResolvedValue([groceriesBudget, { ...diningBudget, month: other }]);
+      analyticsFixture.mockImplementation(async (id) => (id === 1 ? groceriesAnalytics : { ...diningAnalytics, month: other }));
+      render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
+      await screen.findByTestId("budget-card-1");
+
+      await user.selectOptions(periodMonth(), String(other));
+
+      expect(await screen.findByTestId("budget-card-2")).toBeInTheDocument();
+      expect(screen.queryByTestId("budget-card-1")).not.toBeInTheDocument();
+      expect(mockGetMonth).toHaveBeenCalledTimes(2);
+      expect(mockGetMonth).toHaveBeenLastCalledWith({ month: other, year: currentYear }, expect.any(AbortSignal));
+    });
+
+    it("never shows the previous month's budgets while another month loads", async () => {
+      const user = userEvent.setup();
+      budgetsFixture.mockResolvedValue([groceriesBudget]);
+      analyticsFixture.mockResolvedValue(groceriesAnalytics);
+      render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
+      await screen.findByTestId("budget-card-1");
+      mockGetMonth.mockReturnValueOnce(new Promise(() => {}));
+
+      await user.selectOptions(periodMonth(), String(other));
+
+      expect(screen.getByText(`Loading budgets for ${monthName(other)} ${currentYear}…`)).toHaveAttribute("role", "status");
+      expect(screen.queryByTestId("budget-card-1")).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "Budget vs. spending" })).not.toBeInTheDocument();
+      expect(periodMonth()).toBeEnabled();
+    });
+
+    it("keeps the newest month when an older one answers last, and aborts the older request", async () => {
+      const user = userEvent.setup();
+      render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
+      await screen.findByText(/No budgets found for/);
+      const slow = deferred<BudgetMonthAnalyticsResponse>();
+      const fast = deferred<BudgetMonthAnalyticsResponse>();
+      mockGetMonth.mockReturnValueOnce(slow.promise).mockReturnValueOnce(fast.promise);
+
+      await user.selectOptions(periodMonth(), String(other));
+      await user.selectOptions(periodMonth(), String(another));
+      const slowSignal = mockGetMonth.mock.calls.at(-2)![1]!;
+      expect(slowSignal.aborted).toBe(true);
+
+      await act(async () => fast.resolve({ month: another, year: currentYear,
+        budgets: [{ ...diningAnalytics, budgetId: 7, month: another }] }));
+      expect(await screen.findByTestId("budget-card-7")).toBeInTheDocument();
+
+      // Too late: the older month's answer and failure are both ignored.
+      await act(async () => slow.resolve({ month: other, year: currentYear,
+        budgets: [{ ...groceriesAnalytics, budgetId: 6, month: other }] }));
+      expect(screen.queryByTestId("budget-card-6")).not.toBeInTheDocument();
+      expect(screen.getByTestId("budget-card-7")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(periodMonth()).toHaveValue(String(another));
+    });
+
+    it("shows a failed month with Try again, which loads the same month", async () => {
+      const user = userEvent.setup();
+      budgetsFixture.mockResolvedValue([groceriesBudget]);
+      analyticsFixture.mockResolvedValue(groceriesAnalytics);
+      mockGetMonth.mockRejectedValueOnce(new Error("Network unavailable"));
+      render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent("Unable to load budget information. Please try again.");
+      expect(screen.queryByText(/No budgets found for/)).not.toBeInTheDocument(); // Not an empty month.
+      expect(screen.getByRole("heading", { name: "Create budget" })).toBeInTheDocument();
+      expect(screen.getByTestId("budget-period-filter")).toBeInTheDocument();
+
+      const retry = screen.getByRole("button", { name: "Try again" });
+      expect(retry).toHaveAttribute("type", "button");
+      await user.click(retry);
+
+      expect(await screen.findByTestId("budget-card-1")).toBeInTheDocument();
+      expect(mockGetMonth).toHaveBeenCalledTimes(2);
+      expect(mockGetMonth).toHaveBeenLastCalledWith({ month: currentMonth, year: currentYear }, expect.any(AbortSignal));
+    });
+
+    it("refreshes the month a save was for, in one request", async () => {
+      const user = userEvent.setup();
+      render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
+      await screen.findByText(/No budgets found for/);
+      budgetsFixture.mockResolvedValue([{ ...groceriesBudget, month: other }]);
+      analyticsFixture.mockResolvedValue({ ...groceriesAnalytics, month: other });
+
+      await user.selectOptions(screen.getByLabelText("Category"), "1");
+      await user.type(screen.getByLabelText("Monthly limit"), "500");
+      await user.selectOptions(document.getElementById("budget-month")!, String(other));
+      await user.click(screen.getByRole("button", { name: "Create budget" }));
+
+      expect(await screen.findByTestId("budget-card-1")).toBeInTheDocument();
+      expect(periodMonth()).toHaveValue(String(other));
+      expect(mockGetMonth).toHaveBeenCalledTimes(2);
+      expect(mockGetMonth).toHaveBeenLastCalledWith({ month: other, year: currentYear }, expect.any(AbortSignal));
+    });
+
+    it("aborts the pending request when the page is left", async () => {
+      mockGetMonth.mockReturnValueOnce(new Promise(() => {}));
+      const view = render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
+      await waitFor(() => expect(mockGetMonth).toHaveBeenCalledOnce());
+      const signal = mockGetMonth.mock.calls[0][1]!;
+
+      view.unmount();
+
+      expect(signal.aborted).toBe(true);
+    });
+  });
+
+  it("uses the shared button styles: the tinted + Create budget and Update budget, and a red-text Delete", async () => {
+    const user = userEvent.setup();
+    // A budget saved beyond the usual years (2045, opened from a link) can still be edited.
+    budgetsFixture.mockResolvedValue([{ ...groceriesBudget, year: 2045, month: 1 }]);
+    analyticsFixture.mockResolvedValue({ ...groceriesAnalytics, year: 2045, month: 1 });
+    render(<MemoryRouter initialEntries={["/budgets?month=1&year=2045"]}><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
+
+    const create = await screen.findByRole("button", { name: "Create budget" });
+    expect(create).toHaveClass("button--tinted");
+    expect(create.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(within(screen.getAllByLabelText("Year")[0]).getAllByRole("option").at(-1)).toHaveTextContent(String(currentYear + 10));
+
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
+    expect(document.getElementById("budget-year")).toHaveValue("2045");
+    const update = screen.getByRole("button", { name: "Update budget" });
+    expect(update).toHaveClass("button--tinted");
+    expect(update.querySelector("svg")).toBeNull();
+
+    const remove = screen.getByRole("button", { name: "Delete" });
+    expect(remove).toHaveClass("button--secondary", "button--destructive");
+    expect(screen.getByRole("button", { name: "Edit" })).toHaveClass("button--secondary", "button--edit");
+    expect(screen.getByRole("button", { name: "Edit" })).not.toHaveClass("button--destructive");
   });
 });

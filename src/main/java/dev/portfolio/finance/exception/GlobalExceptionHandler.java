@@ -18,6 +18,7 @@ import dev.portfolio.finance.exception.category.CategoryNotFoundException;
 import dev.portfolio.finance.exception.category.CategoryValidationException;
 import dev.portfolio.finance.exception.transaction.InvalidTransactionFilterException;
 import dev.portfolio.finance.exception.budget.BudgetNotFoundException;
+import dev.portfolio.finance.exception.budget.BudgetValidationException;
 import dev.portfolio.finance.exception.budget.DuplicateBudgetException;
 
 @RestControllerAdvice
@@ -183,6 +184,23 @@ public class GlobalExceptionHandler {
 
             return ResponseEntity
                     .status(HttpStatus.NOT_FOUND)
+                    .body(response);
+        }
+
+        /** An invalid budget query month or year, in the same shape as bean validation. */
+        @ExceptionHandler(BudgetValidationException.class)
+        public ResponseEntity<ValidationErrorResponse> handleBudgetValidation(
+                BudgetValidationException ex
+        ) {
+            ValidationErrorResponse response = new ValidationErrorResponse(
+                    LocalDateTime.now(),
+                    HttpStatus.BAD_REQUEST.value(),
+                    "Validation Failed",
+                    ex.getFields()
+            );
+
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
                     .body(response);
         }
 

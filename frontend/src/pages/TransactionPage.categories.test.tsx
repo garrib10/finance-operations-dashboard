@@ -7,7 +7,7 @@ vi.mock("../services/categoryService", async (importOriginal) => ({
 }));
 vi.mock("../services/transactionService");
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -68,7 +68,7 @@ async function chooseNewCategory(user: ReturnType<typeof userEvent.setup>, name:
 }
 
 const submit = (user: ReturnType<typeof userEvent.setup>) =>
-  user.click(screen.getByRole("button", { name: /Add Transaction|Update Transaction/ }));
+  user.click(screen.getByRole("button", { name: /Add transaction|Update transaction/ }));
 
 // Full user-event flows through the whole page are slow under coverage instrumentation.
 vi.setConfig({ testTimeout: 20_000 });
@@ -273,7 +273,7 @@ describe("TransactionPage categories", () => {
       .toBeInTheDocument();
     expect(screen.queryByText(/Unable to create the transaction/)).not.toBeInTheDocument();
     expect(transactionService.createTransaction).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("heading", { name: "Add Transaction" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Add transaction" })).toBeInTheDocument();
   });
 
   it("ignores a second submit while the first is in flight", async () => {
@@ -282,13 +282,13 @@ describe("TransactionPage categories", () => {
     const user = await renderPage();
     await chooseNewCategory(user, "Gym");
     await fillFinancialFields(user);
-    const form = screen.getByRole("button", { name: "Add Transaction" }).closest("form")!;
+    const form = screen.getByRole("button", { name: "Add transaction" }).closest("form")!;
 
     form.requestSubmit();
     form.requestSubmit();
     pending.resolve(transaction());
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Add Transaction" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Add transaction" })).toBeEnabled());
     expect(transactionService.createTransaction).toHaveBeenCalledTimes(1);
   });
 
@@ -318,11 +318,11 @@ describe("TransactionPage categories", () => {
     await user.selectOptions(screen.getByLabelText("Filter by category"), String(petCare.id));
     await user.selectOptions(screen.getByLabelText("Type", { selector: "#filter-type" }), "EXPENSE");
     await user.type(screen.getByLabelText("Search"), "vet");
-    await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+    await user.click(screen.getByRole("button", { name: "Apply filters" }));
 
     await waitFor(() => expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({
       page: 0, categoryId: 40, type: "EXPENSE", search: "vet",
-    })));
+    }), expect.any(AbortSignal)));
     expect(document.querySelector(".transaction-filters .category-select__control svg")).toHaveClass("lucide-paw-print");
 
     await user.click(screen.getByRole("button", { name: "Reset" }));
@@ -333,7 +333,7 @@ describe("TransactionPage categories", () => {
   it("requires a category choice before submitting", async () => {
     const user = await renderPage();
     await fillFinancialFields(user);
-    const form = screen.getByRole("button", { name: "Add Transaction" }).closest("form")!;
+    const form = screen.getByRole("button", { name: "Add transaction" }).closest("form")!;
     form.noValidate = true;
     await submit(user);
 
@@ -423,13 +423,13 @@ describe("TransactionPage category deep link", () => {
   it("takes the user to the filtered history", async () => {
     await renderAt([`/transactions?category=${petCare.id}`]);
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Transaction History" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Transaction history" })).toHaveFocus());
   });
 
   it("leaves focus alone when the page has no link", async () => {
     await renderAt(["/transactions"]);
 
-    expect(screen.getByRole("heading", { name: "Transaction History" })).not.toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Transaction history" })).not.toHaveFocus();
   });
 
   it.each([["text", "abc"], ["a decimal", "1.5"], ["zero", "0"], ["a negative ID", "-3"],
@@ -455,10 +455,79 @@ describe("TransactionPage category deep link", () => {
     expect(requests().at(-1)).toMatchObject({ page: 0, categoryId: petCare.id });
   });
 
+  it("shows the link's category in the filter while that filtered page loads", async () => {
+    const pending = deferred<ReturnType<typeof page>>();
+    vi.mocked(transactionService.getTransactions).mockReturnValueOnce(pending.promise);
+    render(
+      <MemoryRouter initialEntries={[`/transactions?category=${petCare.id}`]}>
+        <CategoryProvider><TransactionPage /></CategoryProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(requests()).toHaveLength(1));
+    // While the filtered page is still loading, the filter already shows the link's category.
+    expect(screen.getByText("Loading transactions…")).toHaveAttribute("role", "status");
+    expect(screen.getByLabelText("Filter by category")).toHaveValue(String(petCare.id));
+    expect(requests()[0]).toMatchObject({ page: 0, categoryId: petCare.id });
+
+    await act(async () => pending.resolve(page([transaction({ description: "Vet visit" })])));
+    expect(await screen.findByText("Vet visit")).toBeInTheDocument();
+    expect(screen.getByLabelText("Filter by category")).toHaveValue(String(petCare.id));
+  });
+
+  it("keeps the link's filter after a refresh", async () => {
+    const view = render(
+      <MemoryRouter initialEntries={[`/transactions?category=${petCare.id}`]}>
+        <CategoryProvider><TransactionPage /></CategoryProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByText("Food Lion");
+    view.unmount();
+
+    await renderAt([`/transactions?category=${petCare.id}`]);
+
+    expect(screen.getByLabelText("Filter by category")).toHaveValue(String(petCare.id));
+    expect(requests().at(-1)).toMatchObject({ page: 0, categoryId: petCare.id });
+  });
+
+  it("never lets an older unfiltered page replace the linked category's page", async () => {
+    const unfiltered = deferred<ReturnType<typeof page>>();
+    vi.mocked(transactionService.getTransactions)
+      .mockReturnValueOnce(unfiltered.promise)
+      .mockResolvedValueOnce(page([transaction({ description: "Linked row" })]));
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/transactions", `/transactions?category=${petCare.id}`]} initialIndex={0}>
+        <CategoryProvider><TransactionPage /></CategoryProvider>
+        <HistoryProbe />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(requests()).toHaveLength(1));
+
+    await user.click(screen.getByRole("button", { name: "History forward" }));
+    expect(await screen.findByText("Linked row")).toBeInTheDocument();
+    await act(async () => unfiltered.resolve(page([transaction({ description: "Unfiltered row" })])));
+
+    expect(screen.queryByText("Unfiltered row")).not.toBeInTheDocument();
+    expect(screen.getByText("Linked row")).toBeInTheDocument();
+    expect(screen.getByLabelText("Filter by category")).toHaveValue(String(petCare.id));
+  });
+
+  it("shows a linked category with no transactions as no matches, not an empty account", async () => {
+    vi.mocked(transactionService.getTransactions).mockResolvedValue(page([], 0, 0));
+    render(
+      <MemoryRouter initialEntries={[`/transactions?category=${petCare.id}`]}>
+        <CategoryProvider><TransactionPage /></CategoryProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("No transactions match these filters.")).toBeInTheDocument();
+  });
+
   it("keeps a manually chosen filter when the page has no link", async () => {
     const user = await renderAt(["/transactions"]);
     await user.selectOptions(screen.getByLabelText("Filter by category"), String(petCare.id));
-    await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+    await user.click(screen.getByRole("button", { name: "Apply filters" }));
 
     expect(requests().at(-1)).toMatchObject({ categoryId: petCare.id });
     expect(screen.getByTestId("url")).toHaveTextContent(/^\/transactions$/);
@@ -487,7 +556,7 @@ describe("TransactionPage add-transaction link", () => {
     await renderAt(`/transactions?addCategory=${petCare.id}`);
 
     await waitFor(() => expect(screen.getByLabelText("Category")).toHaveValue(String(petCare.id)));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Add Transaction" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Add transaction" })).toHaveFocus());
     expect(screen.getByLabelText("Date")).toHaveValue(toDateInputValue(new Date()));
     expect(screen.getByLabelText("Filter by category")).toHaveValue("");
     const requests = vi.mocked(transactionService.getTransactions).mock.calls;

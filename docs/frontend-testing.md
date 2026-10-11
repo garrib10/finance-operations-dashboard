@@ -485,7 +485,7 @@ still needs a person.
   a card under 12rem wide now puts the name on its own row (container query; 375 px and
   wider unchanged)
 - [x] The same widths on a Budgets month link (`?category=25&month=9&year=2026`): no
-  horizontal scroll, focus on "Edit Budget"
+  horizontal scroll, focus on "Edit budget"
 - [x] Tab order: Month → Year → Back to current month → Create category → search, filter,
   sort → section toggle → card links → Other toggle; Enter on Back to current month leaves
   focus on Month; Enter on a section toggle flips `aria-expanded` and keeps focus
@@ -500,7 +500,7 @@ still needs a person.
 - [x] VoiceOver in Safari (October 9, 2026, by hand): "Showing August 2026" and "Showing
   September 2026" each spoken once after switching months; "Back to current month,
   button", "Create category, button", and the create form's "Category name, edit text"
-  read as expected. Budget link names, the "Edit Budget" focus target, and toggle states
+  read as expected. Budget link names, the "Edit budget" focus target, and toggle states
   were confirmed in the accessibility tree by the scripted pass, not by ear. (Return in the
   create form's name field submits it, as it should; a category created by accident
   during the check was deleted.)
@@ -512,3 +512,39 @@ still needs a person.
 - [x] Browser check of Set/Edit budget from an earlier month, Back to Categories, and the Budgets form at 375 px
 - [x] 375 px and 200% zoom with the selects (scripted pass above)
 - [x] VoiceOver pass of the month status (October 9, 2026)
+
+## Issue #105 (v1.3.0) Budgets and Transactions loading
+
+The Budgets page loads one month at a time through `GET /api/budgets/analytics` (see
+[budgets-api.md](budgets-api.md)); both pages keep their layout while data loads.
+
+### Request counts (demo account, local dev server, October 9–10, 2026)
+
+| Budgets page | Before | After |
+| --- | --- | --- |
+| Open `/budgets` (2 budgets, both in September; October shown) | `GET /api/budgets` + 2× `GET /api/budgets/{id}/analytics` (3), all for September, filtered away | 1× `GET /api/budgets/analytics?month=10&year=2026` |
+| Switch to September | 0 (data already loaded for every month) | 1× `GET /api/budgets/analytics?month=9&year=2026` |
+| After create, update, or delete | 1 + N again | 1 for the month on screen |
+
+In development, React StrictMode runs the load effect twice; the first request is now
+cancelled at once (`net::ERR_ABORTED`), so a dev session shows 2 requests where a production
+build makes 1 (before: 6 in dev, 3 in production). With two budgets the timings (0.2–1.5 s)
+were too noisy to compare; the gain grows with N, since the old pattern was 1 + N requests
+over every month and the new one is 1 request and 3 database statements.
+
+### Automated coverage
+
+| Area | Tests |
+| --- | --- |
+| Month request path, both values always sent, abort signal | `budgetService.test.ts` |
+| Budgets: one request for 12 budgets and never `getBudgets`/per-budget analytics; one request per month change; update, delete, and Try again each one request; a save loads the month it was for; no previous-month cards while loading; an older month answering last is ignored and its request aborted; failure distinct from an empty month; abort on unmount; loading keeps the `h1`, form, and selects | `BudgetPage.test.tsx`, `BudgetPage.categories.test.tsx` |
+| Transactions: layout kept while loading with a status in the history area; no old rows under new filters; an older request cannot end the newer loading state, replace its rows, or show its failure; failure distinct from empty with Try again repeating the same filters; filtered empty vs no transactions; abort on unmount; abort signal passed through | `TransactionPage.test.tsx`, `transactionService.test.ts` |
+| `?category=`: the filter shows the category while the filtered page loads, a refresh keeps it, an older unfiltered page never replaces it, an empty linked category reads as no matches | `TransactionPage.categories.test.tsx` |
+
+### Browser checks (scripted Chromium pass, October 10, 2026)
+
+- [x] Request counts above, on the running app
+- [x] Both pages at 375 px and 200% zoom, while loading (requests held for 4 s) and loaded:
+  one `h1`, the loading text is a `role="status"`, no horizontal scroll
+- [ ] By hand: the loading messages read once with VoiceOver, and the pages with a slow
+  network (DevTools throttling) feel stable

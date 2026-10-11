@@ -2,12 +2,17 @@ package dev.portfolio.finance.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import dev.portfolio.finance.dto.budget.BudgetAnalyticsResponse;
+import dev.portfolio.finance.dto.budget.BudgetMonthAnalyticsResponse;
 import dev.portfolio.finance.dto.budget.BudgetResponse;
 import dev.portfolio.finance.dto.budget.CreateBudgetRequest;
 import dev.portfolio.finance.dto.budget.UpdateBudgetRequest;
@@ -16,16 +21,24 @@ import dev.portfolio.finance.entity.Category;
 import dev.portfolio.finance.entity.TransactionType;
 import dev.portfolio.finance.entity.User;
 import dev.portfolio.finance.exception.budget.BudgetNotFoundException;
+import dev.portfolio.finance.exception.budget.BudgetValidationException;
 import dev.portfolio.finance.exception.budget.DuplicateBudgetException;
 import dev.portfolio.finance.repository.BudgetRepository;
 import dev.portfolio.finance.repository.TransactionRepository;
 import dev.portfolio.finance.repository.UserRepository;
+import dev.portfolio.finance.repository.projection.CategorySpendingProjection;
 
 @Service
 public class BudgetService {
 
     private static final String BUDGET_PERIOD_CONSTRAINT =
             "uk_budget_user_category_month_year";
+
+    /** The earliest year a budget can have (the same rule as creating one). */
+    private static final int EARLIEST_YEAR = 2000;
+    /** Digits only (no sign, spaces, or decimals); nine at most, so it always fits an int. */
+    private static final Pattern WHOLE_NUMBER = Pattern.compile("\\d{1,9}");
+    private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2);
 
     private final BudgetRepository budgetRepository;
     private final CategorySelectionService categorySelectionService;
@@ -227,6 +240,95 @@ public class BudgetService {
         return mapToAnalyticsResponse(budget);
     }
 
+    /**
+     * Every budget of the user for one month, with analytics, in exactly three statements
+     * however many budgets there are (none included): the user, the month's budgets with their categories, and the
+     * month's expense spending grouped by category. The figures come from the same
+     * {@link BudgetMetrics} as the single-budget analytics. Month is 1–12 and year is 2000 or
+     * later, with no upper bound, so future months can be planned like when creating one.
+     */
+    @Transactional(readOnly = true)
+    public BudgetMonthAnalyticsResponse getMonthAnalytics(
+            String authenticatedEmail,
+            String monthValue,
+            String yearValue
+    ) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        Integer month = parseMonth(monthValue, errors);
+        Integer year = parseYear(yearValue, errors);
+        if (!errors.isEmpty()) {
+            throw new BudgetValidationException(errors);
+        }
+
+        User user = userRepository
+                .findByEmail(authenticatedEmail)
+                .orElseThrow();
+        ReportingPeriod period = ReportingPeriod.of(year, month);
+
+        List<Budget> budgets = budgetRepository
+                .findAllByUserIdAndMonthAndYearOrderByCategoryNameAscCategoryIdAsc(
+                        user.getId(),
+                        month,
+                        year
+                );
+
+        Map<Long, BigDecimal> spendingByCategory = transactionRepository
+                .findSpendingByCategory(
+                        user.getId(),
+                        TransactionType.EXPENSE,
+                        period.start(),
+                        period.end()
+                )
+                .stream()
+                .collect(Collectors.toMap(
+                        CategorySpendingProjection::getCategoryId,
+                        CategorySpendingProjection::getAmountSpent
+                ));
+
+        List<BudgetAnalyticsResponse> rows = budgets.stream()
+                .map(budget -> toAnalyticsResponse(
+                        budget,
+                        spendingByCategory.getOrDefault(budget.getCategory().getId(), ZERO)
+                ))
+                .toList();
+
+        return new BudgetMonthAnalyticsResponse(month, year, rows);
+    }
+
+    private static Integer parseMonth(String value, Map<String, String> errors) {
+        if (value == null || value.isEmpty()) {
+            errors.put("month", "Month is required");
+            return null;
+        }
+        if (!WHOLE_NUMBER.matcher(value).matches()) {
+            errors.put("month", "Month must be a whole number between 1 and 12");
+            return null;
+        }
+        int month = Integer.parseInt(value);
+        if (month < 1 || month > 12) {
+            errors.put("month", "Month must be between 1 and 12");
+            return null;
+        }
+        return month;
+    }
+
+    private static Integer parseYear(String value, Map<String, String> errors) {
+        if (value == null || value.isEmpty()) {
+            errors.put("year", "Year is required");
+            return null;
+        }
+        if (!WHOLE_NUMBER.matcher(value).matches()) {
+            errors.put("year", "Year must be a whole number");
+            return null;
+        }
+        int year = Integer.parseInt(value);
+        if (year < EARLIEST_YEAR) {
+            errors.put("year", "Year must be " + EARLIEST_YEAR + " or later");
+            return null;
+        }
+        return year;
+    }
+
     private BudgetAnalyticsResponse mapToAnalyticsResponse(
             Budget budget
     ) {
@@ -250,6 +352,14 @@ public class BudgetService {
                                 endDate
                         );
 
+        return toAnalyticsResponse(budget, amountSpent);
+    }
+
+    /** One budget's analytics from its month's expense spending; shared by both endpoints. */
+    private static BudgetAnalyticsResponse toAnalyticsResponse(
+            Budget budget,
+            BigDecimal amountSpent
+    ) {
         BudgetMetrics metrics =
                 BudgetMetrics.calculate(budget.getMonthlyLimit(), amountSpent);
 
