@@ -28,6 +28,7 @@ import { InlineNotice } from "../components/InlineNotice";
 import { CategoryRefreshNotice } from "../components/CategoryRefreshNotice";
 import { StatusBanner } from "../components/StatusBanner";
 import { CategorySelect } from "../components/CategorySelect";
+import { categoryAxisProps } from "../utils/budgetChartAxis";
 import {
   CATEGORY_SELECTION_FIELDS,
   CREATE_CATEGORY_VALUE,
@@ -809,7 +810,7 @@ function BudgetPage() {
                 >
                   <CartesianGrid strokeDasharray="3 3" />
 
-                  <XAxis dataKey="category" />
+                  <XAxis {...categoryAxisProps} />
 
                   <YAxis tickFormatter={(value) => `$${value}`} />
 
@@ -855,7 +856,7 @@ function BudgetPage() {
                 >
                   <CartesianGrid strokeDasharray="3 3" />
 
-                  <XAxis dataKey="category" />
+                  <XAxis {...categoryAxisProps} />
 
                   <YAxis tickFormatter={(value) => `${value}%`} />
 

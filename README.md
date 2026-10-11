@@ -364,27 +364,33 @@ npm run test:coverage
 
 ### Dashboard
 
-The dashboard summarizes income, expenses, recent activity, category spending, and monthly budget performance.
+The dashboard summarizes income, expenses, recent activity, category spending, and monthly budget performance, with sidebar navigation to every page.
 
-<img src="assets/screenshots/dashboard.png" alt="FinTrack dashboard showing financial summaries, recent transactions, spending by category, and monthly budgets" width="1000">
+<img src="assets/screenshots/dashboard.png" alt="FinTrack dashboard with sidebar navigation, financial summaries, recent transactions with category icons, spending by category, and monthly budget cards" width="1000">
 
 ### Budget Analytics
 
-Budget comparison and utilization charts show spending progress across budget categories.
+Budget comparison and utilization charts show spending progress across budget categories, with every category labelled.
 
-<img src="assets/screenshots/budget-analytics.png" alt="FinTrack charts comparing monthly budgets with spending and showing budget utilization percentages" width="1000">
+<img src="assets/screenshots/budget-analytics.png" alt="FinTrack charts comparing monthly budget limits with spending and showing budget utilization percentages for six categories" width="1000">
 
 ### Budget Management
 
-Users can create monthly budgets, select reporting periods, review analytics, and monitor budget status.
+Users can create monthly budgets, select reporting periods, filter by category, review analytics, and monitor budget status.
 
-<img src="assets/screenshots/budgets.png" alt="FinTrack budget management page showing analytics and budget status cards" width="1000">
+<img src="assets/screenshots/budgets.png" alt="FinTrack budget management page showing the create form, period and category filters, analytics charts, and budget status cards" width="1000">
 
 ### Transaction Management
 
 Users can record, edit, delete, search, filter, sort, and paginate through income and expense transactions.
 
-<img src="assets/screenshots/transactions.png" alt="FinTrack transaction management page showing entry, filtering, and transaction history features" width="1000">
+<img src="assets/screenshots/transactions.png" alt="FinTrack transaction management page showing the add form, filters, and transaction history with category icons" width="1000">
+
+### Categories
+
+The Categories page shows how each built-in and custom category is used in a month: spending share, budget progress, activity, and warnings for spending without a budget.
+
+<img src="assets/screenshots/categories.png" alt="FinTrack categories page showing a monthly summary, a spending table with share bars, and category cards with budget status and no-budget warnings" width="1000">
 
 ---
 
@@ -589,7 +595,6 @@ The frontend runs at `http://localhost:5173`.
 ## Future Improvements
 
 - Code-split the frontend bundle by route
-- Add production monitoring and structured application metrics
 
 ---
 
