@@ -61,10 +61,12 @@ function buildTransactionQuery(filters: TransactionFilterRequest = {}): string {
 
 export function getTransactions(
   filters: TransactionFilterRequest = {},
+  signal?: AbortSignal,
 ): Promise<PagedTransactionResponse> {
-  return apiRequest<PagedTransactionResponse>(
-    `/api/transactions${buildTransactionQuery(filters)}`,
-  );
+  const endpoint = `/api/transactions${buildTransactionQuery(filters)}`;
+  return signal
+    ? apiRequest<PagedTransactionResponse>(endpoint, { signal })
+    : apiRequest<PagedTransactionResponse>(endpoint);
 }
 
 export function getTransaction(id: number): Promise<TransactionResponse> {

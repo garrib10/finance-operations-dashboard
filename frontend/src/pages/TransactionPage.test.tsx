@@ -110,18 +110,21 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     );
   });
 
-  it("shows the loading state", () => {
+  it("keeps the page, form, and filters while transactions load, with loading in the history area", async () => {
     vi.mocked(transactionService.getTransactions).mockImplementation(
-      () => new Promise(() => {}),
-    );
-
-    vi.mocked(categoryService.getCategories).mockImplementation(
       () => new Promise(() => {}),
     );
 
     render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
-    expect(screen.getByText("Loading transactions...")).toBeInTheDocument();
+    const loading = await screen.findByText("Loading transactions…");
+    expect(loading).toHaveAttribute("role", "status");
+    expect(screen.getAllByRole("heading", { level: 1 }).map((heading) => heading.textContent)).toEqual(["Transactions"]);
+    expect(screen.getByRole("heading", { name: "Filter Transactions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Transaction History" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Search")).toBeEnabled();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByText("No transactions found.")).not.toBeInTheDocument();
   });
 
   it("renders loaded transactions", async () => {
@@ -760,7 +763,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
           maxAmount: 100,
           sortBy: "amount",
           sortDirection: "asc",
-        }),
+        }), expect.any(AbortSignal)
       );
     });
   });
@@ -815,7 +818,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
         size: pageSize,
         sortBy: "transactionDate",
         sortDirection: "desc",
-      });
+      }, expect.any(AbortSignal));
     });
 
     expect(screen.getByLabelText("Search")).toHaveValue("");
@@ -868,7 +871,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
           size: pageSize,
           sortBy: "transactionDate",
           sortDirection: "desc",
-        }),
+        }), expect.any(AbortSignal)
       );
     });
   });
@@ -887,7 +890,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     await waitFor(() => {
       expect(transactionService.getTransactions).toHaveBeenLastCalledWith(
-        expect.objectContaining({ page: 0 }),
+        expect.objectContaining({ page: 0 }), expect.any(AbortSignal)
       );
     });
   });
@@ -935,15 +938,15 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
    vi.mocked(transactionService.getTransactions).mockResolvedValue(createPagedResponse());
    const { rerender } = render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
    expect(await screen.findByText("2026-09-10")).toBeInTheDocument();
-   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 25 }));
+   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 25 }), expect.any(AbortSignal));
    await userEvent.type(screen.getByLabelText("Search"), "Food");
    await userEvent.click(screen.getByRole("button", { name: "Apply Filters" }));
-   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ size: 25, search: "Food" }));
+   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ size: 25, search: "Food" }), expect.any(AbortSignal));
    vi.mocked(useAuth).mockReturnValue(accountContext({ ...accountUser, preferences: { dateFormat: "ISO", transactionPageSize: 50 } }));
    rerender(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
-   await waitFor(() => expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 50, search: "Food" })));
+   await waitFor(() => expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 50, search: "Food" }), expect.any(AbortSignal)));
    await userEvent.click(screen.getByRole("button", { name: "Reset" }));
-   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 50 }));
+   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 50 }), expect.any(AbortSignal));
  });
 
 it("falls back to ten when account preferences are unavailable", async () => {
@@ -953,7 +956,7 @@ it("falls back to ten when account preferences are unavailable", async () => {
  vi.mocked(transactionService.getTransactions).mockResolvedValue(createPagedResponse());
  render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
  await screen.findByText("Food Lion");
- expect(transactionService.getTransactions).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ size: 10 }));
+ expect(transactionService.getTransactions).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ size: 10 }), expect.any(AbortSignal));
 });
 
 it("ignores an older page-size response and avoids refetches for unrelated identity changes", async () => {
@@ -1015,5 +1018,123 @@ it("ignores an obsolete page-size load failure after the new size succeeds", asy
   await act(async () => older.reject(new ApiError("Obsolete request failed", 503)));
   expect(screen.getByText("Current page")).toBeInTheDocument();
   expect(screen.queryByText("Obsolete request failed")).not.toBeInTheDocument();
-  expect(screen.queryByText("Loading transactions...")).not.toBeInTheDocument();
+  expect(screen.queryByText("Loading transactions…")).not.toBeInTheDocument();
+});
+
+describe("TransactionPage loading and stale requests", () => {
+  const getTransactions = () => vi.mocked(transactionService.getTransactions);
+  const renderPage = () => render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
+  const row = (description: string) => ({ ...transaction, id: description.length, description });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(accountContext());
+    vi.mocked(categoryService.getCategories).mockResolvedValue(categories);
+    getTransactions().mockResolvedValue(createPagedResponse());
+  });
+
+  async function search(user: ReturnType<typeof userEvent.setup>, text: string) {
+    await user.clear(screen.getByLabelText("Search"));
+    await user.type(screen.getByLabelText("Search"), text);
+    await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+  }
+
+  it("never shows the old rows under new filters, and only the newest request ends loading", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Food Lion");
+    const first = deferred<PagedTransactionResponse>();
+    const second = deferred<PagedTransactionResponse>();
+    getTransactions().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+    await search(user, "first");
+    expect(screen.getByText("Loading transactions…")).toHaveAttribute("role", "status");
+    expect(screen.queryByText("Food Lion")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Search")).toBeEnabled(); // Filters stay usable.
+
+    await search(user, "second");
+    expect(getTransactions().mock.calls.at(-2)![1]!.aborted).toBe(true);
+    // The older request finishing changes nothing: still loading, no old rows.
+    await act(async () => first.resolve(createPagedResponse([row("Old filter row")])));
+    expect(screen.getByText("Loading transactions…")).toBeInTheDocument();
+    expect(screen.queryByText("Old filter row")).not.toBeInTheDocument();
+
+    await act(async () => second.resolve(createPagedResponse([row("New filter row")])));
+    expect(await screen.findByText("New filter row")).toBeInTheDocument();
+    expect(screen.queryByText("Loading transactions…")).not.toBeInTheDocument();
+  });
+
+  it("ignores an older request's failure once a newer one has loaded", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Food Lion");
+    const older = deferred<PagedTransactionResponse>();
+    getTransactions().mockReturnValueOnce(older.promise).mockResolvedValueOnce(createPagedResponse([row("Newest")]));
+
+    await search(user, "older");
+    await search(user, "newest");
+    expect(await screen.findByText("Newest")).toBeInTheDocument();
+
+    await act(async () => older.reject(new ApiError("Obsolete failure", 503)));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("Newest")).toBeInTheDocument();
+  });
+
+  it("tells a failed load apart from an empty list, and Try again repeats the same request", async () => {
+    const user = userEvent.setup();
+    getTransactions().mockRejectedValueOnce(new Error("offline"));
+    renderPage();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Unable to load transaction data. Please try again.");
+    expect(screen.getByText("Transactions could not be loaded.")).toBeInTheDocument();
+    expect(screen.queryByText("No transactions found.")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Filter Transactions" })).toBeInTheDocument();
+    const failedRequest = getTransactions().mock.calls[0][0];
+
+    const retry = screen.getByRole("button", { name: "Try again" });
+    expect(retry).toHaveAttribute("type", "button");
+    await user.click(retry);
+
+    expect(await screen.findByText("Food Lion")).toBeInTheDocument();
+    expect(getTransactions()).toHaveBeenLastCalledWith(failedRequest, expect.any(AbortSignal));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("retries a failed filter with the same filters", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Food Lion");
+    getTransactions().mockRejectedValueOnce(new Error("offline"));
+
+    await search(user, "Coffee");
+    await user.click(await screen.findByRole("button", { name: "Try again" }));
+
+    expect(getTransactions()).toHaveBeenLastCalledWith(expect.objectContaining({ search: "Coffee", page: 0 }), expect.any(AbortSignal));
+    expect(await screen.findByText("Food Lion")).toBeInTheDocument();
+  });
+
+  it("says when filters match nothing, unlike an account with no transactions", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Food Lion");
+    getTransactions().mockResolvedValue(createPagedResponse([], 0, 0));
+
+    await search(user, "nothing like this");
+    expect(await screen.findByText("No transactions match these filters.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+    expect(await screen.findByText("No transactions found.")).toBeInTheDocument();
+  });
+
+  it("aborts the pending request when the page is left", async () => {
+    getTransactions().mockReturnValueOnce(new Promise(() => {}));
+    const view = renderPage();
+    await waitFor(() => expect(getTransactions()).toHaveBeenCalledOnce());
+    const signal = getTransactions().mock.calls[0][1]!;
+
+    view.unmount();
+
+    expect(signal.aborted).toBe(true);
+  });
 });

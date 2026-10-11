@@ -127,8 +127,14 @@ function TransactionPage() {
   const { categories, status: categoryStatus, reload: reloadCategories } = useCategories();
   const pageSize = user?.preferences?.transactionPageSize ?? 10;
   const requestSequence = useRef(0);
+  // The request in flight, aborted when a newer one starts or the page is left.
+  const loadController = useRef<AbortController | null>(null);
   const [transactionData, setTransactionData] =
     useState<PagedTransactionResponse | null>(null);
+  // The request behind the rows on screen, to tell "no matches" from "no transactions".
+  const [shownRequest, setShownRequest] = useState<TransactionFilterRequest | null>(null);
+  // A failed list load, so "Try again" repeats exactly that request (its filters and page).
+  const [failedLoad, setFailedLoad] = useState<{ request: TransactionFilterRequest; message: string } | null>(null);
 
   const [form, setForm] = useState<TransactionFormState>(newTransactionForm);
 
@@ -249,11 +255,47 @@ function TransactionPage() {
       sortBy: "transactionDate",
       sortDirection: "desc",
     },
-  ): Promise<void> {
+  ): Promise<boolean> {
+    loadController.current?.abort();
+    const controller = new AbortController();
+    loadController.current = controller;
     const sequence = ++requestSequence.current;
-    const response = await getTransactions(transactionFilters);
+    let response: PagedTransactionResponse;
+    try {
+      response = await getTransactions(transactionFilters, controller.signal);
+    } catch (error) {
+      // A newer request replaced this one: not a failure, and never shown as one.
+      if (sequence !== requestSequence.current || controller.signal.aborted) return false;
+      throw error;
+    }
 
-    if (sequence === requestSequence.current) setTransactionData(response);
+    if (sequence !== requestSequence.current) return false;
+    setTransactionData(response);
+    setShownRequest(transactionFilters);
+    return true;
+  }
+
+  /**
+   * A load the user waits for (filters, page, reset, Try again): the history area shows
+   * a loading message instead of rows for the old filters. Only the newest load may end
+   * the loading state or report an error.
+   */
+  async function showLoad(request: TransactionFilterRequest, failureMessage: string): Promise<void> {
+    setIsLoading(true);
+    setErrorMessage("");
+    setFailedLoad(null);
+    const sequence = requestSequence.current + 1; // The number loadTransactions takes next.
+
+    try {
+      await loadTransactions(request);
+    } catch (error) {
+      if (sequence !== requestSequence.current) return;
+      const message = error instanceof ApiError ? error.message : failureMessage;
+      setErrorMessage(message);
+      setFailedLoad({ request, message: failureMessage });
+    } finally {
+      if (sequence === requestSequence.current) setIsLoading(false);
+    }
   }
 
   // ?category={id} from the Categories page. It is resolved against the user's own
@@ -277,6 +319,7 @@ function TransactionPage() {
   });
 
   const requestFor = useEffectEvent((source: TransactionFilterState) => buildFilters(0, source));
+  const loadForLink = useEffectEvent((request: TransactionFilterRequest) => loadTransactions(request));
 
   /** Drops only the invalid category parameter, keeping any others. */
   const removeCategoryParam = useEffectEvent(() => {
@@ -295,41 +338,40 @@ function TransactionPage() {
     }
 
     let active = true;
-    const sequence = ++requestSequence.current;
     const source = filtersForLoad();
     const linked = linkKey.startsWith("valid:") ? source.categoryId : null;
+    const request = { ...requestFor(source), size: pageSize };
+    const failureMessage = "Unable to load transaction data. Please try again.";
 
     async function loadTransactionPage(): Promise<void> {
+      // The filter shows the link's category straight away (or clears it after leaving the
+      // link), so the controls match the URL while the filtered page loads.
+      setFilters((current) => ({ ...current, categoryId: source.categoryId }));
+      setIsLoading(true);
+      setErrorMessage("");
+      setFailedLoad(null);
+      const sequence = requestSequence.current + 1;
+
       try {
-        setIsLoading(true);
-        setErrorMessage("");
-
-        const transactionsResponse = await getTransactions({
-          ...requestFor(source),
-          size: pageSize,
-        });
-
-        if (!active || sequence !== requestSequence.current) return;
-        setTransactionData(transactionsResponse);
+        const loaded = await loadForLink(request);
+        if (!active || !loaded) return;
         // Arriving from a link: take the user to the filtered history, not the form.
         if (linked !== null && linkedCategoryId.current !== linked) scrollToHistory.current = true;
-        // Show the link's category in the filter (or clear it after leaving the link).
-        setFilters((current) => ({ ...current, categoryId: source.categoryId }));
         linkedCategoryId.current = linked;
       } catch (error) {
         if (!active || sequence !== requestSequence.current) return;
-        if (error instanceof ApiError) {
-          setErrorMessage(error.message);
-        } else {
-          setErrorMessage("Unable to load transaction data. Please try again.");
-        }
+        setErrorMessage(error instanceof ApiError ? error.message : failureMessage);
+        setFailedLoad({ request, message: failureMessage });
       } finally {
         if (active && sequence === requestSequence.current) setIsLoading(false);
       }
     }
 
     void loadTransactionPage();
-    return () => { active = false; };
+    return () => {
+      active = false;
+      loadController.current?.abort();
+    };
   }, [pageSize, linkKey]);
 
   useEffect(() => {
@@ -566,44 +608,16 @@ function TransactionPage() {
   ): Promise<void> {
     event.preventDefault();
 
-    try {
-      setIsLoading(true);
-      setErrorMessage("");
-
-      await loadTransactions(buildFilters(0));
-    } catch (error) {
-      if (error instanceof ApiError) {
-        setErrorMessage(error.message);
-      } else {
-        setErrorMessage("Unable to filter transactions. Please try again.");
-      }
-    } finally {
-      setIsLoading(false);
-    }
+    await showLoad(buildFilters(0), "Unable to filter transactions. Please try again.");
   }
 
   async function handleResetFilters(): Promise<void> {
     setFilters(initialFilterState);
 
-    try {
-      setIsLoading(true);
-      setErrorMessage("");
-
-      await loadTransactions({
-        page: 0,
-        size: pageSize,
-        sortBy: "transactionDate",
-        sortDirection: "desc",
-      });
-    } catch (error) {
-      if (error instanceof ApiError) {
-        setErrorMessage(error.message);
-      } else {
-        setErrorMessage("Unable to load transactions. Please try again.");
-      }
-    } finally {
-      setIsLoading(false);
-    }
+    await showLoad(
+      { page: 0, size: pageSize, sortBy: "transactionDate", sortDirection: "desc" },
+      "Unable to load transactions. Please try again.",
+    );
   }
 
   async function handlePageChange(page: number): Promise<void> {
@@ -611,34 +625,18 @@ function TransactionPage() {
       return;
     }
 
-    try {
-      setIsLoading(true);
-      setErrorMessage("");
-
-      await loadTransactions(buildFilters(page));
-    } catch (error) {
-      if (error instanceof ApiError) {
-        setErrorMessage(error.message);
-      } else {
-        setErrorMessage("Unable to load the requested page. Please try again.");
-      }
-    } finally {
-      setIsLoading(false);
-    }
+    await showLoad(buildFilters(page), "Unable to load the requested page. Please try again.");
   }
 
   const selectedFilterCategory = categories.find(
     (category) => String(category.id) === filters.categoryId,
   );
 
-  if (isLoading && transactionData === null) {
-    return (
-      <section>
-        <h1>Transactions</h1>
-        <p>Loading transactions...</p>
-      </section>
-    );
-  }
+  // Only a request that actually narrowed the list makes an empty result "no matches".
+  const filteredView = shownRequest !== null && [
+    shownRequest.search, shownRequest.type, shownRequest.categoryId, shownRequest.startDate,
+    shownRequest.endDate, shownRequest.minAmount, shownRequest.maxAmount,
+  ].some((value) => value !== undefined && value !== "");
 
   return (
     <section>
@@ -647,7 +645,16 @@ function TransactionPage() {
         <p>Manage your income and expenses.</p>
       </div>
 
-      {errorMessage && <InlineNotice variant="error">{errorMessage}</InlineNotice>}
+      {errorMessage && (
+        <InlineNotice
+          variant="error"
+          action={failedLoad
+            ? { label: "Try again", onClick: () => void showLoad(failedLoad.request, failedLoad.message) }
+            : undefined}
+        >
+          {errorMessage}
+        </InlineNotice>
+      )}
 
       {/* A refresh warning also confirms the save, so it replaces the banner and stays. */}
       {refreshWarning && <InlineNotice variant="warning">{refreshWarning}</InlineNotice>}
@@ -1061,14 +1068,21 @@ function TransactionPage() {
           <h2 ref={historyHeadingRef} tabIndex={-1}>Transaction History</h2>
 
           <p>
-            {transactionData
+            {transactionData && !isLoading
               ? `${transactionData.totalElements} total transactions`
-              : "0 total transactions"}
+              : "\u00a0"}
           </p>
         </div>
 
-        {transactionData?.transactions.length === 0 ? (
-          <p className="empty-state">No transactions found.</p>
+        {/* The history area alone waits or fails; the heading, form, and filters stay. */}
+        {isLoading ? (
+          <p className="empty-state" role="status">Loading transactions…</p>
+        ) : !transactionData ? (
+          <p className="empty-state">Transactions could not be loaded.</p>
+        ) : transactionData.transactions.length === 0 ? (
+          <p className="empty-state">
+            {filteredView ? "No transactions match these filters." : "No transactions found."}
+          </p>
         ) : (
           <div className="table-wrapper">
             <table className="data-table">

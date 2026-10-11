@@ -112,6 +112,10 @@ Money values are JSON numbers with two decimal places, computed with exact decim
 arithmetic. Spending in a category without a budget that month never creates a row, and
 categories are matched by ID, so two users' same-named categories never mix.
 
+**Frontend use.** The Budgets page calls this once per month shown, after each save or
+delete, and for "Try again" (issue #105); it no longer calls `GET /api/budgets` or the
+per-budget analytics, which remain available.
+
 **Queries.** Exactly three statements per request, however many budgets the month has
 (none included): the user, the month's budgets with their categories (one join), and the
 month's expense spending grouped by category. Budgets from other months and older

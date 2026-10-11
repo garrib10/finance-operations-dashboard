@@ -52,10 +52,13 @@ function analyticsFor(item: BudgetResponse, percentageUsed = 40): BudgetAnalytic
   };
 }
 
+/** Serves GET /api/budgets/analytics from these budgets, for whichever month is asked for. */
 function useBudgets(budgets: BudgetResponse[]) {
-  vi.mocked(budgetService.getBudgets).mockResolvedValue(budgets);
-  vi.mocked(budgetService.getBudgetAnalytics).mockImplementation(async (id) =>
-    analyticsFor(budgets.find((item) => item.id === id)!));
+  vi.mocked(budgetService.getMonthBudgetAnalytics).mockImplementation(async ({ month: m, year: y }) => ({
+    month: m,
+    year: y,
+    budgets: budgets.filter((item) => item.month === m && item.year === y).map((item) => analyticsFor(item)),
+  }));
 }
 
 async function renderPage() {
@@ -233,11 +236,13 @@ describe("BudgetPage categories", () => {
 
     await user.selectOptions(screen.getByLabelText("Filter by category"), "2");
     expect(screen.getByText(/No Housing budget for/)).toBeInTheDocument();
-    expect(budgetService.getBudgets).toHaveBeenCalledTimes(1);
+    // Filtering by category is client-side: still the one request for the month.
+    expect(budgetService.getMonthBudgetAnalytics).toHaveBeenCalledTimes(1);
 
     const otherMonth = month === 12 ? "1" : String(month + 1);
     await user.selectOptions(screen.getAllByLabelText("Month")[1], otherMonth);
-    expect(screen.getByText(/No budgets found for/)).toBeInTheDocument();
+    expect(await screen.findByText(/No budgets found for/)).toBeInTheDocument();
+    expect(budgetService.getMonthBudgetAnalytics).toHaveBeenCalledTimes(2);
   });
 
   it("reports a category that no longer exists on the category field", async () => {

@@ -7,7 +7,7 @@ vi.mock("../services/categoryService", async (importOriginal) => ({
 }));
 vi.mock("../services/transactionService");
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -322,7 +322,7 @@ describe("TransactionPage categories", () => {
 
     await waitFor(() => expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({
       page: 0, categoryId: 40, type: "EXPENSE", search: "vet",
-    })));
+    }), expect.any(AbortSignal)));
     expect(document.querySelector(".transaction-filters .category-select__control svg")).toHaveClass("lucide-paw-print");
 
     await user.click(screen.getByRole("button", { name: "Reset" }));
@@ -453,6 +453,75 @@ describe("TransactionPage category deep link", () => {
     await user.click(screen.getByRole("button", { name: "History forward" }));
     await waitFor(() => expect(screen.getByLabelText("Filter by category")).toHaveValue(String(petCare.id)));
     expect(requests().at(-1)).toMatchObject({ page: 0, categoryId: petCare.id });
+  });
+
+  it("shows the link's category in the filter while that filtered page loads", async () => {
+    const pending = deferred<ReturnType<typeof page>>();
+    vi.mocked(transactionService.getTransactions).mockReturnValueOnce(pending.promise);
+    render(
+      <MemoryRouter initialEntries={[`/transactions?category=${petCare.id}`]}>
+        <CategoryProvider><TransactionPage /></CategoryProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(requests()).toHaveLength(1));
+    // While the filtered page is still loading, the filter already shows the link's category.
+    expect(screen.getByText("Loading transactions…")).toHaveAttribute("role", "status");
+    expect(screen.getByLabelText("Filter by category")).toHaveValue(String(petCare.id));
+    expect(requests()[0]).toMatchObject({ page: 0, categoryId: petCare.id });
+
+    await act(async () => pending.resolve(page([transaction({ description: "Vet visit" })])));
+    expect(await screen.findByText("Vet visit")).toBeInTheDocument();
+    expect(screen.getByLabelText("Filter by category")).toHaveValue(String(petCare.id));
+  });
+
+  it("keeps the link's filter after a refresh", async () => {
+    const view = render(
+      <MemoryRouter initialEntries={[`/transactions?category=${petCare.id}`]}>
+        <CategoryProvider><TransactionPage /></CategoryProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByText("Food Lion");
+    view.unmount();
+
+    await renderAt([`/transactions?category=${petCare.id}`]);
+
+    expect(screen.getByLabelText("Filter by category")).toHaveValue(String(petCare.id));
+    expect(requests().at(-1)).toMatchObject({ page: 0, categoryId: petCare.id });
+  });
+
+  it("never lets an older unfiltered page replace the linked category's page", async () => {
+    const unfiltered = deferred<ReturnType<typeof page>>();
+    vi.mocked(transactionService.getTransactions)
+      .mockReturnValueOnce(unfiltered.promise)
+      .mockResolvedValueOnce(page([transaction({ description: "Linked row" })]));
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/transactions", `/transactions?category=${petCare.id}`]} initialIndex={0}>
+        <CategoryProvider><TransactionPage /></CategoryProvider>
+        <HistoryProbe />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(requests()).toHaveLength(1));
+
+    await user.click(screen.getByRole("button", { name: "History forward" }));
+    expect(await screen.findByText("Linked row")).toBeInTheDocument();
+    await act(async () => unfiltered.resolve(page([transaction({ description: "Unfiltered row" })])));
+
+    expect(screen.queryByText("Unfiltered row")).not.toBeInTheDocument();
+    expect(screen.getByText("Linked row")).toBeInTheDocument();
+    expect(screen.getByLabelText("Filter by category")).toHaveValue(String(petCare.id));
+  });
+
+  it("shows a linked category with no transactions as no matches, not an empty account", async () => {
+    vi.mocked(transactionService.getTransactions).mockResolvedValue(page([], 0, 0));
+    render(
+      <MemoryRouter initialEntries={[`/transactions?category=${petCare.id}`]}>
+        <CategoryProvider><TransactionPage /></CategoryProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("No transactions match these filters.")).toBeInTheDocument();
   });
 
   it("keeps a manually chosen filter when the page has no link", async () => {

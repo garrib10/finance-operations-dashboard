@@ -156,4 +156,12 @@ describe("transactionService", () => {
 
     expect(mockApiRequest).toHaveBeenCalledTimes(2);
   });
+
+  it("passes the abort signal through when one is given", async () => {
+    const controller = new AbortController();
+
+    await getTransactions({ page: 1 }, controller.signal);
+
+    expect(mockApiRequest).toHaveBeenCalledExactlyOnceWith("/api/transactions?page=1", { signal: controller.signal });
+  });
 });

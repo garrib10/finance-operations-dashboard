@@ -117,6 +117,21 @@ Routine automation should use dedicated accounts containing fictional data. Cred
 
 Authenticated users can create, view, edit, delete, search, filter, sort, and paginate their own transactions.
 
+### Transactions loading (issue #105)
+
+- The heading, form, and filters stay on screen while the list loads; only the Transaction
+  History area shows `role="status"` "Loading transactions…" (no rows from the previous
+  filters or page are shown meanwhile, and the count line is blank).
+- A failed list load shows `role="alert"` with the error and a "Try again" button that
+  repeats the same filters and page; the history area then says "Transactions could not be
+  loaded." (never "No transactions found.").
+- Empty results: "No transactions match these filters." when a search, type, category, date,
+  or amount filter was applied (including `?category=`), otherwise "No transactions found.".
+- `?category={id}` applies the category filter for the first request, and the filter select
+  shows that category while the filtered page loads; a refresh keeps it.
+- Only the newest request may change the list, the loading state, or the error; an older or
+  cancelled request is ignored and never shown as an error.
+
 ### Transaction validation
 
 | Field            | Rule                                               |
@@ -172,12 +187,28 @@ Automation should reserve category, month, and year combinations for individual 
 
 The Budget Period selector includes:
 
-- The default supported year range
-- Every year represented by the user's saved budgets
+- Every year from 2000 (the earliest budget year) to three years after the current year
+- The linked year from a `?month=&year=` link, if outside that range
 - No duplicate year options
 - Years sorted numerically
 
-A saved budget outside the default range remains reachable by selecting its saved year and month.
+Any saved budget remains reachable by selecting its year and month. (Before issue #105 the
+years came from every saved budget; the page now loads only the month shown.)
+
+### Budgets loading (issue #105)
+
+- Each month shown costs exactly one `GET /api/budgets/analytics?month=&year=` request,
+  however many budgets it has: no `GET /api/budgets` and no per-budget
+  `GET /api/budgets/{id}/analytics`. Choosing another month, saving, deleting, and "Try
+  again" each make one request for the month on screen (a save shows the month it was for).
+- The heading, the Create/Edit Budget form, and the Budget Period selects stay on screen;
+  while a month loads, the Monthly Budgets area shows `role="status"` "Loading budgets for
+  {Month Year}…" and no cards or charts from the previous month.
+- A failed load shows `role="alert"` with the error and "Try again" (instead of "No budgets
+  found for …"). A failed refresh after a successful save shows the warning "Budget saved,
+  but the budget list could not be refreshed. Reload the page to see the latest data."
+- Only the newest month may change the page: an older month's answer or failure is ignored,
+  and a request that is replaced or left is cancelled, never shown as an error.
 
 ### Budget analytics and progress
 
