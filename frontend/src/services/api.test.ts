@@ -391,6 +391,32 @@ describe("API response handling", () => {
     });
   });
 
+  it("keeps nested category field keys and stable codes from financial validation errors", async () => {
+    fetchMock.mockResolvedValueOnce(json({
+      timestamp: "2026-10-01T10:00:00", status: 400, error: "Validation Failed",
+      fields: {
+        amount: "Amount can have at most 10 whole digits and 2 decimal places",
+        "newCategory.name": "Category name is required",
+        "newCategory.iconKey": "Icon must be one of the approved category icons",
+      },
+    }, 400));
+    fetchMock.mockResolvedValueOnce(json({
+      status: 409, error: "Conflict", message: "Category already exists", code: "CATEGORY_DUPLICATE",
+    }, 409));
+
+    await expect(apiRequest("/api/transactions", { method: "POST", body: "{}" })).rejects.toMatchObject({
+      status: 400,
+      validationErrors: {
+        amount: "Amount can have at most 10 whole digits and 2 decimal places",
+        "newCategory.name": "Category name is required",
+        "newCategory.iconKey": "Icon must be one of the approved category icons",
+      },
+    });
+    await expect(apiRequest("/api/budgets", { method: "POST", body: "{}" })).rejects.toMatchObject({
+      status: 409, message: "Category already exists", code: "CATEGORY_DUPLICATE",
+    });
+  });
+
   it("uses a fallback message when an error response omits one", async () => {
     fetchMock.mockResolvedValueOnce(json({}, 500));
 

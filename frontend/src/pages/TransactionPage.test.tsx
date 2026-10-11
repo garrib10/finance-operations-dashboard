@@ -2,6 +2,7 @@ vi.mock("../context/AuthContext", () => ({ useAuth: vi.fn() }));
 import { useAuth } from "../context/AuthContext";
 import { accountContext, accountUser, deferred } from "../test/accountFixtures";
 import { act, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as categoryService from "../services/categoryService";
@@ -13,6 +14,8 @@ import type {
   TransactionResponse,
 } from "../types/transaction";
 import TransactionPage from "./TransactionPage";
+import { toDateInputValue } from "../utils/formatters";
+import { CategoryProvider } from "../context/CategoryProvider";
 
 vi.mock("../services/categoryService");
 vi.mock("../services/transactionService");
@@ -24,6 +27,8 @@ const categories: CategoryResponse[] = [
     id: 1,
     name: "Groceries",
     budgetEnabled: true,
+    builtIn: true,
+    iconKey: "shopping-cart",
     createdAt: "2026-09-01T10:00:00",
     updatedAt: "2026-09-01T10:00:00",
   },
@@ -33,6 +38,7 @@ const transaction: TransactionResponse = {
   id: 1,
   categoryId: 1,
   categoryName: "Groceries",
+  categoryIconKey: "shopping-cart",
   type: "EXPENSE",
   amount: 75.5,
   description: "Food Lion",
@@ -63,8 +69,12 @@ async function completeTransactionForm(
   await user.selectOptions(screen.getByLabelText("Category"), "1");
   await user.type(screen.getByLabelText("Amount"), "75.50");
   await user.type(screen.getByLabelText("Description"), description);
+  await user.clear(screen.getByLabelText("Date")); // The form starts on today.
   await user.type(screen.getByLabelText("Date"), "2026-09-10");
 }
+
+// Full user-event form flows are slow when the machine is busy (dev server, browser).
+vi.setConfig({ testTimeout: 20_000 });
 
 describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageSize) => {
   afterEach(() => {
@@ -100,22 +110,25 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     );
   });
 
-  it("shows the loading state", () => {
+  it("keeps the page, form, and filters while transactions load, with loading in the history area", async () => {
     vi.mocked(transactionService.getTransactions).mockImplementation(
       () => new Promise(() => {}),
     );
 
-    vi.mocked(categoryService.getCategories).mockImplementation(
-      () => new Promise(() => {}),
-    );
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
-    render(<TransactionPage />);
-
-    expect(screen.getByText("Loading transactions...")).toBeInTheDocument();
+    const loading = await screen.findByText("Loading transactions…");
+    expect(loading).toHaveAttribute("role", "status");
+    expect(screen.getAllByRole("heading", { level: 1 }).map((heading) => heading.textContent)).toEqual(["Transactions"]);
+    expect(screen.getByRole("heading", { name: "Filter transactions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Transaction history" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Search")).toBeEnabled();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByText("No transactions found.")).not.toBeInTheDocument();
   });
 
   it("renders loaded transactions", async () => {
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     expect(await screen.findByText("Food Lion")).toBeInTheDocument();
 
@@ -125,7 +138,8 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     expect(transactionRow).toHaveTextContent("Food Lion");
     expect(transactionRow).toHaveTextContent("Groceries");
     expect(transactionRow).toHaveTextContent("$75.50");
-    expect(screen.getAllByText("Groceries")).toHaveLength(2);
+    // The form option, the category filter option, and the row's category label.
+    expect(screen.getAllByText("Groceries")).toHaveLength(3);
     expect(screen.getByText("$75.50")).toBeInTheDocument();
     expect(screen.getByText("Sep 10, 2026")).toBeInTheDocument();
   });
@@ -142,12 +156,79 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       ]),
     );
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     const transactionRow = await screen.findByTestId("transaction-row-2");
 
     expect(transactionRow).toHaveTextContent("Paycheck");
     expect(transactionRow).toHaveTextContent("Income");
+    expect(transactionRow.querySelector(".transaction-type-icon--income")).toBeInTheDocument();
+    expect(transactionRow.querySelector(".icon-label .lucide-calendar-days")).toBeInTheDocument();
+  });
+
+  it("shows the Amount icon once the user starts typing, and none for Description or Date", async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
+    await screen.findByTestId("transaction-row-1");
+    const iconFor = (label: string) => screen.getByLabelText(label).parentElement?.querySelector("svg");
+
+    expect(iconFor("Amount")).toBeNull();
+    await user.type(screen.getByLabelText("Amount"), "5");
+    await user.type(screen.getByLabelText("Description"), "C");
+    expect(iconFor("Amount")).toHaveClass("lucide-dollar-sign");
+    // Description and Date never have one: the label (or the calendar button) says enough.
+    expect(iconFor("Description")).toBeNull();
+    expect(iconFor("Date")).toBeNull();
+  });
+
+  it("shows filter icons that follow each filter's value", async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
+    await screen.findByTestId("transaction-row-1");
+    const iconFor = (label: string) => screen.getByLabelText(label).parentElement?.querySelector("svg");
+
+    // Date inputs already have the browser's calendar button, so no second icon.
+    expect(iconFor("Start date")).toBeNull();
+    expect(iconFor("End date")).toBeNull();
+
+    // Search and amounts wait for input, like the form's Amount and Description.
+    expect(iconFor("Search")).toBeNull();
+    expect(iconFor("Minimum amount")).toBeNull();
+    expect(iconFor("Maximum amount")).toBeNull();
+    await user.type(screen.getByLabelText("Search"), "f");
+    await user.type(screen.getByLabelText("Minimum amount"), "1");
+    await user.type(screen.getByLabelText("Maximum amount"), "9");
+    expect(iconFor("Search")).toHaveClass("lucide-search");
+    expect(iconFor("Minimum amount")).toHaveClass("lucide-dollar-sign");
+    expect(iconFor("Maximum amount")).toHaveClass("lucide-dollar-sign");
+
+    const typeFilter = screen.getByLabelText("Type", { selector: "#filter-type" });
+    expect(typeFilter.parentElement?.querySelector("svg")).toHaveClass("category-icon--placeholder");
+    await user.selectOptions(typeFilter, "INCOME");
+    expect(typeFilter.parentElement?.querySelector("svg")).toHaveClass("transaction-type-icon--income");
+
+    const sortBy = screen.getByLabelText("Sort by");
+    expect(iconFor("Sort by")).toHaveClass("lucide-calendar-days");
+    await user.selectOptions(sortBy, "amount");
+    expect(iconFor("Sort by")).toHaveClass("lucide-dollar-sign");
+    await user.selectOptions(sortBy, "createdAt");
+    expect(iconFor("Sort by")).toHaveClass("lucide-calendar-plus");
+
+    // Direction's arrow flips with the order.
+    expect(iconFor("Direction")).toHaveClass("lucide-arrow-down-wide-narrow");
+    await user.selectOptions(screen.getByLabelText("Direction"), "asc");
+    expect(iconFor("Direction")).toHaveClass("lucide-arrow-up-narrow-wide");
+  });
+
+  it("shows an icon for the chosen transaction type", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
+    await screen.findByTestId("transaction-row-1");
+    const typeIcon = () => container.querySelector(".icon-field .transaction-type-icon");
+
+    expect(typeIcon()).toHaveClass("transaction-type-icon--expense");
+    await user.selectOptions(screen.getByLabelText("Type", { selector: "#transaction-type" }), "INCOME");
+    expect(typeIcon()).toHaveClass("transaction-type-icon--income");
   });
 
   it("renders the empty transaction state", async () => {
@@ -155,7 +236,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       createPagedResponse([], 0, 0),
     );
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     expect(
       await screen.findByText("No transactions found."),
@@ -165,14 +246,16 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
   it("creates a transaction", async () => {
     const user = userEvent.setup();
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
+    // A new transaction starts on today's date.
+    expect(screen.getByLabelText("Date")).toHaveValue(toDateInputValue(new Date()));
     await completeTransactionForm();
 
     await user.click(
       screen.getByRole("button", {
-        name: "Add Transaction",
+        name: "Add transaction",
       }),
     );
 
@@ -185,12 +268,14 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
         transactionDate: "2026-09-10",
       });
     });
+    // After saving, the next one starts on today again.
+    await waitFor(() => expect(screen.getByLabelText("Date")).toHaveValue(toDateInputValue(new Date())));
   });
 
   it("loads a transaction into edit mode", async () => {
     const user = userEvent.setup();
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
 
@@ -201,7 +286,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     await user.click(editButton);
 
     const formHeading = screen.getByRole("heading", {
-      name: "Edit Transaction",
+      name: "Edit transaction",
     });
 
     expect(formHeading).toBeInTheDocument();
@@ -220,7 +305,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     expect(
       screen.getByRole("button", {
-        name: "Update Transaction",
+        name: "Update transaction",
       }),
     ).toBeInTheDocument();
   });
@@ -228,7 +313,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
   it("returns focus to the originating Edit button after cancelling", async () => {
     const user = userEvent.setup();
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
 
@@ -236,7 +321,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(
-      screen.getByRole("heading", { name: "Add Transaction" }),
+      screen.getByRole("heading", { name: "Add transaction" }),
     ).toBeInTheDocument();
 
     await waitFor(() => {
@@ -247,7 +332,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
   it("updates a transaction after editing", async () => {
     const user = userEvent.setup();
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await user.click(screen.getByRole("button", { name: "Edit" }));
@@ -259,7 +344,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     await user.click(
       screen.getByRole("button", {
-        name: "Update Transaction",
+        name: "Update transaction",
       }),
     );
 
@@ -286,14 +371,14 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       }),
     );
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await completeTransactionForm();
 
     await user.click(
       screen.getByRole("button", {
-        name: "Add Transaction",
+        name: "Add transaction",
       }),
     );
 
@@ -305,8 +390,9 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     const descriptionInput = screen.getByLabelText("Description");
     const dateInput = screen.getByLabelText("Date");
 
+    // The summary supplements the field messages instead of repeating them.
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Validation failed.",
+      "Please check the highlighted fields.",
     );
 
     expect(categoryInput).toHaveAttribute("aria-invalid", "true");
@@ -352,7 +438,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
         new ApiError("Validation failed.", 400, { [field]: message }),
       );
 
-      render(<TransactionPage />);
+      render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
       await screen.findByText("Food Lion");
       await completeTransactionForm();
@@ -364,7 +450,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
         );
       }
 
-      await user.click(screen.getByRole("button", { name: "Add Transaction" }));
+      await user.click(screen.getByRole("button", { name: "Add transaction" }));
 
       const input = selector
         ? screen.getByLabelText(label, { selector })
@@ -387,19 +473,17 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       new ApiError("Transaction could not be saved.", 422),
     );
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await completeTransactionForm();
-    await user.click(screen.getByRole("button", { name: "Add Transaction" }));
+    await user.click(screen.getByRole("button", { name: "Add transaction" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Transaction could not be saved.",
     );
-    expect(screen.getByLabelText("Category")).toHaveAttribute(
-      "aria-invalid",
-      "false",
-    );
+    // aria-invalid is only present when the control is invalid.
+    expect(screen.getByLabelText("Category")).not.toHaveAttribute("aria-invalid");
   });
 
   it.each([
@@ -414,9 +498,10 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
   ])("reports initial transaction load failures", async (error, message) => {
     vi.mocked(transactionService.getTransactions).mockRejectedValue(error);
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
-    expect(await screen.findByText(message)).toBeInTheDocument();
+    // Announced as an error, with a visible label rather than colour alone.
+    expect(await screen.findByRole("alert")).toHaveTextContent(`Error: ${message}`);
   });
 
   it("preserves the create form and skips refresh when creation fails", async () => {
@@ -426,14 +511,14 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       new Error("Request failed"),
     );
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await completeTransactionForm();
 
     await user.click(
       screen.getByRole("button", {
-        name: "Add Transaction",
+        name: "Add transaction",
       }),
     );
 
@@ -461,7 +546,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       new Error("Request failed"),
     );
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await user.click(screen.getByRole("button", { name: "Edit" }));
@@ -472,7 +557,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     await user.click(
       screen.getByRole("button", {
-        name: "Update Transaction",
+        name: "Update transaction",
       }),
     );
 
@@ -484,7 +569,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     expect(transactionService.getTransactions).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("heading", { name: "Edit Transaction" }),
+      screen.getByRole("heading", { name: "Edit transaction" }),
     ).toBeInTheDocument();
     expect(descriptionInput).toHaveValue("Updated Grocery Store");
   });
@@ -496,20 +581,21 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       .mockResolvedValueOnce(createPagedResponse())
       .mockRejectedValueOnce(new Error("Refresh failed"));
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await completeTransactionForm();
 
     await user.click(
       screen.getByRole("button", {
-        name: "Add Transaction",
+        name: "Add transaction",
       }),
     );
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Transaction saved, but the transaction list could not be refreshed.",
-    );
+    expect((await screen.findByText(/Transaction saved, but the transaction list could not be refreshed\./)).closest("[role='status']"))
+      .toHaveTextContent(/^Warning: /);
+    // The warning replaces the success banner rather than appearing beside it.
+    expect(screen.queryByText(/^Transaction (added|updated)\.$/)).not.toBeInTheDocument();
 
     expect(transactionService.createTransaction).toHaveBeenCalledOnce();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -529,7 +615,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       .mockResolvedValueOnce(createPagedResponse())
       .mockRejectedValueOnce(new Error("Refresh failed"));
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await user.click(screen.getByRole("button", { name: "Edit" }));
@@ -540,17 +626,18 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     await user.click(
       screen.getByRole("button", {
-        name: "Update Transaction",
+        name: "Update transaction",
       }),
     );
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Transaction saved, but the transaction list could not be refreshed.",
-    );
+    expect((await screen.findByText(/Transaction saved, but the transaction list could not be refreshed\./)).closest("[role='status']"))
+      .toHaveTextContent(/^Warning: /);
+    // The warning replaces the success banner rather than appearing beside it.
+    expect(screen.queryByText(/^Transaction (added|updated)\.$/)).not.toBeInTheDocument();
 
     expect(transactionService.updateTransaction).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("heading", { name: "Add Transaction" }),
+      screen.getByRole("heading", { name: "Add transaction" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Cancel" }),
@@ -563,7 +650,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await user.click(screen.getByRole("button", { name: "Delete" }));
@@ -575,6 +662,8 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     await waitFor(() => {
       expect(transactionService.getTransactions).toHaveBeenCalledTimes(2);
     });
+
+    expect(await screen.findByText("Transaction deleted.")).toHaveAttribute("role", "status");
   });
 
   it("resets the form when deleting the transaction being edited", async () => {
@@ -585,14 +674,14 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       .mockResolvedValueOnce(createPagedResponse())
       .mockResolvedValueOnce(createPagedResponse([], 0, 0));
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await user.click(screen.getByRole("button", { name: "Edit" }));
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Add Transaction" }),
+      await screen.findByRole("heading", { name: "Add transaction" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Cancel" }),
@@ -611,7 +700,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.mocked(transactionService.deleteTransaction).mockRejectedValue(error);
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await user.click(screen.getByRole("button", { name: "Delete" }));
@@ -624,7 +713,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     vi.spyOn(window, "confirm").mockReturnValue(false);
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await user.click(screen.getByRole("button", { name: "Delete" }));
@@ -636,7 +725,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
   it("applies transaction filters", async () => {
     const user = userEvent.setup();
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await user.type(screen.getByLabelText("Search"), "Food");
@@ -648,16 +737,16 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       "EXPENSE",
     );
 
-    await user.type(screen.getByLabelText("Start Date"), "2026-09-01");
-    await user.type(screen.getByLabelText("End Date"), "2026-09-30");
-    await user.type(screen.getByLabelText("Minimum Amount"), "25");
-    await user.type(screen.getByLabelText("Maximum Amount"), "100");
-    await user.selectOptions(screen.getByLabelText("Sort By"), "amount");
+    await user.type(screen.getByLabelText("Start date"), "2026-09-01");
+    await user.type(screen.getByLabelText("End date"), "2026-09-30");
+    await user.type(screen.getByLabelText("Minimum amount"), "25");
+    await user.type(screen.getByLabelText("Maximum amount"), "100");
+    await user.selectOptions(screen.getByLabelText("Sort by"), "amount");
     await user.selectOptions(screen.getByLabelText("Direction"), "asc");
 
     await user.click(
       screen.getByRole("button", {
-        name: "Apply Filters",
+        name: "Apply filters",
       }),
     );
 
@@ -674,7 +763,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
           maxAmount: 100,
           sortBy: "amount",
           sortDirection: "asc",
-        }),
+        }), expect.any(AbortSignal)
       );
     });
   });
@@ -695,10 +784,10 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       .mockResolvedValueOnce(createPagedResponse())
       .mockRejectedValueOnce(error);
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
-    await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+    await user.click(screen.getByRole("button", { name: "Apply filters" }));
 
     expect(await screen.findByText(message)).toBeInTheDocument();
   });
@@ -706,7 +795,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
   it("resets filters and reloads the first page with default sorting", async () => {
     const user = userEvent.setup();
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await user.type(screen.getByLabelText("Search"), "Food");
@@ -714,11 +803,11 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       screen.getByLabelText("Type", { selector: "#filter-type" }),
       "EXPENSE",
     );
-    await user.type(screen.getByLabelText("Start Date"), "2026-09-01");
-    await user.type(screen.getByLabelText("End Date"), "2026-09-30");
-    await user.type(screen.getByLabelText("Minimum Amount"), "25");
-    await user.type(screen.getByLabelText("Maximum Amount"), "100");
-    await user.selectOptions(screen.getByLabelText("Sort By"), "amount");
+    await user.type(screen.getByLabelText("Start date"), "2026-09-01");
+    await user.type(screen.getByLabelText("End date"), "2026-09-30");
+    await user.type(screen.getByLabelText("Minimum amount"), "25");
+    await user.type(screen.getByLabelText("Maximum amount"), "100");
+    await user.selectOptions(screen.getByLabelText("Sort by"), "amount");
     await user.selectOptions(screen.getByLabelText("Direction"), "asc");
 
     await user.click(screen.getByRole("button", { name: "Reset" }));
@@ -729,11 +818,11 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
         size: pageSize,
         sortBy: "transactionDate",
         sortDirection: "desc",
-      });
+      }, expect.any(AbortSignal));
     });
 
     expect(screen.getByLabelText("Search")).toHaveValue("");
-    expect(screen.getByLabelText("Sort By")).toHaveValue("transactionDate");
+    expect(screen.getByLabelText("Sort by")).toHaveValue("transactionDate");
     expect(screen.getByLabelText("Direction")).toHaveValue("desc");
   });
 
@@ -750,7 +839,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       .mockResolvedValueOnce(createPagedResponse())
       .mockRejectedValueOnce(error);
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await user.click(screen.getByRole("button", { name: "Reset" }));
@@ -765,7 +854,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       createPagedResponse([transaction], 0, 2),
     );
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
 
@@ -782,7 +871,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
           size: pageSize,
           sortBy: "transactionDate",
           sortDirection: "desc",
-        }),
+        }), expect.any(AbortSignal)
       );
     });
   });
@@ -794,14 +883,14 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       createPagedResponse([transaction], 1, 2),
     );
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await user.click(screen.getByRole("button", { name: "Previous" }));
 
     await waitFor(() => {
       expect(transactionService.getTransactions).toHaveBeenLastCalledWith(
-        expect.objectContaining({ page: 0 }),
+        expect.objectContaining({ page: 0 }), expect.any(AbortSignal)
       );
     });
   });
@@ -813,7 +902,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       createPagedResponse([transaction], -1, 2),
     );
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await user.click(screen.getByRole("button", { name: "Previous" }));
@@ -834,7 +923,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       .mockResolvedValueOnce(createPagedResponse([transaction], 0, 2))
       .mockRejectedValueOnce(error);
 
-    render(<TransactionPage />);
+    render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
     await user.click(screen.getByRole("button", { name: "Next" }));
@@ -847,17 +936,17 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
    vi.mocked(useAuth).mockReturnValue(accountContext({ ...accountUser, preferences: { dateFormat: "ISO", transactionPageSize: 25 } }));
    vi.mocked(categoryService.getCategories).mockResolvedValue(categories);
    vi.mocked(transactionService.getTransactions).mockResolvedValue(createPagedResponse());
-   const { rerender } = render(<TransactionPage />);
+   const { rerender } = render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
    expect(await screen.findByText("2026-09-10")).toBeInTheDocument();
-   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 25 }));
+   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 25 }), expect.any(AbortSignal));
    await userEvent.type(screen.getByLabelText("Search"), "Food");
-   await userEvent.click(screen.getByRole("button", { name: "Apply Filters" }));
-   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ size: 25, search: "Food" }));
+   await userEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ size: 25, search: "Food" }), expect.any(AbortSignal));
    vi.mocked(useAuth).mockReturnValue(accountContext({ ...accountUser, preferences: { dateFormat: "ISO", transactionPageSize: 50 } }));
-   rerender(<TransactionPage />);
-   await waitFor(() => expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 50, search: "Food" })));
+   rerender(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
+   await waitFor(() => expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 50, search: "Food" }), expect.any(AbortSignal)));
    await userEvent.click(screen.getByRole("button", { name: "Reset" }));
-   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 50 }));
+   expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 50 }), expect.any(AbortSignal));
  });
 
 it("falls back to ten when account preferences are unavailable", async () => {
@@ -865,9 +954,9 @@ it("falls back to ten when account preferences are unavailable", async () => {
  vi.mocked(useAuth).mockReturnValue({ ...accountContext(), user: null });
  vi.mocked(categoryService.getCategories).mockResolvedValue(categories);
  vi.mocked(transactionService.getTransactions).mockResolvedValue(createPagedResponse());
- render(<TransactionPage />);
+ render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
  await screen.findByText("Food Lion");
- expect(transactionService.getTransactions).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ size: 10 }));
+ expect(transactionService.getTransactions).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ size: 10 }), expect.any(AbortSignal));
 });
 
 it("ignores an older page-size response and avoids refetches for unrelated identity changes", async () => {
@@ -876,16 +965,16 @@ it("ignores an older page-size response and avoids refetches for unrelated ident
  vi.mocked(useAuth).mockReturnValue(accountContext());
  vi.mocked(categoryService.getCategories).mockResolvedValue(categories);
  vi.mocked(transactionService.getTransactions).mockReturnValueOnce(old.promise).mockResolvedValue(createPagedResponse([{ ...transaction, description: "New result" }]));
- const { rerender } = render(<TransactionPage />);
+ const { rerender } = render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
  await waitFor(() => expect(transactionService.getTransactions).toHaveBeenCalledTimes(1));
  const updated = { ...accountUser, preferences: { dateFormat: "ISO" as const, transactionPageSize: 50 as const } };
  vi.mocked(useAuth).mockReturnValue(accountContext(updated));
- rerender(<TransactionPage />);
+ rerender(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
  await screen.findByText("New result");
  old.resolve(createPagedResponse([{ ...transaction, description: "Old result" }]));
  await waitFor(() => expect(screen.queryByText("Old result")).not.toBeInTheDocument());
  vi.mocked(useAuth).mockReturnValue(accountContext({ ...updated, displayName: "Changed name" }));
- rerender(<TransactionPage />);
+ rerender(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
  expect(transactionService.getTransactions).toHaveBeenCalledTimes(2);
 });
 
@@ -899,14 +988,14 @@ it("keeps newer filter results when an older filter request completes later", as
     .mockResolvedValueOnce(createPagedResponse())
     .mockReturnValueOnce(older.promise)
     .mockResolvedValueOnce(createPagedResponse([{ ...transaction, description: "Latest filtered result" }]));
-  render(<TransactionPage />);
+  render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
   await screen.findByText("Food Lion");
   const user = userEvent.setup();
   await user.type(screen.getByLabelText("Search"), "Old");
-  await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+  await user.click(screen.getByRole("button", { name: "Apply filters" }));
   await user.clear(screen.getByLabelText("Search"));
   await user.type(screen.getByLabelText("Search"), "Latest");
-  await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+  await user.click(screen.getByRole("button", { name: "Apply filters" }));
   await screen.findByText("Latest filtered result");
   await act(async () => older.resolve(createPagedResponse([{ ...transaction, description: "Obsolete filtered result" }])));
   expect(screen.getByText("Latest filtered result")).toBeInTheDocument();
@@ -921,13 +1010,153 @@ it("ignores an obsolete page-size load failure after the new size succeeds", asy
   vi.mocked(transactionService.getTransactions)
     .mockReturnValueOnce(older.promise)
     .mockResolvedValueOnce(createPagedResponse([{ ...transaction, description: "Current page" }]));
-  const { rerender } = render(<TransactionPage />);
+  const { rerender } = render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
   await waitFor(() => expect(transactionService.getTransactions).toHaveBeenCalledTimes(1));
   vi.mocked(useAuth).mockReturnValue(accountContext({ ...accountUser, preferences: { dateFormat: "MEDIUM", transactionPageSize: 25 } }));
-  rerender(<TransactionPage />);
+  rerender(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
   await screen.findByText("Current page");
   await act(async () => older.reject(new ApiError("Obsolete request failed", 503)));
   expect(screen.getByText("Current page")).toBeInTheDocument();
   expect(screen.queryByText("Obsolete request failed")).not.toBeInTheDocument();
-  expect(screen.queryByText("Loading transactions...")).not.toBeInTheDocument();
+  expect(screen.queryByText("Loading transactions…")).not.toBeInTheDocument();
+});
+
+describe("TransactionPage loading and stale requests", () => {
+  const getTransactions = () => vi.mocked(transactionService.getTransactions);
+  const renderPage = () => render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
+  const row = (description: string) => ({ ...transaction, id: description.length, description });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(accountContext());
+    vi.mocked(categoryService.getCategories).mockResolvedValue(categories);
+    getTransactions().mockResolvedValue(createPagedResponse());
+  });
+
+  async function search(user: ReturnType<typeof userEvent.setup>, text: string) {
+    await user.clear(screen.getByLabelText("Search"));
+    await user.type(screen.getByLabelText("Search"), text);
+    await user.click(screen.getByRole("button", { name: "Apply filters" }));
+  }
+
+  it("never shows the old rows under new filters, and only the newest request ends loading", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Food Lion");
+    const first = deferred<PagedTransactionResponse>();
+    const second = deferred<PagedTransactionResponse>();
+    getTransactions().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+    await search(user, "first");
+    expect(screen.getByText("Loading transactions…")).toHaveAttribute("role", "status");
+    expect(screen.queryByText("Food Lion")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Search")).toBeEnabled(); // Filters stay usable.
+
+    await search(user, "second");
+    expect(getTransactions().mock.calls.at(-2)![1]!.aborted).toBe(true);
+    // The older request finishing changes nothing: still loading, no old rows.
+    await act(async () => first.resolve(createPagedResponse([row("Old filter row")])));
+    expect(screen.getByText("Loading transactions…")).toBeInTheDocument();
+    expect(screen.queryByText("Old filter row")).not.toBeInTheDocument();
+
+    await act(async () => second.resolve(createPagedResponse([row("New filter row")])));
+    expect(await screen.findByText("New filter row")).toBeInTheDocument();
+    expect(screen.queryByText("Loading transactions…")).not.toBeInTheDocument();
+  });
+
+  it("ignores an older request's failure once a newer one has loaded", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Food Lion");
+    const older = deferred<PagedTransactionResponse>();
+    getTransactions().mockReturnValueOnce(older.promise).mockResolvedValueOnce(createPagedResponse([row("Newest")]));
+
+    await search(user, "older");
+    await search(user, "newest");
+    expect(await screen.findByText("Newest")).toBeInTheDocument();
+
+    await act(async () => older.reject(new ApiError("Obsolete failure", 503)));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("Newest")).toBeInTheDocument();
+  });
+
+  it("tells a failed load apart from an empty list, and Try again repeats the same request", async () => {
+    const user = userEvent.setup();
+    getTransactions().mockRejectedValueOnce(new Error("offline"));
+    renderPage();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Unable to load transaction data. Please try again.");
+    expect(screen.getByText("Transactions could not be loaded.")).toBeInTheDocument();
+    expect(screen.queryByText("No transactions found.")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Filter transactions" })).toBeInTheDocument();
+    const failedRequest = getTransactions().mock.calls[0][0];
+
+    const retry = screen.getByRole("button", { name: "Try again" });
+    expect(retry).toHaveAttribute("type", "button");
+    await user.click(retry);
+
+    expect(await screen.findByText("Food Lion")).toBeInTheDocument();
+    expect(getTransactions()).toHaveBeenLastCalledWith(failedRequest, expect.any(AbortSignal));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("retries a failed filter with the same filters", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Food Lion");
+    getTransactions().mockRejectedValueOnce(new Error("offline"));
+
+    await search(user, "Coffee");
+    await user.click(await screen.findByRole("button", { name: "Try again" }));
+
+    expect(getTransactions()).toHaveBeenLastCalledWith(expect.objectContaining({ search: "Coffee", page: 0 }), expect.any(AbortSignal));
+    expect(await screen.findByText("Food Lion")).toBeInTheDocument();
+  });
+
+  it("says when filters match nothing, unlike an account with no transactions", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Food Lion");
+    getTransactions().mockResolvedValue(createPagedResponse([], 0, 0));
+
+    await search(user, "nothing like this");
+    expect(await screen.findByText("No transactions match these filters.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+    expect(await screen.findByText("No transactions found.")).toBeInTheDocument();
+  });
+
+  it("aborts the pending request when the page is left", async () => {
+    getTransactions().mockReturnValueOnce(new Promise(() => {}));
+    const view = renderPage();
+    await waitFor(() => expect(getTransactions()).toHaveBeenCalledOnce());
+    const signal = getTransactions().mock.calls[0][1]!;
+
+    view.unmount();
+
+    expect(signal.aborted).toBe(true);
+  });
+});
+
+it("uses the shared button styles: tinted + Add transaction, Update transaction, and Apply filters, and a red-text Delete", async () => {
+  vi.clearAllMocks();
+  vi.mocked(useAuth).mockReturnValue(accountContext());
+  vi.mocked(categoryService.getCategories).mockResolvedValue(categories);
+  vi.mocked(transactionService.getTransactions).mockResolvedValue(createPagedResponse());
+  render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
+  await screen.findByText("Food Lion");
+
+  const add = screen.getByRole("button", { name: "Add transaction" });
+  expect(add).toHaveClass("button--tinted");
+  expect(add.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+  expect(screen.getByRole("button", { name: "Apply filters" })).toHaveClass("button--tinted");
+  expect(screen.getByRole("button", { name: "Delete" })).toHaveClass("button--secondary", "button--destructive");
+  expect(screen.getByRole("button", { name: "Edit" })).toHaveClass("button--secondary", "button--edit");
+  expect(screen.getByRole("button", { name: "Edit" })).not.toHaveClass("button--destructive");
+
+  await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+  const update = screen.getByRole("button", { name: "Update transaction" });
+  expect(update.querySelector("svg")).toBeNull();
+  expect(update).toHaveClass("button--tinted");
 });

@@ -84,6 +84,8 @@ Invalid credentials submitted through the Login form remain a Login form error.
 | Method | Endpoint             | Purpose                                 |
 | ------ | -------------------- | --------------------------------------- |
 | `GET`  | `/api/health`        | Check backend availability              |
+| `GET`  | `/actuator/health/liveness` | Process is running: `{"status":"UP"}` (issue #20) |
+| `GET`  | `/actuator/health/readiness` | Ready, database included: `{"status":"UP"}`, or `503 {"status":"DOWN"}` |
 | `POST` | `/api/auth/register` | Register a user                         |
 | `POST` | `/api/auth/login`    | Authenticate and obtain an access token |
 
@@ -117,13 +119,28 @@ Routine automation should use dedicated accounts containing fictional data. Cred
 
 Authenticated users can create, view, edit, delete, search, filter, sort, and paginate their own transactions.
 
+### Transactions loading (issue #105)
+
+- The heading, form, and filters stay on screen while the list loads; only the Transaction
+  History area shows `role="status"` "Loading transactions…" (no rows from the previous
+  filters or page are shown meanwhile, and the count line is blank).
+- A failed list load shows `role="alert"` with the error and a "Try again" button that
+  repeats the same filters and page; the history area then says "Transactions could not be
+  loaded." (never "No transactions found.").
+- Empty results: "No transactions match these filters." when a search, type, category, date,
+  or amount filter was applied (including `?category=`), otherwise "No transactions found.".
+- `?category={id}` applies the category filter for the first request, and the filter select
+  shows that category while the filtered page loads; a refresh keeps it.
+- Only the newest request may change the list, the loading state, or the error; an older or
+  cancelled request is ignored and never shown as an error.
+
 ### Transaction validation
 
 | Field            | Rule                                               |
 | ---------------- | -------------------------------------------------- |
-| Category         | Required and must belong to the authenticated user |
+| Category         | Exactly one of `categoryId` (must belong to the authenticated user) or `newCategory` (creates a custom category in the same write; see [categories API](categories-api.md#categories-in-transactions-and-budgets)) |
 | Type             | Required                                           |
-| Amount           | Required and must be at least `0.01`               |
+| Amount           | Required; at least `0.01`; at most 10 whole digits and 2 decimal places (`9999999999.99`) |
 | Description      | Required; maximum 255 characters                   |
 | Transaction date | Required                                           |
 
@@ -139,6 +156,14 @@ Before retrying a failed create action, automation must confirm whether the reco
 
 Transactions with tied sort values use transaction ID as a secondary key in the same direction.
 
+The transaction list accepts an optional `categoryId` filter that combines with every other
+filter, sort, and page. A category that is missing or belongs to another user returns
+`404 CATEGORY_NOT_FOUND`.
+
+A failed transaction or budget write that requested a `newCategory` leaves no category
+behind. Automation that retries after a `409 CATEGORY_DUPLICATE` should pick the existing
+category by ID instead of resending `newCategory`.
+
 ## Budget behavior
 
 Authenticated users can create, view, edit, and delete their own monthly budgets.
@@ -147,8 +172,8 @@ Authenticated users can create, view, edit, and delete their own monthly budgets
 
 | Field         | Rule                                               |
 | ------------- | -------------------------------------------------- |
-| Category      | Required and must belong to the authenticated user |
-| Monthly limit | Required and must be at least `0.01`               |
+| Category      | Exactly one of `categoryId` (must belong to the authenticated user) or `newCategory` (creates a custom category in the same write) |
+| Monthly limit | Required; at least `0.01`; at most 10 whole digits and 2 decimal places (`9999999999.99`) |
 | Month         | Must be between `1` and `12`                       |
 | Year          | Must be `2000` or later                            |
 
@@ -162,14 +187,47 @@ Automation should reserve category, month, and year combinations for individual 
 
 ### Budget period selector
 
-The Budget Period selector includes:
+The Budget period selector includes:
 
-- The default supported year range
-- Every year represented by the user's saved budgets
+- Every year from 2000 (the earliest budget year) to ten years after the current year (the
+  Create/Edit budget form's Year is the same dropdown, plus the edited budget's own year)
+- The linked year from a `?month=&year=` link, if outside that range
 - No duplicate year options
 - Years sorted numerically
 
-A saved budget outside the default range remains reachable by selecting its saved year and month.
+Any saved budget remains reachable by selecting its year and month. (Before issue #105 the
+years came from every saved budget; the page now loads only the month shown.)
+
+### Labels and buttons (v1.3.0)
+
+Budgets and Transactions use sentence case like the rest of the app, for example "Create
+budget", "Update budget", "Monthly limit", "Budget period", "Add transaction", "Apply
+filters", "Transaction history", "Start date", and "Sort by" (before v1.3.0 these were Title
+Case: "Create Budget", "Add Transaction", …). Every main action on these pages ("Add
+transaction", "Update transaction", "Apply filters", "Create budget", "Update budget",
+"Create category", "Save category"), and on Profile and Settings ("Save profile", "Upload
+photo", "Save preferences", "Change password"), and the sign-in, registration, and
+session-restore "Retry" buttons, uses the soft blue `button--tinted` style of the
+Categories card's "+ Add transaction" link; create buttons also show a decorative "+" that
+is not part of the accessible name; Cancel, Reset, and Edit are the light
+secondary style; Delete on budget cards and transaction rows has red text
+(`button--destructive`). On hover, Edit on budget cards and transaction rows takes the tinted
+blue (`button--edit`) and Delete the same look in red.
+
+### Budgets loading (issue #105)
+
+- Each month shown costs exactly one `GET /api/budgets/analytics?month=&year=` request,
+  however many budgets it has: no `GET /api/budgets` and no per-budget
+  `GET /api/budgets/{id}/analytics`. Choosing another month, saving, deleting, and "Try
+  again" each make one request for the month on screen (a save shows the month it was for).
+- The heading, the Create/Edit budget form, and the Budget period selects stay on screen;
+  while a month loads, the Monthly budgets area shows `role="status"` "Loading budgets for
+  {Month Year}…" and no cards or charts from the previous month.
+- A failed load shows `role="alert"` with the error and "Try again" (instead of "No budgets
+  found for …"). A failed refresh after a successful save shows the warning "Budget saved,
+  but the budget list could not be refreshed. Reload the page to see the latest data."
+- Only the newest month may change the page: an older month's answer or failure is ignored,
+  and a request that is replaced or left is cancelled, never shown as an error.
 
 ### Budget analytics and progress
 
@@ -186,6 +244,37 @@ Budget progress bars expose:
 
 Usage above 100% remains visible and available through `aria-valuetext`, while the visual width and `aria-valuenow` are capped at 100.
 
+## Custom category workflows (v1.3.0)
+
+- **Create while saving:** choosing "Create a custom category…" reveals "Category name"
+  and an "Icon" radiogroup (default "Tag"). The category is created in the same request
+  as the transaction or budget; if either fails, neither is saved and the form keeps its
+  values. After a successful save the form resets (the new category is not left
+  selected) and a confirmation banner shows "Transaction added." / "Budget created.".
+  The new category then appears in every category select and filter without a reload.
+- **Confirmation banner:** success messages for saves and deletes appear in a banner at
+  the top of the window and close after 3 seconds (paused while hovered or focused;
+  "Dismiss message" closes it). Assert on the text promptly after the action, or hover
+  it first; do not assert that it is still visible later. Errors and refresh warnings
+  stay on the page.
+- **Duplicates:** a name matching an existing category after normalization (case,
+  spacing, Unicode form) shows "You already have a category with this name" beside the
+  name field and offers "Use existing category “{name}”". Nothing is saved.
+- **Server field errors:** `amount`, `monthlyLimit`, `newCategory.name`, and
+  `newCategory.iconKey` messages appear beside their controls with `aria-invalid`; the
+  first invalid control receives focus. Amounts above 9,999,999,999.99 or with more than
+  two decimals are rejected (`400`).
+- **Management:** custom categories are created, renamed, re-iconed, and deleted on the
+  Categories page (`/categories`, reached from the sidebar). Delete is inactive (`aria-disabled="true"`) with a visible reason for a
+  category in use; if the server still refuses a delete (`409`), a persistent
+  `role="alert"` explains it and the category stays listed. Built-in categories cannot be
+  changed.
+- **Filters:** the transaction filter is applied on the server and returns to page 1;
+  Reset clears it. The budget filter narrows the loaded month in the browser and shows a
+  distinct empty message when the month has budgets but none in that category.
+- **Icon fallback:** an unknown stored icon key is returned and rendered as `tag`.
+- **Isolation:** another user's category ID behaves exactly like a missing one (`404`).
+
 ## Dashboard calculations
 
 Dashboard data is scoped to the authenticated user.
@@ -198,8 +287,8 @@ Dashboard data is scoped to the authenticated user.
 | Monthly Income       | Sum of `INCOME` transactions in the server's current calendar month                           |
 | Monthly Expenses     | Sum of `EXPENSE` transactions in the server's current calendar month                          |
 | Recent Transactions  | Up to five transactions ordered by transaction date descending, then creation time descending |
-| Spending by Category | Current-month `EXPENSE` totals grouped by category                                            |
-| Monthly Budgets      | Budgets matching the server's current month and year                                          |
+| Spending by Category | Current-month `EXPENSE` totals grouped by category ID (built-in and custom alike)              |
+| Monthly budgets      | Budgets matching the server's current month and year                                          |
 
 ## Stable automation selectors
 
@@ -217,6 +306,99 @@ Accessible roles, labels, input IDs, link names, and button names should be pref
 | Monthly Expenses       | `summary-monthly-expenses` |
 
 These values are exposed through `data-testid`.
+
+### Navigation and layout (v1.3.0)
+
+Signed-in pages use a sidebar layout (issue #95); Login and Register keep a simple
+header. No navigation `data-testid` values are added. Link and button names are
+unchanged from earlier releases, so existing locators such as link text "Transactions"
+keep working.
+
+| Element | Selector |
+| --- | --- |
+| Primary navigation | `nav` named "Primary navigation" with links "Dashboard" (`/`), "Transactions", "Budgets", and "Categories" (`/categories`) |
+| Current page | the matching primary link has `aria-current="page"` |
+| Brand | link "FinTrack" (to `/`) |
+| Account menu | button "Open account menu for {name}" (`#account-menu-trigger`) in the page `header`; panel `#account-menu-panel` |
+| Account links | inside `nav` "Account navigation": "Profile" and "Account Settings" (not in the primary navigation) |
+| Logout | button "Logout" in the open account menu |
+| Public pages | `nav` "Authentication navigation" with "Login" and "Register"; hidden while a session is being restored |
+| Landmarks | exactly one `header` and one `main#main-content`; "Skip to main content" targets it |
+| Sidebar toggle (above 1100px) | button "Collapse sidebar" / "Expand sidebar" with `aria-expanded`, controlling `#app-sidebar` |
+| Menu button (1100px and below) | button "Open navigation menu" with `aria-expanded`, controlling `#mobile-navigation` |
+| Navigation drawer | `dialog` named "Navigation menu" containing the primary navigation; close button "Close navigation menu" |
+
+Above 1100px the primary navigation is a sidebar column that can be collapsed to
+icons. Collapsed links keep their names ("Dashboard", "Transactions", "Budgets"), so
+name-based locators work in both states (including "Categories"); the choice is saved per browser in
+`localStorage` under `fintrack:sidebar-collapsed` ("true" or "false"). At 1100px and
+below the sidebar is hidden: open the drawer with the menu button, then follow a link
+(the drawer closes on navigation, Escape, the close button, or a backdrop click). Below
+640px the account menu button shows only the avatar; its name is unchanged. Prefer role
+and name locators over layout position.
+
+### Categories page (v1.3.0)
+
+`/categories` is protected and lists every category the user owns with its usage for the
+server's reporting month (issue #100). No new `data-testid` values are added.
+
+| Element | Selector |
+| --- | --- |
+| Page | `h1` "Categories"; loading `role="status"` "Loading categories…"; failure `role="alert"` with button "Try again" |
+| Summary strip | `dl` with terms "Categories", "Top this month" ("Top in {Month Year}" for an earlier month), "Over budget" (detail "of {n} budgets this month" / "in {Month Year}"), "No budget" (detail "categories spending in {Month Year} without a budget"; counts every category, unaffected by the toolbar) |
+| No-budget warning | in a qualifying card (spending in the month shown, no budget that month, takes budgets): "Warning: {amount} spent in {Month} with no budget." with the link "Set budget for {name} for {Month Year}" (`/budgets?category={id}&month={m}&year={yyyy}`), the card's only Set budget link; no `role`/live region and no dismiss button |
+| Category card | `article` named by the category (for example "Pet Care"), badge "Built-in" or "Custom" |
+| Card figures | "Spent in {Month}", "Share of spending" (only when the month has spending) |
+| Budget progress | `role="progressbar"` named "{Category} budget used", `aria-valuenow` 0–100, `aria-valuetext` "{n}% used"; status text such as "Warning" |
+| No budget | "No budget for {Month}", shown only for categories that take budgets |
+| Activity | "{n} transaction(s) in {Month} · Last used {date}" (this month's count, income and expense) or "Not used yet" |
+| Spending table | `table` named "Spending in {Month Year}" with column headers Category, Spent, Share and a row header per category with spending; "No spending recorded for {Month Year}." when empty; rounding note "Percentages are rounded, so they may not add up to exactly 100%." |
+| Toolbar | search "Search categories", selects "Filter categories" (All categories, Custom, Built-in, Unused, No budget in {Month}) and "Sort categories" (Name, Spending in {Month}, Most used); `role="status"` "Showing {n} of {total} categories"; button "Clear category filters" when not at the defaults |
+| No matches | "No categories match your search and filter." with button "Show all categories" |
+| Sections | while browsing (no search, filter "All categories"): `section` named "Active this month" (`h2`), then `section` named "Other categories · {n}" (`h2`); each category appears once. Empty Active: "Nothing has spending or a budget in {Month} yet." (an earlier month: `section` "Active in {Month Year}", empty text "Nothing had spending or a budget in {Month Year}."). Searching or filtering replaces both with the single flat results list |
+| Reporting month | group "Reporting month" with selects "Month" (`#category-period-month`) and "Year" (2000 to the server's current year; no future months); button "Back to current month" only for an earlier month; disabled with the description "Finish or cancel the open form or confirmation to change the month." while a form or confirmation is open. URL `/categories?month={1-12}&year={yyyy}`; invalid, partial, repeated, or future values are removed with a history replacement |
+| Month loading | "Loading {Month Year}…" (`role="status"`) while another month loads (no figures, cards, or budget links shown); "Showing {Month Year}" in a visually hidden status when it arrives |
+| Selected-month wording | subtitle "How each category is used in {Month Year}: spending, budgets, and activity." for the current month, "…was used in {Month Year}…" for an earlier one (also while loading or after a failure); earlier months never say "this month" ("Active in {Month Year}", "No spending in {Month Year}") |
+| Budgets month link | `/budgets?category={id}&month={m}&year={yyyy}`: Budget period selects show that month; focus moves to the `h2` "Edit budget" (that month's budget) or "Create budget" (category and month preselected); nothing is submitted. Invalid month: `month`/`year` removed by replacement, category applied to today's month. Unknown, malformed, or another user's category: `category` removed, valid month kept, no focus moved, no request about the ID. Choosing another Budget period month removes all three |
+| Active categories toggle | button "Hide active categories" / "Show active categories" with `aria-expanded` and `aria-controls="categories-active-list"`; open by default; absent while an Active card's form or confirmation is open and when nothing is active. Saved per device in `localStorage` `fintrack:categories-active-expanded` (only `"false"` closes it) |
+| Other categories toggle | button "Show other categories" / "Hide other categories" with `aria-expanded` and `aria-controls="categories-other-list"`; closed by default; absent only while the section must stay open (create form open, an Other card's form or confirmation open); with nothing active it starts open but the button is still offered. Saved per device in `localStorage` `fintrack:categories-others-expanded` |
+| Create | button "Create category" opens a form named "Create category" (fields "Category name" and the "Icon" radiogroup; submit "Create category", "Cancel") |
+| Card actions | button "More actions for {name}" (custom cards only; `aria-expanded`, `aria-controls` → `#category-{id}-actions-panel`); not an ARIA menu, so no `menu`/`menuitem` roles. Built-in cards have no such button |
+| Edit | button "Edit {name}" inside the open actions panel; opens a form named "Edit {name}" with "Save category" and "Cancel"; focus then returns to "More actions for {name}" |
+| Delete | button "Delete {name}" inside the open actions panel; `aria-disabled="true"` plus a visible reason "Used by …" (its accessible description) when in use; confirmation group "Delete “{name}”? This cannot be undone." with "Delete category" and "Keep category" |
+| Card links | real links, each with a decorative icon and visible text: "View transactions for {name}" (`/transactions?category={id}`), or "Add a transaction for {name}" (`/transactions?addCategory={id}`) when the category has no transactions; "Set budget for {name} for {Month Year}" or "Edit budget for {name} for {Month Year}" (`/budgets?category={id}&month={m}&year={yyyy}`, the month shown, current month included; only for categories that take budgets) |
+| Messages | success banner "“{name}” was created/updated/deleted successfully." (after the summary refresh); refresh warning `role="status"` starting "Warning: “{name}” was updated, but the latest category summary could not be loaded." with "Try again"; errors `role="alert"` starting "Error:" with "Dismiss error"; initial load failure "Error: Unable to load categories. Please try again." with "Try again" |
+| Inline notice | `InlineNotice`: visible label "Error:" (`role="alert"`), "Warning:" or "Note:" (`role="status"`); optional action button and "Dismiss error" / "Dismiss warning" / "Dismiss note" |
+
+Cards are ordered by name, then ID, unless another sort is chosen; the toolbar affects the
+cards only, never the summary strip or spending table. Transactions and Budgets accept `?category={id}`: a
+category the user owns is applied (Transactions filters; Budgets opens that month's
+budget for editing or preselects it for a new one); any other value is removed from the
+URL without a request. Budgets also accepts `&month=&year=` for the month to open.
+
+### Category controls (v1.3.0)
+
+Category features add no new `data-testid` values; automation should use these stable
+IDs, labels, and accessible names.
+
+| Element | Selector |
+| --- | --- |
+| Transaction category select | `#transaction-category` (label "Category") |
+| Budget category select | `#budget-category` (label "Category") |
+| Create option | option text `Create a custom category…` (its value is internal; select by text) |
+| New category name | `#transaction-category-new-name` / `#budget-category-new-name` (label "Category name") |
+| Icon choices | radios named `transaction-category-icon` / `budget-category-icon`; accessible names such as "Tag", "Paw print" |
+| Transaction category filter | `#filter-category` (label "Filter by category", first option "All categories") |
+| Budget category filter | `#budget-filter-category` (label "Filter by category") |
+| Budget fields | `#budget-monthly-limit`, `#budget-month`, `#budget-year` (labels unchanged) |
+| Field errors | `#transaction-category-error` / `#budget-category-error` (selection), `#…-category-new-name-error`, `#…-category-icon-error`, `#transaction-amount-error`, `#budget-monthly-limit-error` |
+| Duplicate recovery | button "Use existing category “{name}”" under the name error |
+| Category management | on the Categories page only (see above); Transactions and Budgets have no management panel or "Manage categories" link |
+| Confirmation banner | `#status-banner-stack [role="status"]`: "Transaction added./updated./deleted.", "Budget created./updated./deleted.", "“{name}” was created/updated/deleted successfully."; close button "Dismiss message" |
+
+Existing category options use the numeric category ID as their value. Built-in categories
+show a "Built-in" badge and no edit or delete buttons. Category icons are decorative
+(`aria-hidden`) and never the only identifier; assert on visible names.
 
 Tests should not depend on generated CSS class names, DOM position, or visual layout when a role, label, ID, button name, or documented selector is available.
 
@@ -266,10 +448,25 @@ The initial automation suite should:
 - Exclude passwords, JWTs, cookies, and other secrets from artifacts
 - Confirm authentication before executing protected workflows
 - Clean up UI-created transaction and budget data when possible
+- Give UI-created categories a unique run-specific name, and delete them only after
+  the transactions and budgets that use them (otherwise the delete is refused as in use)
+- Never rename or delete built-in categories or categories the run did not create
 
 Browser expansion and parallel workers should be added only after serial execution and cleanup are reliable.
 
 ## Health and readiness
+
+The monitoring endpoints and their access rules are in [monitoring.md](monitoring.md).
+
+Production availability is watched by an external monitor on `/api/health` (see
+[monitoring.md](monitoring.md#external-uptime-monitoring-and-alerts)); automation should not
+poll production more often than needed, so it never looks like an incident.
+
+Every response carries an `X-Correlation-ID` header. Automation may send its own value (1–64
+characters of `A-Z a-z 0-9 . _ -`) to find its requests in the logs; any other value is
+replaced with a UUID, and the request still proceeds.
+Detailed health, metrics, and every other `/actuator` path need an access token, and in
+production they show the status only or do not exist (`404`).
 
 Before running deployed UI workflows, automation should request `GET https://finance-operations-dashboard-production.up.railway.app/api/health`.
 

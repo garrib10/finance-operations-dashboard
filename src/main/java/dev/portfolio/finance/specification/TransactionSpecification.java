@@ -107,4 +107,19 @@ public final class TransactionSpecification {
                         maxAmount
                 );
     }
+
+    /** Matches by category identity; null means no category filter. */
+    public static Specification<Transaction> hasCategory(
+            Long categoryId
+    ) {
+        if (categoryId == null) {
+            return Specification.unrestricted();
+        }
+
+        return (root, query, criteriaBuilder) ->
+                criteriaBuilder.equal(
+                        root.get("category").get("id"),
+                        categoryId
+                );
+    }
 }

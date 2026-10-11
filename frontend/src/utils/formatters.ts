@@ -20,3 +20,9 @@ export function formatDate(value: string, preference: DateFormatPreference = "ME
     year: "numeric",
   }).format(localDate);
 }
+
+/** A date input's value (YYYY-MM-DD) for the user's local day, not the UTC one. */
+export function toDateInputValue(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}

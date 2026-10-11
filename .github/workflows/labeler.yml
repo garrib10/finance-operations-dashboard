@@ -1,0 +1,24 @@
+name: Pull Request Labeler
+
+# Uses pull_request (not pull_request_target, which GitHub always runs from the default
+# branch) so the labeler works on PRs into develop and staging as well as main.
+# Dependabot PRs are skipped: their token is read-only here, and Dependabot labels its
+# own PRs. The action never checks out or runs PR code; it only reads the list of
+# changed files and the branch name.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: Label pull request
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Apply labels from .github/labeler.yml
+        uses: actions/labeler@v7

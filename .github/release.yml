@@ -1,0 +1,29 @@
+# Categories for GitHub's "Generate release notes" button, based on the labels that
+# .github/labeler.yml adds. Each PR appears once, under the first category it matches.
+
+changelog:
+  categories:
+    - title: Features
+      labels:
+        - enhancement
+    - title: Bug fixes
+      labels:
+        - bug
+    - title: Security
+      labels:
+        - security
+    - title: Database
+      labels:
+        - database
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Dependencies
+      labels:
+        - dependencies
+    - title: CI and tooling
+      labels:
+        - github_actions
+    - title: Other changes
+      labels:
+        - "*"

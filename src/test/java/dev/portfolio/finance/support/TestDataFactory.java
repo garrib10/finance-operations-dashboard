@@ -82,7 +82,7 @@ public final class TestDataFactory {
     public static Category createCategory(
             User user
     ) {
-        return new Category(
+        return Category.custom(
                 user,
                 DEFAULT_CATEGORY_NAME,
                 true
@@ -93,7 +93,7 @@ public final class TestDataFactory {
             User user,
             String name
     ) {
-        return new Category(
+        return Category.custom(
                 user,
                 name,
                 true
@@ -105,7 +105,7 @@ public final class TestDataFactory {
             String name,
             boolean budgetEnabled
     ) {
-        return new Category(
+        return Category.custom(
                 user,
                 name,
                 budgetEnabled

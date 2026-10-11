@@ -84,6 +84,18 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**")
                         .permitAll()
 
+                        // Monitoring probes (issue #20): each answers with its status alone, so
+                        // uptime checks need no credentials. Exact paths: the root
+                        // /actuator/health (which also lists the probe group names), health
+                        // components, metrics, and info still require an access token through
+                        // anyRequest() below.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/actuator/health/liveness",
+                                "/actuator/health/readiness"
+                        )
+                        .permitAll()
+
                         .requestMatchers(
                                 "/api/health",
                                 "/api/auth/register",

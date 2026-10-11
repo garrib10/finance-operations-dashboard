@@ -40,7 +40,7 @@ function PreferencesForm() {
     </div>
     <AccountFeedback failure={form.failure} success={form.success} statusRef={statusRef} alertRef={alertRef} />
     <div className="account-actions">
-      <button className="button button--primary" disabled={form.pending || unchanged}>{form.pending ? "Saving preferences..." : "Save preferences"}</button>
+      <button className="button button--tinted" disabled={form.pending || unchanged}>{form.pending ? "Saving preferences..." : "Save preferences"}</button>
       <button type="button" className="button button--secondary" disabled={form.pending} onClick={() => { setDraft(null); form.clear(); }}>Reset preferences</button>
     </div>
   </form>;
@@ -105,7 +105,7 @@ function PasswordForm() {
       {form.errors[key] && <p className="field-error" id={`password-${key}-error`}>{form.errors[key]}</p>}
     </div>)}
     <AccountFeedback failure={form.failure} success={form.success} statusRef={statusRef} alertRef={alertRef} />
-    <button className="button button--primary" disabled={form.pending}>{form.pending ? "Changing password..." : "Change password"}</button>
+    <button className="button button--tinted" disabled={form.pending}>{form.pending ? "Changing password..." : "Change password"}</button>
   </form>;
 }
 

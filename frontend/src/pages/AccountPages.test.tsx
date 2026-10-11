@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "../context/AuthProvider";
 import { AuthContext, useAuth } from "../context/AuthContext";
-import AppHeader from "../components/AppHeader";
+import { AccountMenu } from "../components/AccountMenu";
 import * as accountService from "../services/accountService";
 import * as authService from "../services/authService";
 import { ApiError } from "../services/api";
@@ -25,7 +25,7 @@ function UserProbe() {
 async function setup(page: "profile" | "settings") {
   vi.mocked(authService.refreshSession).mockResolvedValue({ accessToken: "test-session", tokenType: "Bearer", expiresIn: 300 });
   vi.mocked(authService.getCurrentUser).mockResolvedValue(accountUser);
-  render(<MemoryRouter><AuthProvider><AppHeader /><UserProbe />{page === "profile" ? <ProfilePage /> : <AccountSettingsPage />}</AuthProvider></MemoryRouter>);
+  render(<MemoryRouter><AuthProvider><AccountMenu /><UserProbe />{page === "profile" ? <ProfilePage /> : <AccountSettingsPage />}</AuthProvider></MemoryRouter>);
   await screen.findByRole("button", { name: /account menu for River Walker/i });
   return userEvent.setup();
 }
@@ -38,6 +38,20 @@ function passwords(current = "old password value", next = "new password value", 
   setField("Confirm new password", confirmation);
 }
 beforeEach(() => { vi.resetAllMocks(); localStorage.clear(); clearAccessToken(); });
+
+describe("Main buttons", () => {
+  it("use the app's tinted blue on Profile and Settings", async () => {
+    await setup("profile");
+    expect(screen.getByRole("button", { name: "Save profile" })).toHaveClass("button--tinted");
+  });
+
+  it("use the tinted blue for the photo, preferences, and password forms on Settings", async () => {
+    await setup("settings");
+    expect(screen.getByRole("button", { name: "Upload photo" })).toHaveClass("button--tinted");
+    expect(screen.getByRole("button", { name: "Save preferences" })).toHaveClass("button--tinted");
+    expect(screen.getByRole("button", { name: "Change password" })).toHaveClass("button--tinted");
+  });
+});
 
 describe("Profile form", () => {
   it("prefills canonical values, trims only approved fields, updates header, and focuses success", async () => {
@@ -185,8 +199,7 @@ describe("Password form", () => {
     await user.click(screen.getByRole("button", { name: "Change password" }));
     expect(accountService.changePassword).toHaveBeenCalledExactlyOnceWith({ currentPassword: " old password ", newPassword: next });
     // The backend revoked every session: this tab signs out without refresh or logout calls.
-    await waitFor(() => expect(screen.getByRole("link", { name: "Login" })).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: /account menu for River Walker/i })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: /account menu for River Walker/i })).not.toBeInTheDocument());
     expect(screen.getByTestId("canonical")).toHaveTextContent("null");
     expect(getAccessToken()).toBeNull();
     expect(authService.refreshSession).toHaveBeenCalledOnce();

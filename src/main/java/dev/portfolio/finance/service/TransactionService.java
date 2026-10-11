@@ -31,15 +31,18 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
     private final CategoryRepository categoryRepository;
+    private final CategorySelectionService categorySelectionService;
 
     public TransactionService(
             TransactionRepository transactionRepository,
             UserRepository userRepository,
-            CategoryRepository categoryRepository
+            CategoryRepository categoryRepository,
+            CategorySelectionService categorySelectionService
     ) {
         this.transactionRepository = transactionRepository;
         this.userRepository = userRepository;
         this.categoryRepository = categoryRepository;
+        this.categorySelectionService = categorySelectionService;
     }
 
     @Transactional
@@ -51,16 +54,11 @@ public class TransactionService {
                 .findByEmail(authenticatedEmail)
                 .orElseThrow();
 
-        Category category = categoryRepository
-                .findByIdAndUserId(
-                        request.categoryId(),
-                        user.getId()
-                )
-                .orElseThrow(() ->
-                        new CategoryNotFoundException(
-                                "Category not found"
-                        )
-                );
+        // An existing owned category, or a new one created in this same transaction.
+        Category category = categorySelectionService.resolve(
+                user,
+                request
+        );
 
         Transaction transaction = new Transaction(
                 user,
@@ -72,7 +70,7 @@ public class TransactionService {
         );
 
         Transaction savedTransaction =
-                transactionRepository.save(transaction);
+                transactionRepository.saveAndFlush(transaction);
 
         return mapToResponse(savedTransaction);
     }
@@ -136,16 +134,12 @@ public class TransactionService {
                         )
                 );
 
-        Category category = categoryRepository
-                .findByIdAndUserId(
-                        request.categoryId(),
-                        user.getId()
-                )
-                .orElseThrow(() ->
-                        new CategoryNotFoundException(
-                                "Category not found"
-                        )
-                );
+        // Resolved only after the transaction is found and owned, so a 404 never leaves
+        // a newly created category behind.
+        Category category = categorySelectionService.resolve(
+                user,
+                request
+        );
 
         transaction.update(
                 category,
@@ -156,7 +150,7 @@ public class TransactionService {
         );
 
         Transaction savedTransaction =
-                transactionRepository.save(transaction);
+                transactionRepository.saveAndFlush(transaction);
 
         return mapToResponse(savedTransaction);
     }
@@ -194,6 +188,7 @@ public class TransactionService {
                 .orElseThrow();
 
         validateFilters(filters);
+        requireOwnedFilterCategory(filters.categoryId(), user);
 
         int page = filters.page() != null
                 ? filters.page()
@@ -243,6 +238,9 @@ public class TransactionService {
                         ),
                         TransactionSpecification.amountAtMost(
                                 filters.maxAmount()
+                        ),
+                        TransactionSpecification.hasCategory(
+                                filters.categoryId()
                         )
                 );
 
@@ -258,6 +256,22 @@ public class TransactionService {
                 result.getTotalElements(),
                 result.getTotalPages()
         );
+    }
+
+    /**
+     * A category filter must name one of the user's categories. Missing and foreign IDs give
+     * the same 404 CATEGORY_NOT_FOUND as the category API, rather than an empty page that
+     * would look identical for a valid unused category.
+     */
+    private void requireOwnedFilterCategory(Long categoryId, User user) {
+        if (categoryId == null) {
+            return;
+        }
+        if (!categoryRepository.existsByIdAndUserId(categoryId, user.getId())) {
+            throw new CategoryNotFoundException(
+                    "Category not found"
+            );
+        }
     }
 
     private void validateFilters(
@@ -322,6 +336,14 @@ public class TransactionService {
             );
         }
 
+        if (filters.categoryId() != null
+                && filters.categoryId() < 1) {
+
+            throw new InvalidTransactionFilterException(
+                    "Category ID must be a positive whole number"
+            );
+        }
+
         if (filters.page() != null
                 && filters.page() < 0) {
 
@@ -347,6 +369,7 @@ public class TransactionService {
                 transaction.getId(),
                 transaction.getCategory().getId(),
                 transaction.getCategory().getName(),
+                transaction.getCategory().getIcon().key(),
                 transaction.getType(),
                 transaction.getAmount(),
                 transaction.getDescription(),

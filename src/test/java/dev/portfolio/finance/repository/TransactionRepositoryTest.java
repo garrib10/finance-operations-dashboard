@@ -791,7 +791,7 @@ class TransactionRepositoryTest {
             String name
     ) {
         return categoryRepository.save(
-                new Category(
+                Category.custom(
                         user,
                         name,
                         true

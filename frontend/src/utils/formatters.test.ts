@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCurrency, formatDate } from "./formatters";
+import { formatCurrency, formatDate, toDateInputValue } from "./formatters";
 
 describe("formatCurrency", () => {
   it("formats positive USD values with two decimal places", () => {
@@ -21,4 +21,11 @@ it("preserves calendar dates in ISO and readable formats", () => {
  expect(formatDate("2026-01-01", "ISO")).toBe("2026-01-01");
  expect(formatDate("2026-01-01", "MEDIUM")).toBe("Jan 1, 2026");
  expect(formatDate("2024-02-29", "ISO")).toBe("2024-02-29");
+});
+
+describe("toDateInputValue", () => {
+  it("uses the local calendar day with zero padding", () => {
+    expect(toDateInputValue(new Date(2026, 0, 5, 23, 30))).toBe("2026-01-05");
+    expect(toDateInputValue(new Date(2026, 11, 31, 0, 5))).toBe("2026-12-31");
+  });
 });
