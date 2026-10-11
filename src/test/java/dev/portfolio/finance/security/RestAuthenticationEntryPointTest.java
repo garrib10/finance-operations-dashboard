@@ -26,7 +26,9 @@ class RestAuthenticationEntryPointTest {
 
         entryPoint =
                 new RestAuthenticationEntryPoint(
-                        jsonMapper
+                        jsonMapper,
+                        new dev.portfolio.finance.monitoring.AuthenticationMetrics(
+                                new io.micrometer.core.instrument.simple.SimpleMeterRegistry())
                 );
 
         request =

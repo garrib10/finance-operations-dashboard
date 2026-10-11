@@ -8,6 +8,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import dev.portfolio.finance.dto.auth.LoginRequest;
 import dev.portfolio.finance.exception.auth.InvalidCredentialsException;
+import dev.portfolio.finance.monitoring.AuthenticationMetrics;
+import dev.portfolio.finance.monitoring.AuthenticationMetrics.Flow;
+import dev.portfolio.finance.monitoring.AuthenticationMetrics.Reason;
 import dev.portfolio.finance.repository.UserRepository;
 import dev.portfolio.finance.service.RefreshSessionService.IssuedSession;
 
@@ -19,17 +22,20 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final RefreshSessionService refreshSessionService;
+    private final AuthenticationMetrics metrics;
     /** Compared against when the email is unknown, so both paths pay one hash check. */
     private final String unknownAccountHash;
 
     public AuthService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            RefreshSessionService refreshSessionService
+            RefreshSessionService refreshSessionService,
+            AuthenticationMetrics metrics
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.refreshSessionService = refreshSessionService;
+        this.metrics = metrics;
         this.unknownAccountHash = passwordEncoder.encode("unknown-account-timing-placeholder");
     }
 
@@ -48,15 +54,23 @@ public class AuthService {
         if (userId.isEmpty()) {
             passwordEncoder.matches(request.password(), unknownAccountHash);
             log.info("auth.login.failed category=invalid_credentials");
+            // Same reason for an unknown email as for a wrong password: never which one.
+            metrics.failure(Flow.LOGIN, Reason.INVALID_CREDENTIALS);
             throw new InvalidCredentialsException(
                     "Invalid email or password"
             );
         }
 
-        IssuedSession session = refreshSessionService.startSession(
-                userId.get(),
-                user -> passwordEncoder.matches(request.password(), user.getPasswordHash())
-        );
+        IssuedSession session;
+        try {
+            session = refreshSessionService.startSession(
+                    userId.get(),
+                    user -> passwordEncoder.matches(request.password(), user.getPasswordHash())
+            );
+        } catch (InvalidCredentialsException ex) {
+            metrics.failure(Flow.LOGIN, Reason.INVALID_CREDENTIALS); // The wrong-password case.
+            throw ex;
+        }
 
         log.info("auth.login.succeeded userId={}", userId.get());
         return session;

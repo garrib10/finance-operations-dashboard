@@ -7,6 +7,9 @@ import java.util.Optional;
 import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import dev.portfolio.finance.monitoring.AuthenticationMetrics;
+import dev.portfolio.finance.monitoring.AuthenticationMetrics.Flow;
+import dev.portfolio.finance.monitoring.AuthenticationMetrics.Reason;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -48,6 +51,8 @@ public class RefreshSessionService {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshSessionService.class);
 
+    private final AuthenticationMetrics metrics;
+
     private final RefreshSessionRepository sessionRepository;
     private final RefreshTokenRepository tokenRepository;
     private final UserRepository userRepository;
@@ -65,8 +70,10 @@ public class RefreshSessionService {
             JwtService jwtService,
             AuthSessionProperties properties,
             Clock clock,
-            PlatformTransactionManager transactionManager
+            PlatformTransactionManager transactionManager,
+            AuthenticationMetrics metrics
     ) {
+        this.metrics = metrics;
         this.sessionRepository = sessionRepository;
         this.tokenRepository = tokenRepository;
         this.userRepository = userRepository;
@@ -128,12 +135,17 @@ public class RefreshSessionService {
     public RefreshResult refresh(PresentedRefreshCookie cookie) {
         Optional<byte[]> hash = presentedHash(cookie, "refresh");
         if (hash.isEmpty()) {
+            // No cookie is a signed-out visitor, not a failure; an unreadable or doubled one is.
+            if (cookie.state() != PresentedRefreshCookie.State.ABSENT) {
+                metrics.failure(Flow.REFRESH_TOKEN, Reason.MALFORMED);
+            }
             return RefreshResult.REJECTED;
         }
         try {
             Optional<Long> ownerId = tokenRepository.findOwnerUserIdByTokenHash(hash.get());
             if (ownerId.isEmpty()) {
                 log.info("auth.refresh.rejected category=unknown");
+                metrics.failure(Flow.REFRESH_TOKEN, Reason.INVALID);
                 return RefreshResult.REJECTED;
             }
             return transactions.execute(status -> rotateLocked(ownerId.get(), hash.get()));
@@ -168,6 +180,7 @@ public class RefreshSessionService {
         Optional<RefreshToken> locked = user.flatMap(u -> tokenRepository.findByTokenHashForUpdate(hash));
         if (locked.isEmpty() || !ownerId.equals(locked.get().getSession().getUser().getId())) {
             log.info("auth.refresh.rejected category=unknown");
+            metrics.failure(Flow.REFRESH_TOKEN, Reason.INVALID);
             return RefreshResult.REJECTED;
         }
         RefreshToken token = locked.get();
@@ -175,12 +188,14 @@ public class RefreshSessionService {
         String terminal = terminalCategory(session);
         if (terminal != null) {
             log.info("auth.refresh.rejected category={} userId={} sessionId={}", terminal, ownerId, session.getId());
+            metrics.failure(Flow.REFRESH_TOKEN, terminal.equals("revoked") ? Reason.REVOKED : Reason.EXPIRED);
             return RefreshResult.REJECTED;
         }
         if (token.isConsumed()) {
             session.revoke(RefreshSessionRevocationReason.REUSE_DETECTED, clock);
             log.warn("auth.refresh.reuse_detected userId={} sessionId={} action=family_revoked",
                     ownerId, session.getId());
+            metrics.failure(Flow.REFRESH_TOKEN, Reason.REUSED);
             return RefreshResult.REJECTED;
         }
         token.markConsumed(clock);

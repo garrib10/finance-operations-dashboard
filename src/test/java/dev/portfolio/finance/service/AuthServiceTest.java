@@ -47,7 +47,8 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         when(passwordEncoder.encode(anyString())).thenReturn(PLACEHOLDER_HASH);
-        authService = new AuthService(userRepository, passwordEncoder, refreshSessionService);
+        authService = new AuthService(userRepository, passwordEncoder, refreshSessionService,
+                new dev.portfolio.finance.monitoring.AuthenticationMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     @SuppressWarnings("unchecked")
