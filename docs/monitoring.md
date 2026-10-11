@@ -2,10 +2,10 @@
 
 FinTrack's monitoring is built in three phases under issue #20:
 
-1. **Health foundation (this document):** Spring Boot Actuator, health probes, management
-   security, and safe per-environment settings.
-2. **Metrics and logs (planned):** request and error metrics, authentication-failure counts,
-   structured JSON logs, and correlation IDs.
+1. **Health foundation:** Spring Boot Actuator, health probes, management security, and
+   safe per-environment settings.
+2. **Metrics and logs:** request and error metrics, authentication-failure counts,
+   structured JSON logs, and correlation IDs (sections below).
 3. **External monitoring (planned):** an uptime monitor, alerts, and the operations runbook.
 
 No external monitoring service, account, credential, or Railway setting is involved yet.
@@ -78,10 +78,130 @@ filesystem paths.
 
 ## Metrics
 
-Actuator brings Micrometer with an in-memory registry. JVM, HTTP-server
-(`http.server.requests`), and HikariCP connection-pool metrics (`hikaricp.connections.*`)
-are registered automatically, without custom code. No registry for an external system (such
-as Prometheus) is added until Phase 3 chooses what will read the metrics.
+Actuator brings Micrometer with an in-memory registry. No registry for an external system
+(such as Prometheus) is added until Phase 3 chooses what will read the metrics. In
+production the metrics endpoint is off; locally, read them with an access token at
+`/actuator/metrics/{name}`.
+
+### HTTP requests (built in)
+
+`http.server.requests` is a timer (count, total and maximum duration, in seconds) recorded
+by Spring for every request. Its tags are all bounded:
+
+| Tag | Values |
+| --- | --- |
+| `uri` | the route template, such as `/api/transactions/{id}`, never the real path, IDs, or query string; `UNKNOWN`/`NOT_FOUND`-style fallbacks for unmatched routes |
+| `method` | the HTTP method |
+| `status` | the response status code |
+| `outcome` | `SUCCESS`, `CLIENT_ERROR`, `SERVER_ERROR`, … (use `SERVER_ERROR` to spot 5xx) |
+| `exception` | the exception class name, or `none` |
+| `error` | the error class name, or `none` |
+
+No custom request counter or timer is added; this one already gives volume, latency, and
+server errors per route.
+
+### Authentication failures (custom)
+
+`fintrack.authentication.failures` is a counter (unit `failures`) with exactly two tags:
+
+| `flow` | `reason` | When |
+| --- | --- | --- |
+| `login` | `invalid_credentials` | wrong email or wrong password (never which one) |
+| `access_token` | `missing` | a protected request with no bearer token |
+| `access_token` | `invalid` | a bearer token that is not valid (bad signature, garbage, or a deleted account) |
+| `access_token` | `expired` | a correctly signed token past its 5-minute lifetime (the frontend then refreshes) |
+| `refresh_token` | `malformed` | a refresh cookie that is unreadable or sent twice |
+| `refresh_token` | `invalid` | a well-formed refresh token the server does not know |
+| `refresh_token` | `expired` | a refresh token whose session is past its lifetime |
+| `refresh_token` | `revoked` | a refresh token whose session was ended (logout, password change, earlier reuse) |
+| `refresh_token` | `reused` | an already-used refresh token, which ends its session family |
+
+Each failure is counted once, where it is decided: login in `AuthService`, access tokens in
+the 401 handler (so a bad token on a public endpoint is not counted), and refresh tokens in
+`RefreshSessionService`. Not counted: successful sign-in, refresh, and logout; a refresh
+with no cookie at all (every signed-out visit makes one); and server errors (those show in
+`http.server.requests`). A metrics failure never changes an authentication response. Tag
+values come from fixed enums in `AuthenticationMetrics`.
+
+### Database and connection pool (built in)
+
+`hikaricp.connections.active`, `.idle`, `.pending`, `.timeout`, `.max`, `.min`,
+`.creation`, `.acquire`, and `.usage` are registered automatically, tagged only by `pool`
+(the pool name). Nothing polls or runs extra SQL to produce them. Database connectivity
+itself is the `db` health component (above).
+
+### Labels that are never allowed
+
+No metric tag may hold a user ID, email, name, token, cookie, authorization header, IP
+address, correlation ID, transaction/budget/category ID or name, description, amount, raw
+URL, query string, exception message, or stack trace. `MonitoringMetricsIntegrationTest`
+sends such values in requests and checks that none appears in any registered tag.
+
+## Logs
+
+### Format
+
+| Profile | Format |
+| --- | --- |
+| production (`prod`) | one JSON object per line, Spring Boot's built-in Logstash format (`logging.structured.format.console=logstash`), so Railway can read `level` and `message` and keeps stack traces inside the line (capped at 8 KB) |
+| local development and tests | Spring Boot's readable text format, with the correlation ID in brackets after the thread |
+
+Fields in a production line: `@timestamp`, `level`, `logger_name`, `thread_name`,
+`message`, `correlationId` (during a request), any structured fields of the event (such as
+`method`, `route`, `status`, `durationMs`, `exception` on a failed request), and
+`stack_trace` when an exception is logged. No dependency was added for this.
+
+### Correlation IDs
+
+- **Header:** `X-Correlation-ID`, on every request and response (including 401, 403, 404,
+  and 5xx responses).
+- **Accepted:** 1–64 characters of `A-Z a-z 0-9 . _ -`. Anything else (missing, blank,
+  longer, spaces, control characters or line breaks, other punctuation, non-ASCII) is ignored
+  and a random UUID is used instead; the request itself is never rejected for it.
+- **Use:** it is in the logging context (`correlationId`) for every log line written while
+  the request runs, and is removed when the request ends, after success or failure, so a
+  reused thread never carries it into another request. It is never a credential and never a
+  metric tag. The browser does not read it (it is not a CORS-exposed header).
+- **Scope:** one request on its servlet thread. Work on other threads would not inherit it;
+  the application has none today.
+- **Finding a request:** ask the user (or a support tool) for the `X-Correlation-ID` of the
+  failed response, or send your own, then search Railway's logs for that value: every line
+  of that request, including `http.request.failed`, carries it.
+
+### What is logged
+
+- **Failed requests:** a request that ends in a 5xx or an unhandled exception gets one ERROR
+  line, `http.request.failed`, with the method, route template, status, duration, and the
+  innermost exception's class name. Never the URL, query string, headers, cookies, bodies,
+  or exception message.
+- **Routine requests:** logged only at DEBUG (`http.request.completed`), which production
+  does not show. Request volume and latency come from the `http.server.requests` metric, and
+  Railway records its own HTTP request logs, so there is no second access log.
+- **Authentication:** existing safe events (`auth.login.failed category=invalid_credentials`,
+  `auth.refresh.rejected category=…`) with no email, password, or token. Counts come from the
+  metric above.
+
+Never logged: passwords or hashes, access or refresh tokens, authorization headers, cookies,
+emails, names, photo storage keys, transaction descriptions or amounts, budget details,
+category names, request or response bodies, and database credentials or SQL.
+`CorrelationAndLogSafetyIntegrationTest` runs sign-in, refresh, financial, profile, and
+failing requests with distinctive stand-in values and checks that none reaches the logs.
+
+### Production log levels
+
+`root` and the application at INFO; no DEBUG or TRACE. Hibernate SQL at WARN and bound
+parameter values off (they hold user data); Spring Security at WARN. Startup, database,
+migration, and security failures still appear at WARN or ERROR. The existing targeted
+silences (Tomcat cookie parsing, raw Hibernate error text, validation and response-body
+diagnostics) remain in every profile.
+
+### Known limit
+
+When a request fails with an exception nothing handles, Tomcat also logs it itself, with the
+exception message and stack trace and without the correlation ID (it runs after the request
+context ends). The application's own `http.request.failed` line carries the ID. Catching every
+exception in one handler would remove that second line, but would change the 500 response
+format, so it is left for a follow-up.
 
 ## Configuration
 
@@ -109,3 +229,7 @@ These must never be exposed in any environment: `env`, `configprops`, `beans`, `
 | Database down: readiness `503 {"status":"DOWN"}` with no detail, liveness and `/api/health` still up | `ManagementDatabaseDownTest` |
 | Production profile: health only, status alone even with a token, metrics and info absent | `ProductionManagementConfigTest` |
 | An invalid setting stops startup | `ManagementConfigValidationTest` |
+| HTTP timer with route templates (no IDs or query strings), 4xx and 5xx outcomes, the authentication-failure counter per flow and reason (counted once, never for successes, logout, or a missing cookie), connection-pool meters tagged by pool only, no request value in any tag | `MonitoringMetricsIntegrationTest`, `AuthenticationMetricsTest` |
+| Correlation IDs: accepted and replaced values, response header on success and errors, logging context set during and cleared after success, handled and unhandled failures, distinct per request, never a credential | `CorrelationIdFilterTest`, `CorrelationAndLogSafetyIntegrationTest` |
+| No private value in the logs; failed requests logged once with the ID and class but not the message | `CorrelationAndLogSafetyIntegrationTest` |
+| Production JSON line: level, logger, message, correlation ID, request fields, stack trace in one line | `StructuredLoggingFormatTest` |

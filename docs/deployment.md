@@ -126,6 +126,10 @@ answer with `{"status":"UP"}` only; readiness also fails (`503`) when the databa
 They need no Railway setting or variable. The `prod` profile exposes nothing else from
 Actuator. See [monitoring.md](monitoring.md).
 
+Production logs are one JSON object per line (Spring Boot's Logstash format), with a
+`correlationId` field; every response has an `X-Correlation-ID` header to search for. No
+Railway variable is needed for either.
+
 ## Staging rollout (manual)
 
 1. Open the PR from `feature/v1.2.0-refresh-token-rotation` into `develop`. Wait for

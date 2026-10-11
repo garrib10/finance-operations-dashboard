@@ -457,6 +457,10 @@ Browser expansion and parallel workers should be added only after serial executi
 ## Health and readiness
 
 The monitoring endpoints and their access rules are in [monitoring.md](monitoring.md).
+
+Every response carries an `X-Correlation-ID` header. Automation may send its own value (1–64
+characters of `A-Z a-z 0-9 . _ -`) to find its requests in the logs; any other value is
+replaced with a UUID, and the request still proceeds.
 Detailed health, metrics, and every other `/actuator` path need an access token, and in
 production they show the status only or do not exist (`404`).
 
