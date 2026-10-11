@@ -1071,6 +1071,24 @@ describe("CategoriesPage", () => {
     });
   });
 
+  it("gives both Create category buttons the shared + icon, but not Save category", async () => {
+    const user = await renderPage();
+
+    const open = screen.getByRole("button", { name: "Create category" });
+    expect(open).toHaveClass("button--tinted");
+    expect(open.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    await user.click(open);
+    const submit = within(screen.getByRole("form", { name: "Create category" })).getByRole("button", { name: "Create category" });
+    expect(submit.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(submit).toHaveClass("button--tinted");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await chooseAction(user, "Hobbies", "Edit");
+    const save = screen.getByRole("button", { name: "Save category" });
+    expect(save.querySelector("svg")).toBeNull();
+    expect(save).toHaveClass("button--tinted");
+  });
+
   describe("page-wide checks", () => {
     // Spotify spends with no budget, so a static warning is on screen too.
     const spotify = summaryRow({ id: 40, name: "Spotify", iconKey: "music", currentMonthSpent: 12,

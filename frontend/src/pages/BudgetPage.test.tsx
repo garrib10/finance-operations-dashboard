@@ -2,7 +2,7 @@ vi.mock("../context/AuthContext", () => ({ useAuth: vi.fn() }));
 import { useAuth } from "../context/AuthContext";
 import { accountContext, accountUser, deferred } from "../test/accountFixtures";
 import type { ReactNode } from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -208,7 +208,7 @@ describe("BudgetPage", () => {
     const monthName = new Intl.DateTimeFormat("en-US", { month: "long" }).format(today);
     expect(screen.getByText(`Loading budgets for ${monthName} ${currentYear}…`)).toHaveAttribute("role", "status");
     expect(screen.getAllByRole("heading", { level: 1 }).map((heading) => heading.textContent)).toEqual(["Budgets"]);
-    expect(screen.getByRole("heading", { name: "Create Budget" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create budget" })).toBeInTheDocument();
     expect(screen.getByTestId("budget-period-filter")).toBeInTheDocument();
     expect(screen.getAllByLabelText("Month")[1]).toBeEnabled();
     expect(screen.queryByTestId(/^budget-card-/)).not.toBeInTheDocument();
@@ -221,7 +221,7 @@ describe("BudgetPage", () => {
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
     expect(
-      await screen.findByRole("heading", { name: "Monthly Budgets" }),
+      await screen.findByRole("heading", { name: "Monthly budgets" }),
     ).toBeInTheDocument();
 
     expect(
@@ -251,11 +251,11 @@ describe("BudgetPage", () => {
     expect(screen.getByText("30.0%")).toBeInTheDocument();
 
     expect(
-      screen.getByRole("heading", { name: "Budget vs. Spending" }),
+      screen.getByRole("heading", { name: "Budget vs. spending" }),
     ).toBeInTheDocument();
 
     expect(
-      screen.getByRole("heading", { name: "Budget Utilization" }),
+      screen.getByRole("heading", { name: "Budget utilization" }),
     ).toBeInTheDocument();
 
     expect(screen.getAllByTestId("bar-chart")).toHaveLength(2);
@@ -352,11 +352,11 @@ describe("BudgetPage", () => {
     ).not.toBeInTheDocument();
 
     expect(
-      screen.queryByRole("heading", { name: "Budget vs. Spending" }),
+      screen.queryByRole("heading", { name: "Budget vs. spending" }),
     ).not.toBeInTheDocument();
 
     expect(
-      screen.queryByRole("heading", { name: "Budget Utilization" }),
+      screen.queryByRole("heading", { name: "Budget utilization" }),
     ).not.toBeInTheDocument();
   });
 
@@ -383,15 +383,15 @@ describe("BudgetPage", () => {
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    await screen.findByRole("heading", { name: "Create Budget" });
+    await screen.findByRole("heading", { name: "Create budget" });
 
     const filterYearSelect = screen.getAllByLabelText("Year")[1];
 
-    expect(
-      screen.getByRole("option", {
-        name: String(savedBudgetYear),
-      }),
-    ).toBeInTheDocument();
+    // Both the form and Budget period offer every year from 2000.
+    for (const yearSelect of screen.getAllByLabelText("Year")) {
+      expect(within(yearSelect).getByRole("option", { name: String(savedBudgetYear) })).toBeInTheDocument();
+      expect(within(yearSelect).getAllByRole("option")[0]).toHaveTextContent("2000");
+    }
 
     await user.selectOptions(filterYearSelect, String(savedBudgetYear));
 
@@ -415,12 +415,12 @@ describe("BudgetPage", () => {
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    await screen.findByRole("heading", { name: "Create Budget" });
+    await screen.findByRole("heading", { name: "Create budget" });
 
     await user.selectOptions(screen.getByLabelText("Category"), "1");
-    await user.type(screen.getByLabelText("Monthly Limit"), "500");
+    await user.type(screen.getByLabelText("Monthly limit"), "500");
 
-    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+    await user.click(screen.getByRole("button", { name: "Create budget" }));
 
     await waitFor(() => {
       expect(mockCreateBudget).toHaveBeenCalledWith({
@@ -442,10 +442,10 @@ describe("BudgetPage", () => {
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    await screen.findByRole("heading", { name: "Create Budget" });
+    await screen.findByRole("heading", { name: "Create budget" });
 
     const form = screen
-      .getByRole("button", { name: "Create Budget" })
+      .getByRole("button", { name: "Create budget" })
       .closest("form");
     expect(form).not.toBeNull();
 
@@ -460,10 +460,10 @@ describe("BudgetPage", () => {
     expect(category).toHaveFocus();
 
     await user.selectOptions(screen.getByLabelText("Category"), "1");
-    await user.type(screen.getByLabelText("Monthly Limit"), "0");
+    await user.type(screen.getByLabelText("Monthly limit"), "0");
     fireEvent.submit(form!);
 
-    const monthlyLimit = screen.getByLabelText("Monthly Limit");
+    const monthlyLimit = screen.getByLabelText("Monthly limit");
     await waitFor(() => expect(monthlyLimit).toHaveAccessibleDescription(
       "Monthly limit must be greater than 0.",
     ));
@@ -490,19 +490,18 @@ describe("BudgetPage", () => {
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    await screen.findByRole("heading", { name: "Create Budget" });
+    await screen.findByRole("heading", { name: "Create budget" });
 
     await user.selectOptions(screen.getByLabelText("Category"), "1");
-    await user.type(screen.getByLabelText("Monthly Limit"), "500");
+    await user.type(screen.getByLabelText("Monthly limit"), "500");
     await user.selectOptions(
       screen.getAllByLabelText("Month")[0],
       String(nextMonth),
     );
 
     const yearInput = screen.getAllByLabelText("Year")[0];
-    await user.clear(yearInput);
-    await user.type(yearInput, String(nextYear));
-    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+    await user.selectOptions(yearInput, String(nextYear));
+    await user.click(screen.getByRole("button", { name: "Create budget" }));
 
     expect(await screen.findByText("Category is invalid.")).toBeInTheDocument();
     expect(screen.getByText("Monthly limit is invalid.")).toBeInTheDocument();
@@ -525,11 +524,11 @@ describe("BudgetPage", () => {
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    await screen.findByRole("heading", { name: "Create Budget" });
+    await screen.findByRole("heading", { name: "Create budget" });
 
     await user.selectOptions(screen.getByLabelText("Category"), "1");
-    await user.type(screen.getByLabelText("Monthly Limit"), "500");
-    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+    await user.type(screen.getByLabelText("Monthly limit"), "500");
+    await user.click(screen.getByRole("button", { name: "Create budget" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Unable to create the budget. Please try again.",
@@ -537,7 +536,7 @@ describe("BudgetPage", () => {
 
     expect(mockGetMonth).toHaveBeenCalledOnce();
     expect(screen.getByLabelText("Category")).toHaveValue("1");
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500);
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(500);
   });
 
   it("reports a refresh warning after a successful create", async () => {
@@ -554,8 +553,8 @@ describe("BudgetPage", () => {
     await screen.findByRole("heading", { name: "Groceries" });
 
     await user.selectOptions(screen.getByLabelText("Category"), "2");
-    await user.type(screen.getByLabelText("Monthly Limit"), "200");
-    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+    await user.type(screen.getByLabelText("Monthly limit"), "200");
+    await user.click(screen.getByRole("button", { name: "Create budget" }));
 
     expect((await screen.findByText(/Budget saved, but the budget list could not be refreshed\./)).closest("[role='status']"))
       .toHaveTextContent(/^Warning: /);
@@ -567,7 +566,7 @@ describe("BudgetPage", () => {
       screen.getByRole("heading", { name: "Groceries" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Category")).toHaveValue("");
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(null);
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(null);
     expect(
       screen.queryByText(/Unable to create the budget/i),
     ).not.toBeInTheDocument();
@@ -589,7 +588,7 @@ describe("BudgetPage", () => {
 
     await user.click(editButton);
 
-    const formHeading = screen.getByRole("heading", { name: "Edit Budget" });
+    const formHeading = screen.getByRole("heading", { name: "Edit budget" });
 
     expect(formHeading).toBeInTheDocument();
     expect(formHeading).toHaveAttribute("tabindex", "-1");
@@ -604,14 +603,14 @@ describe("BudgetPage", () => {
     });
 
     expect(screen.getByLabelText("Category")).toHaveValue("1");
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500);
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(500);
 
-    const monthlyLimitInput = screen.getByLabelText("Monthly Limit");
+    const monthlyLimitInput = screen.getByLabelText("Monthly limit");
 
     await user.clear(monthlyLimitInput);
     await user.type(monthlyLimitInput, "600");
 
-    await user.click(screen.getByRole("button", { name: "Update Budget" }));
+    await user.click(screen.getByRole("button", { name: "Update budget" }));
 
     await waitFor(() => {
       expect(mockUpdateBudget).toHaveBeenCalledWith(1, {
@@ -639,10 +638,10 @@ describe("BudgetPage", () => {
     await screen.findByRole("heading", { name: "Groceries" });
     await user.click(screen.getByRole("button", { name: "Edit" }));
 
-    const monthlyLimitInput = screen.getByLabelText("Monthly Limit");
+    const monthlyLimitInput = screen.getByLabelText("Monthly limit");
     await user.clear(monthlyLimitInput);
     await user.type(monthlyLimitInput, "600");
-    await user.click(screen.getByRole("button", { name: "Update Budget" }));
+    await user.click(screen.getByRole("button", { name: "Update budget" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Unable to update the budget. Please try again.",
@@ -650,7 +649,7 @@ describe("BudgetPage", () => {
 
     expect(mockGetMonth).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("heading", { name: "Edit Budget" }),
+      screen.getByRole("heading", { name: "Edit budget" }),
     ).toBeInTheDocument();
     expect(monthlyLimitInput).toHaveValue(600);
   });
@@ -675,10 +674,10 @@ describe("BudgetPage", () => {
     await screen.findByRole("heading", { name: "Groceries" });
     await user.click(screen.getByRole("button", { name: "Edit" }));
 
-    const monthlyLimitInput = screen.getByLabelText("Monthly Limit");
+    const monthlyLimitInput = screen.getByLabelText("Monthly limit");
     await user.clear(monthlyLimitInput);
     await user.type(monthlyLimitInput, "600");
-    await user.click(screen.getByRole("button", { name: "Update Budget" }));
+    await user.click(screen.getByRole("button", { name: "Update budget" }));
 
     expect((await screen.findByText(/Budget saved, but the budget list could not be refreshed\./)).closest("[role='status']"))
       .toHaveTextContent(/^Warning: /);
@@ -687,7 +686,7 @@ describe("BudgetPage", () => {
 
     expect(mockUpdateBudget).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("heading", { name: "Create Budget" }),
+      screen.getByRole("heading", { name: "Create budget" }),
     ).toBeInTheDocument();
     expect(screen.getByText("$500.00")).toBeInTheDocument();
     expect(screen.queryByText("$600.00")).not.toBeInTheDocument();
@@ -709,23 +708,23 @@ describe("BudgetPage", () => {
     await user.click(screen.getByRole("button", { name: "Edit" }));
 
     expect(
-      screen.getByRole("heading", { name: "Edit Budget" }),
+      screen.getByRole("heading", { name: "Edit budget" }),
     ).toBeInTheDocument();
 
     expect(screen.getByLabelText("Category")).toHaveValue("1");
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500);
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(500);
 
-    await user.click(screen.getByRole("button", { name: "Cancel Edit" }));
+    await user.click(screen.getByRole("button", { name: "Cancel edit" }));
 
     expect(
-      screen.getByRole("heading", { name: "Create Budget" }),
+      screen.getByRole("heading", { name: "Create budget" }),
     ).toBeInTheDocument();
 
     expect(screen.getByLabelText("Category")).toHaveValue("");
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(null);
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(null);
 
     expect(
-      screen.queryByRole("button", { name: "Cancel Edit" }),
+      screen.queryByRole("button", { name: "Cancel edit" }),
     ).not.toBeInTheDocument();
 
     await waitFor(() => {
@@ -779,9 +778,9 @@ describe("BudgetPage", () => {
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Create Budget" }),
+      await screen.findByRole("heading", { name: "Create budget" }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Cancel Edit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel edit" })).toBeNull();
   });
 
   it.each([
@@ -842,12 +841,12 @@ describe("BudgetPage", () => {
 
     render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
 
-    await screen.findByRole("heading", { name: "Create Budget" });
+    await screen.findByRole("heading", { name: "Create budget" });
 
     await user.selectOptions(screen.getByLabelText("Category"), "1");
-    await user.type(screen.getByLabelText("Monthly Limit"), "500");
+    await user.type(screen.getByLabelText("Monthly limit"), "500");
 
-    await user.click(screen.getByRole("button", { name: "Create Budget" }));
+    await user.click(screen.getByRole("button", { name: "Create budget" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Budget already exists for this category and month",
@@ -909,7 +908,7 @@ describe("BudgetPage", () => {
 
       expect(screen.getByText(`Loading budgets for ${monthName(other)} ${currentYear}…`)).toHaveAttribute("role", "status");
       expect(screen.queryByTestId("budget-card-1")).not.toBeInTheDocument();
-      expect(screen.queryByRole("heading", { name: "Budget vs. Spending" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "Budget vs. spending" })).not.toBeInTheDocument();
       expect(periodMonth()).toBeEnabled();
     });
 
@@ -949,7 +948,7 @@ describe("BudgetPage", () => {
       const alert = await screen.findByRole("alert");
       expect(alert).toHaveTextContent("Unable to load budget information. Please try again.");
       expect(screen.queryByText(/No budgets found for/)).not.toBeInTheDocument(); // Not an empty month.
-      expect(screen.getByRole("heading", { name: "Create Budget" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Create budget" })).toBeInTheDocument();
       expect(screen.getByTestId("budget-period-filter")).toBeInTheDocument();
 
       const retry = screen.getByRole("button", { name: "Try again" });
@@ -969,9 +968,9 @@ describe("BudgetPage", () => {
       analyticsFixture.mockResolvedValue({ ...groceriesAnalytics, month: other });
 
       await user.selectOptions(screen.getByLabelText("Category"), "1");
-      await user.type(screen.getByLabelText("Monthly Limit"), "500");
+      await user.type(screen.getByLabelText("Monthly limit"), "500");
       await user.selectOptions(document.getElementById("budget-month")!, String(other));
-      await user.click(screen.getByRole("button", { name: "Create Budget" }));
+      await user.click(screen.getByRole("button", { name: "Create budget" }));
 
       expect(await screen.findByTestId("budget-card-1")).toBeInTheDocument();
       expect(periodMonth()).toHaveValue(String(other));
@@ -989,5 +988,29 @@ describe("BudgetPage", () => {
 
       expect(signal.aborted).toBe(true);
     });
+  });
+
+  it("uses the shared button styles: the tinted + Create budget and Update budget, and a red-text Delete", async () => {
+    const user = userEvent.setup();
+    // A budget saved beyond the usual years (2045, opened from a link) can still be edited.
+    budgetsFixture.mockResolvedValue([{ ...groceriesBudget, year: 2045, month: 1 }]);
+    analyticsFixture.mockResolvedValue({ ...groceriesAnalytics, year: 2045, month: 1 });
+    render(<MemoryRouter initialEntries={["/budgets?month=1&year=2045"]}><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
+
+    const create = await screen.findByRole("button", { name: "Create budget" });
+    expect(create).toHaveClass("button--tinted");
+    expect(create.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(within(screen.getAllByLabelText("Year")[0]).getAllByRole("option").at(-1)).toHaveTextContent(String(currentYear + 10));
+
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
+    expect(document.getElementById("budget-year")).toHaveValue("2045");
+    const update = screen.getByRole("button", { name: "Update budget" });
+    expect(update).toHaveClass("button--tinted");
+    expect(update.querySelector("svg")).toBeNull();
+
+    const remove = screen.getByRole("button", { name: "Delete" });
+    expect(remove).toHaveClass("button--secondary", "button--destructive");
+    expect(screen.getByRole("button", { name: "Edit" })).toHaveClass("button--secondary", "button--edit");
+    expect(screen.getByRole("button", { name: "Edit" })).not.toHaveClass("button--destructive");
   });
 });

@@ -24,7 +24,7 @@ function ProtectedRoute() {
           </div>
 
           <button
-            className="button button--primary"
+            className="button button--tinted"
             type="button"
             disabled={isLoading}
             onClick={() => void retrySessionRestore()}

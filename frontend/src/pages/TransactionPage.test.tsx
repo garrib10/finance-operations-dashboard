@@ -120,8 +120,8 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     const loading = await screen.findByText("Loading transactions…");
     expect(loading).toHaveAttribute("role", "status");
     expect(screen.getAllByRole("heading", { level: 1 }).map((heading) => heading.textContent)).toEqual(["Transactions"]);
-    expect(screen.getByRole("heading", { name: "Filter Transactions" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Transaction History" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Filter transactions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Transaction history" })).toBeInTheDocument();
     expect(screen.getByLabelText("Search")).toBeEnabled();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.queryByText("No transactions found.")).not.toBeInTheDocument();
@@ -188,31 +188,31 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     const iconFor = (label: string) => screen.getByLabelText(label).parentElement?.querySelector("svg");
 
     // Date inputs already have the browser's calendar button, so no second icon.
-    expect(iconFor("Start Date")).toBeNull();
-    expect(iconFor("End Date")).toBeNull();
+    expect(iconFor("Start date")).toBeNull();
+    expect(iconFor("End date")).toBeNull();
 
     // Search and amounts wait for input, like the form's Amount and Description.
     expect(iconFor("Search")).toBeNull();
-    expect(iconFor("Minimum Amount")).toBeNull();
-    expect(iconFor("Maximum Amount")).toBeNull();
+    expect(iconFor("Minimum amount")).toBeNull();
+    expect(iconFor("Maximum amount")).toBeNull();
     await user.type(screen.getByLabelText("Search"), "f");
-    await user.type(screen.getByLabelText("Minimum Amount"), "1");
-    await user.type(screen.getByLabelText("Maximum Amount"), "9");
+    await user.type(screen.getByLabelText("Minimum amount"), "1");
+    await user.type(screen.getByLabelText("Maximum amount"), "9");
     expect(iconFor("Search")).toHaveClass("lucide-search");
-    expect(iconFor("Minimum Amount")).toHaveClass("lucide-dollar-sign");
-    expect(iconFor("Maximum Amount")).toHaveClass("lucide-dollar-sign");
+    expect(iconFor("Minimum amount")).toHaveClass("lucide-dollar-sign");
+    expect(iconFor("Maximum amount")).toHaveClass("lucide-dollar-sign");
 
     const typeFilter = screen.getByLabelText("Type", { selector: "#filter-type" });
     expect(typeFilter.parentElement?.querySelector("svg")).toHaveClass("category-icon--placeholder");
     await user.selectOptions(typeFilter, "INCOME");
     expect(typeFilter.parentElement?.querySelector("svg")).toHaveClass("transaction-type-icon--income");
 
-    const sortBy = screen.getByLabelText("Sort By");
-    expect(iconFor("Sort By")).toHaveClass("lucide-calendar-days");
+    const sortBy = screen.getByLabelText("Sort by");
+    expect(iconFor("Sort by")).toHaveClass("lucide-calendar-days");
     await user.selectOptions(sortBy, "amount");
-    expect(iconFor("Sort By")).toHaveClass("lucide-dollar-sign");
+    expect(iconFor("Sort by")).toHaveClass("lucide-dollar-sign");
     await user.selectOptions(sortBy, "createdAt");
-    expect(iconFor("Sort By")).toHaveClass("lucide-calendar-plus");
+    expect(iconFor("Sort by")).toHaveClass("lucide-calendar-plus");
 
     // Direction's arrow flips with the order.
     expect(iconFor("Direction")).toHaveClass("lucide-arrow-down-wide-narrow");
@@ -255,7 +255,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     await user.click(
       screen.getByRole("button", {
-        name: "Add Transaction",
+        name: "Add transaction",
       }),
     );
 
@@ -286,7 +286,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     await user.click(editButton);
 
     const formHeading = screen.getByRole("heading", {
-      name: "Edit Transaction",
+      name: "Edit transaction",
     });
 
     expect(formHeading).toBeInTheDocument();
@@ -305,7 +305,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     expect(
       screen.getByRole("button", {
-        name: "Update Transaction",
+        name: "Update transaction",
       }),
     ).toBeInTheDocument();
   });
@@ -321,7 +321,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(
-      screen.getByRole("heading", { name: "Add Transaction" }),
+      screen.getByRole("heading", { name: "Add transaction" }),
     ).toBeInTheDocument();
 
     await waitFor(() => {
@@ -344,7 +344,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     await user.click(
       screen.getByRole("button", {
-        name: "Update Transaction",
+        name: "Update transaction",
       }),
     );
 
@@ -378,7 +378,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     await user.click(
       screen.getByRole("button", {
-        name: "Add Transaction",
+        name: "Add transaction",
       }),
     );
 
@@ -450,7 +450,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
         );
       }
 
-      await user.click(screen.getByRole("button", { name: "Add Transaction" }));
+      await user.click(screen.getByRole("button", { name: "Add transaction" }));
 
       const input = selector
         ? screen.getByLabelText(label, { selector })
@@ -477,7 +477,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     await screen.findByText("Food Lion");
     await completeTransactionForm();
-    await user.click(screen.getByRole("button", { name: "Add Transaction" }));
+    await user.click(screen.getByRole("button", { name: "Add transaction" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Transaction could not be saved.",
@@ -518,7 +518,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     await user.click(
       screen.getByRole("button", {
-        name: "Add Transaction",
+        name: "Add transaction",
       }),
     );
 
@@ -557,7 +557,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     await user.click(
       screen.getByRole("button", {
-        name: "Update Transaction",
+        name: "Update transaction",
       }),
     );
 
@@ -569,7 +569,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     expect(transactionService.getTransactions).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("heading", { name: "Edit Transaction" }),
+      screen.getByRole("heading", { name: "Edit transaction" }),
     ).toBeInTheDocument();
     expect(descriptionInput).toHaveValue("Updated Grocery Store");
   });
@@ -588,7 +588,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     await user.click(
       screen.getByRole("button", {
-        name: "Add Transaction",
+        name: "Add transaction",
       }),
     );
 
@@ -626,7 +626,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     await user.click(
       screen.getByRole("button", {
-        name: "Update Transaction",
+        name: "Update transaction",
       }),
     );
 
@@ -637,7 +637,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
 
     expect(transactionService.updateTransaction).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("heading", { name: "Add Transaction" }),
+      screen.getByRole("heading", { name: "Add transaction" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Cancel" }),
@@ -681,7 +681,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Add Transaction" }),
+      await screen.findByRole("heading", { name: "Add transaction" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Cancel" }),
@@ -737,16 +737,16 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       "EXPENSE",
     );
 
-    await user.type(screen.getByLabelText("Start Date"), "2026-09-01");
-    await user.type(screen.getByLabelText("End Date"), "2026-09-30");
-    await user.type(screen.getByLabelText("Minimum Amount"), "25");
-    await user.type(screen.getByLabelText("Maximum Amount"), "100");
-    await user.selectOptions(screen.getByLabelText("Sort By"), "amount");
+    await user.type(screen.getByLabelText("Start date"), "2026-09-01");
+    await user.type(screen.getByLabelText("End date"), "2026-09-30");
+    await user.type(screen.getByLabelText("Minimum amount"), "25");
+    await user.type(screen.getByLabelText("Maximum amount"), "100");
+    await user.selectOptions(screen.getByLabelText("Sort by"), "amount");
     await user.selectOptions(screen.getByLabelText("Direction"), "asc");
 
     await user.click(
       screen.getByRole("button", {
-        name: "Apply Filters",
+        name: "Apply filters",
       }),
     );
 
@@ -787,7 +787,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
 
     await screen.findByText("Food Lion");
-    await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+    await user.click(screen.getByRole("button", { name: "Apply filters" }));
 
     expect(await screen.findByText(message)).toBeInTheDocument();
   });
@@ -803,11 +803,11 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
       screen.getByLabelText("Type", { selector: "#filter-type" }),
       "EXPENSE",
     );
-    await user.type(screen.getByLabelText("Start Date"), "2026-09-01");
-    await user.type(screen.getByLabelText("End Date"), "2026-09-30");
-    await user.type(screen.getByLabelText("Minimum Amount"), "25");
-    await user.type(screen.getByLabelText("Maximum Amount"), "100");
-    await user.selectOptions(screen.getByLabelText("Sort By"), "amount");
+    await user.type(screen.getByLabelText("Start date"), "2026-09-01");
+    await user.type(screen.getByLabelText("End date"), "2026-09-30");
+    await user.type(screen.getByLabelText("Minimum amount"), "25");
+    await user.type(screen.getByLabelText("Maximum amount"), "100");
+    await user.selectOptions(screen.getByLabelText("Sort by"), "amount");
     await user.selectOptions(screen.getByLabelText("Direction"), "asc");
 
     await user.click(screen.getByRole("button", { name: "Reset" }));
@@ -822,7 +822,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
     });
 
     expect(screen.getByLabelText("Search")).toHaveValue("");
-    expect(screen.getByLabelText("Sort By")).toHaveValue("transactionDate");
+    expect(screen.getByLabelText("Sort by")).toHaveValue("transactionDate");
     expect(screen.getByLabelText("Direction")).toHaveValue("desc");
   });
 
@@ -940,7 +940,7 @@ describe.each([10, 25, 50] as const)("TransactionPage with page size %s", (pageS
    expect(await screen.findByText("2026-09-10")).toBeInTheDocument();
    expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, size: 25 }), expect.any(AbortSignal));
    await userEvent.type(screen.getByLabelText("Search"), "Food");
-   await userEvent.click(screen.getByRole("button", { name: "Apply Filters" }));
+   await userEvent.click(screen.getByRole("button", { name: "Apply filters" }));
    expect(transactionService.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ size: 25, search: "Food" }), expect.any(AbortSignal));
    vi.mocked(useAuth).mockReturnValue(accountContext({ ...accountUser, preferences: { dateFormat: "ISO", transactionPageSize: 50 } }));
    rerender(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
@@ -992,10 +992,10 @@ it("keeps newer filter results when an older filter request completes later", as
   await screen.findByText("Food Lion");
   const user = userEvent.setup();
   await user.type(screen.getByLabelText("Search"), "Old");
-  await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+  await user.click(screen.getByRole("button", { name: "Apply filters" }));
   await user.clear(screen.getByLabelText("Search"));
   await user.type(screen.getByLabelText("Search"), "Latest");
-  await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+  await user.click(screen.getByRole("button", { name: "Apply filters" }));
   await screen.findByText("Latest filtered result");
   await act(async () => older.resolve(createPagedResponse([{ ...transaction, description: "Obsolete filtered result" }])));
   expect(screen.getByText("Latest filtered result")).toBeInTheDocument();
@@ -1036,7 +1036,7 @@ describe("TransactionPage loading and stale requests", () => {
   async function search(user: ReturnType<typeof userEvent.setup>, text: string) {
     await user.clear(screen.getByLabelText("Search"));
     await user.type(screen.getByLabelText("Search"), text);
-    await user.click(screen.getByRole("button", { name: "Apply Filters" }));
+    await user.click(screen.getByRole("button", { name: "Apply filters" }));
   }
 
   it("never shows the old rows under new filters, and only the newest request ends loading", async () => {
@@ -1089,7 +1089,7 @@ describe("TransactionPage loading and stale requests", () => {
     expect(alert).toHaveTextContent("Unable to load transaction data. Please try again.");
     expect(screen.getByText("Transactions could not be loaded.")).toBeInTheDocument();
     expect(screen.queryByText("No transactions found.")).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Filter Transactions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Filter transactions" })).toBeInTheDocument();
     const failedRequest = getTransactions().mock.calls[0][0];
 
     const retry = screen.getByRole("button", { name: "Try again" });
@@ -1137,4 +1137,26 @@ describe("TransactionPage loading and stale requests", () => {
 
     expect(signal.aborted).toBe(true);
   });
+});
+
+it("uses the shared button styles: tinted + Add transaction, Update transaction, and Apply filters, and a red-text Delete", async () => {
+  vi.clearAllMocks();
+  vi.mocked(useAuth).mockReturnValue(accountContext());
+  vi.mocked(categoryService.getCategories).mockResolvedValue(categories);
+  vi.mocked(transactionService.getTransactions).mockResolvedValue(createPagedResponse());
+  render(<MemoryRouter><CategoryProvider><TransactionPage /></CategoryProvider></MemoryRouter>);
+  await screen.findByText("Food Lion");
+
+  const add = screen.getByRole("button", { name: "Add transaction" });
+  expect(add).toHaveClass("button--tinted");
+  expect(add.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+  expect(screen.getByRole("button", { name: "Apply filters" })).toHaveClass("button--tinted");
+  expect(screen.getByRole("button", { name: "Delete" })).toHaveClass("button--secondary", "button--destructive");
+  expect(screen.getByRole("button", { name: "Edit" })).toHaveClass("button--secondary", "button--edit");
+  expect(screen.getByRole("button", { name: "Edit" })).not.toHaveClass("button--destructive");
+
+  await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+  const update = screen.getByRole("button", { name: "Update transaction" });
+  expect(update.querySelector("svg")).toBeNull();
+  expect(update).toHaveClass("button--tinted");
 });

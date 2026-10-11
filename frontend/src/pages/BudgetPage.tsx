@@ -22,7 +22,7 @@ import {
 import { CATEGORY_DUPLICATE, CATEGORY_NOT_FOUND } from "../services/categoryService";
 import { useCategories } from "../context/CategoryContext";
 import { CategoryIcon, CategoryLabel } from "../components/CategoryIcon";
-import { CalendarDays, CalendarRange, Tags, Wallet } from "lucide-react";
+import { CalendarDays, CalendarRange, Plus, Tags, Wallet } from "lucide-react";
 import { IconField } from "../components/IconField";
 import { InlineNotice } from "../components/InlineNotice";
 import { CategoryRefreshNotice } from "../components/CategoryRefreshNotice";
@@ -84,12 +84,12 @@ const monthOptions = Array.from({ length: 12 }, (_, index) => ({
 const currentYear = new Date().getFullYear();
 
 /**
- * 2000 (the earliest budget year) to three years ahead. Only the shown month is loaded, so
- * the years are no longer taken from every budget the user has; this range keeps any past
- * budget reachable.
+ * 2000 (the earliest budget year) to ten years ahead, for both the form and Budget Period.
+ * Only the shown month is loaded, so the years are no longer taken from every budget the
+ * user has; this range keeps past budgets reachable and leaves room to plan ahead.
  */
 const defaultYearOptions = Array.from(
-  { length: currentYear + 3 - 2000 + 1 },
+  { length: currentYear + 10 - 2000 + 1 },
   (_, index) => 2000 + index,
 );
 
@@ -170,6 +170,11 @@ function BudgetPage() {
       setViewYear(String(linkedPeriod.year));
     }
   }
+
+  // The form offers the same years, plus a saved budget's year if it is outside them.
+  const formYearOptions = Array.from(
+    new Set([...defaultYearOptions, ...(Number(form.year) >= 2000 ? [Number(form.year)] : [])]),
+  ).sort((firstYear, secondYear) => firstYear - secondYear);
 
   // The linked year may be outside the usual range, so it is always offered.
   const yearOptions = Array.from(
@@ -570,7 +575,7 @@ function BudgetPage() {
 
       <section>
         <h2 ref={formHeadingRef} tabIndex={-1}>
-          {editingBudgetId !== null ? "Edit Budget" : "Create Budget"}
+          {editingBudgetId !== null ? "Edit budget" : "Create budget"}
         </h2>
 
         <form ref={formRef} className="budget-form" onSubmit={handleSubmit} noValidate>
@@ -606,7 +611,7 @@ function BudgetPage() {
           />
 
           <div className="form-field">
-            <label htmlFor="budget-monthly-limit">Monthly Limit</label>
+            <label htmlFor="budget-monthly-limit">Monthly limit</label>
 
             <IconField icon={Wallet}>
               <input
@@ -657,15 +662,20 @@ function BudgetPage() {
             <label htmlFor="budget-year">Year</label>
 
             <IconField icon={CalendarRange}>
-              <input
+              {/* The same years as Budget Period, plus the edited budget's own year. */}
+              <select
                 id="budget-year"
-                type="number"
-                min="2000"
                 value={form.year}
                 aria-invalid={validationErrors.year ? true : undefined}
                 aria-describedby={validationErrors.year ? "budget-year-error" : undefined}
                 onChange={(event) => updateField("year", event.target.value)}
-              />
+              >
+                {formYearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
             </IconField>
 
             {validationErrors.year && (
@@ -674,12 +684,16 @@ function BudgetPage() {
           </div>
 
           <div>
-            <button type="submit" className="button" disabled={isSubmitting}>
+            <button
+              type="submit"
+              className={editingBudgetId !== null ? "button button--tinted" : "button button--tinted button--icon"}
+              disabled={isSubmitting}
+            >
               {isSubmitting
                 ? "Saving..."
                 : editingBudgetId !== null
-                  ? "Update Budget"
-                  : "Create Budget"}
+                  ? "Update budget"
+                  : <><Plus aria-hidden="true" focusable="false" size={16} />Create budget</>}
             </button>
 
             {editingBudgetId !== null && (
@@ -689,7 +703,7 @@ function BudgetPage() {
                 onClick={handleCancelEdit}
                 disabled={isSubmitting}
               >
-                Cancel Edit
+                Cancel edit
               </button>
             )}
           </div>
@@ -704,7 +718,7 @@ function BudgetPage() {
 
       <section className="budget-filter-section">
         <div>
-          <h2>Budget Period</h2>
+          <h2>Budget period</h2>
 
           <p>View budgets for a specific month.</p>
         </div>
@@ -777,7 +791,7 @@ function BudgetPage() {
         <div className="budget-charts-grid">
           <section className="budget-chart-section">
             <div>
-              <h2>Budget vs. Spending</h2>
+              <h2>Budget vs. spending</h2>
 
               <p>Compare monthly limits with actual spending by category.</p>
             </div>
@@ -805,14 +819,14 @@ function BudgetPage() {
 
                   <Bar
                     dataKey="limit"
-                    name="Monthly Limit"
+                    name="Monthly limit"
                     fill="var(--color-primary)"
                     radius={[6, 6, 0, 0]}
                   />
 
                   <Bar
                     dataKey="spent"
-                    name="Amount Spent"
+                    name="Amount spent"
                     fill="var(--color-text-muted)"
                     radius={[6, 6, 0, 0]}
                   />
@@ -823,7 +837,7 @@ function BudgetPage() {
 
           <section className="budget-chart-section">
             <div>
-              <h2>Budget Utilization</h2>
+              <h2>Budget utilization</h2>
 
               <p>Percentage of each monthly budget currently used.</p>
             </div>
@@ -863,7 +877,7 @@ function BudgetPage() {
       )}
 
       <section>
-        <h2>Monthly Budgets</h2>
+        <h2>Monthly budgets</h2>
 
         {/* The month's area alone waits or fails; the heading, form, and month selects stay. */}
         {!shownMonth && loadStatus === "loading" ? (
@@ -915,13 +929,13 @@ function BudgetPage() {
                   </div>
                   <div className="budget-card__content">
                     <div>
-                      <span>Monthly Limit:</span>
+                      <span>Monthly limit:</span>
 
                       <strong>{formatCurrency(budget.monthlyLimit)}</strong>
                     </div>
 
                     <div>
-                      <span>Amount Spent:</span>
+                      <span>Amount spent:</span>
 
                       <strong>
                         {formatCurrency(budget.amountSpent)}
@@ -947,7 +961,7 @@ function BudgetPage() {
                   <div className="budget-card__actions">
                     <button
                       type="button"
-                      className="button button--secondary"
+                      className="button button--secondary button--edit"
                       data-budget-edit-id={budget.budgetId}
                       onClick={() => handleEditBudget(budget)}
                     >
@@ -956,7 +970,7 @@ function BudgetPage() {
 
                     <button
                       type="button"
-                      className="button button--secondary"
+                      className="button button--secondary button--destructive"
                       onClick={() => {
                         void handleDeleteBudget(budget);
                       }}

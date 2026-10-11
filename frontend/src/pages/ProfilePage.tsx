@@ -56,7 +56,7 @@ function ProfilePage() {
       </div>
       <AccountFeedback failure={form.failure} success={form.success} statusRef={statusRef} alertRef={alertRef} />
       <div className="account-actions">
-        <button className="button button--primary" disabled={form.pending || unchanged}>{form.pending ? "Saving profile..." : "Save profile"}</button>
+        <button className="button button--tinted" disabled={form.pending || unchanged}>{form.pending ? "Saving profile..." : "Save profile"}</button>
         <button type="button" className="button button--secondary" disabled={form.pending} onClick={() => { setDraft(null); form.clear(); }}>Reset profile</button>
       </div>
     </form>

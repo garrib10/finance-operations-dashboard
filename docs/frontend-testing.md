@@ -485,7 +485,7 @@ still needs a person.
   a card under 12rem wide now puts the name on its own row (container query; 375 px and
   wider unchanged)
 - [x] The same widths on a Budgets month link (`?category=25&month=9&year=2026`): no
-  horizontal scroll, focus on "Edit Budget"
+  horizontal scroll, focus on "Edit budget"
 - [x] Tab order: Month → Year → Back to current month → Create category → search, filter,
   sort → section toggle → card links → Other toggle; Enter on Back to current month leaves
   focus on Month; Enter on a section toggle flips `aria-expanded` and keeps focus
@@ -500,7 +500,7 @@ still needs a person.
 - [x] VoiceOver in Safari (October 9, 2026, by hand): "Showing August 2026" and "Showing
   September 2026" each spoken once after switching months; "Back to current month,
   button", "Create category, button", and the create form's "Category name, edit text"
-  read as expected. Budget link names, the "Edit Budget" focus target, and toggle states
+  read as expected. Budget link names, the "Edit budget" focus target, and toggle states
   were confirmed in the accessibility tree by the scripted pass, not by ear. (Return in the
   create form's name field submits it, as it should; a category created by accident
   during the check was deleted.)

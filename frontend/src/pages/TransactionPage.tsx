@@ -52,6 +52,7 @@ import {
   CalendarDays,
   CalendarPlus,
   DollarSign,
+  Plus,
   Search,
   Tags,
   type LucideIcon,
@@ -667,8 +668,8 @@ function TransactionPage() {
         <div>
           <h2 ref={formHeadingRef} tabIndex={-1}>
             {editingTransactionId !== null
-              ? "Edit Transaction"
-              : "Add Transaction"}
+              ? "Edit transaction"
+              : "Add transaction"}
           </h2>
 
           <p>
@@ -827,14 +828,14 @@ function TransactionPage() {
           <div>
             <button
               type="submit"
-              className="button button--primary"
+              className={editingTransactionId !== null ? "button button--tinted" : "button button--tinted button--icon"}
               disabled={isSubmitting}
             >
               {isSubmitting
                 ? "Saving..."
                 : editingTransactionId !== null
-                  ? "Update Transaction"
-                  : "Add Transaction"}
+                  ? "Update transaction"
+                  : <><Plus aria-hidden="true" focusable="false" size={16} />Add transaction</>}
             </button>
 
             {editingTransactionId !== null && (
@@ -852,7 +853,7 @@ function TransactionPage() {
 
       <section>
         <div>
-          <h2>Filter Transactions</h2>
+          <h2>Filter transactions</h2>
           <p>Search, filter, and sort your financial activity.</p>
         </div>
 
@@ -930,7 +931,7 @@ function TransactionPage() {
           </div>
 
           <div className="form-field">
-            <label htmlFor="filter-start-date">Start Date</label>
+            <label htmlFor="filter-start-date">Start date</label>
 
             <input
               id="filter-start-date"
@@ -946,7 +947,7 @@ function TransactionPage() {
           </div>
 
           <div className="form-field">
-            <label htmlFor="filter-end-date">End Date</label>
+            <label htmlFor="filter-end-date">End date</label>
 
             <input
               id="filter-end-date"
@@ -962,7 +963,7 @@ function TransactionPage() {
           </div>
 
           <div className="form-field">
-            <label htmlFor="filter-min-amount">Minimum Amount</label>
+            <label htmlFor="filter-min-amount">Minimum amount</label>
 
             <IconField icon={DollarSign} showIcon={filters.minAmount !== ""}>
               <input
@@ -982,7 +983,7 @@ function TransactionPage() {
           </div>
 
           <div className="form-field">
-            <label htmlFor="filter-max-amount">Maximum Amount</label>
+            <label htmlFor="filter-max-amount">Maximum amount</label>
 
             <IconField icon={DollarSign} showIcon={filters.maxAmount !== ""}>
               <input
@@ -1002,7 +1003,7 @@ function TransactionPage() {
           </div>
 
           <div className="form-field">
-            <label htmlFor="filter-sort-by">Sort By</label>
+            <label htmlFor="filter-sort-by">Sort by</label>
 
             <IconField icon={SORT_ICONS[filters.sortBy]}>
               <select
@@ -1015,11 +1016,11 @@ function TransactionPage() {
                   })
                 }
               >
-                <option value="transactionDate">Transaction Date</option>
+                <option value="transactionDate">Transaction date</option>
 
                 <option value="amount">Amount</option>
 
-                <option value="createdAt">Created Date</option>
+                <option value="createdAt">Created date</option>
               </select>
             </IconField>
           </div>
@@ -1046,8 +1047,8 @@ function TransactionPage() {
           </div>
 
           <div>
-            <button type="submit" className="button button--primary">
-              Apply Filters
+            <button type="submit" className="button button--tinted">
+              Apply filters
             </button>
 
             <button
@@ -1065,7 +1066,7 @@ function TransactionPage() {
 
       <section>
         <div>
-          <h2 ref={historyHeadingRef} tabIndex={-1}>Transaction History</h2>
+          <h2 ref={historyHeadingRef} tabIndex={-1}>Transaction history</h2>
 
           <p>
             {transactionData && !isLoading
@@ -1124,7 +1125,7 @@ function TransactionPage() {
                     <td>
                       <button
                         type="button"
-                        className="button button--secondary"
+                        className="button button--secondary button--edit"
                         data-transaction-edit-id={transaction.id}
                         onClick={() => handleEdit(transaction)}
                       >
@@ -1133,7 +1134,7 @@ function TransactionPage() {
 
                       <button
                         type="button"
-                        className="button button--secondary"
+                        className="button button--secondary button--destructive"
                         onClick={() => {
                           void handleDelete(transaction);
                         }}

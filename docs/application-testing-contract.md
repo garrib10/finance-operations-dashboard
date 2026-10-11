@@ -185,9 +185,10 @@ Automation should reserve category, month, and year combinations for individual 
 
 ### Budget period selector
 
-The Budget Period selector includes:
+The Budget period selector includes:
 
-- Every year from 2000 (the earliest budget year) to three years after the current year
+- Every year from 2000 (the earliest budget year) to ten years after the current year (the
+  Create/Edit budget form's Year is the same dropdown, plus the edited budget's own year)
 - The linked year from a `?month=&year=` link, if outside that range
 - No duplicate year options
 - Years sorted numerically
@@ -195,14 +196,30 @@ The Budget Period selector includes:
 Any saved budget remains reachable by selecting its year and month. (Before issue #105 the
 years came from every saved budget; the page now loads only the month shown.)
 
+### Labels and buttons (v1.3.0)
+
+Budgets and Transactions use sentence case like the rest of the app, for example "Create
+budget", "Update budget", "Monthly limit", "Budget period", "Add transaction", "Apply
+filters", "Transaction history", "Start date", and "Sort by" (before v1.3.0 these were Title
+Case: "Create Budget", "Add Transaction", …). Every main action on these pages ("Add
+transaction", "Update transaction", "Apply filters", "Create budget", "Update budget",
+"Create category", "Save category"), and on Profile and Settings ("Save profile", "Upload
+photo", "Save preferences", "Change password"), and the sign-in, registration, and
+session-restore "Retry" buttons, uses the soft blue `button--tinted` style of the
+Categories card's "+ Add transaction" link; create buttons also show a decorative "+" that
+is not part of the accessible name; Cancel, Reset, and Edit are the light
+secondary style; Delete on budget cards and transaction rows has red text
+(`button--destructive`). On hover, Edit on budget cards and transaction rows takes the tinted
+blue (`button--edit`) and Delete the same look in red.
+
 ### Budgets loading (issue #105)
 
 - Each month shown costs exactly one `GET /api/budgets/analytics?month=&year=` request,
   however many budgets it has: no `GET /api/budgets` and no per-budget
   `GET /api/budgets/{id}/analytics`. Choosing another month, saving, deleting, and "Try
   again" each make one request for the month on screen (a save shows the month it was for).
-- The heading, the Create/Edit Budget form, and the Budget Period selects stay on screen;
-  while a month loads, the Monthly Budgets area shows `role="status"` "Loading budgets for
+- The heading, the Create/Edit budget form, and the Budget period selects stay on screen;
+  while a month loads, the Monthly budgets area shows `role="status"` "Loading budgets for
   {Month Year}…" and no cards or charts from the previous month.
 - A failed load shows `role="alert"` with the error and "Try again" (instead of "No budgets
   found for …"). A failed refresh after a successful save shows the warning "Budget saved,
@@ -269,7 +286,7 @@ Dashboard data is scoped to the authenticated user.
 | Monthly Expenses     | Sum of `EXPENSE` transactions in the server's current calendar month                          |
 | Recent Transactions  | Up to five transactions ordered by transaction date descending, then creation time descending |
 | Spending by Category | Current-month `EXPENSE` totals grouped by category ID (built-in and custom alike)              |
-| Monthly Budgets      | Budgets matching the server's current month and year                                          |
+| Monthly budgets      | Budgets matching the server's current month and year                                          |
 
 ## Stable automation selectors
 
@@ -340,7 +357,7 @@ server's reporting month (issue #100). No new `data-testid` values are added.
 | Reporting month | group "Reporting month" with selects "Month" (`#category-period-month`) and "Year" (2000 to the server's current year; no future months); button "Back to current month" only for an earlier month; disabled with the description "Finish or cancel the open form or confirmation to change the month." while a form or confirmation is open. URL `/categories?month={1-12}&year={yyyy}`; invalid, partial, repeated, or future values are removed with a history replacement |
 | Month loading | "Loading {Month Year}…" (`role="status"`) while another month loads (no figures, cards, or budget links shown); "Showing {Month Year}" in a visually hidden status when it arrives |
 | Selected-month wording | subtitle "How each category is used in {Month Year}: spending, budgets, and activity." for the current month, "…was used in {Month Year}…" for an earlier one (also while loading or after a failure); earlier months never say "this month" ("Active in {Month Year}", "No spending in {Month Year}") |
-| Budgets month link | `/budgets?category={id}&month={m}&year={yyyy}`: Budget Period selects show that month; focus moves to the `h2` "Edit Budget" (that month's budget) or "Create Budget" (category and month preselected); nothing is submitted. Invalid month: `month`/`year` removed by replacement, category applied to today's month. Unknown, malformed, or another user's category: `category` removed, valid month kept, no focus moved, no request about the ID. Choosing another Budget Period month removes all three |
+| Budgets month link | `/budgets?category={id}&month={m}&year={yyyy}`: Budget period selects show that month; focus moves to the `h2` "Edit budget" (that month's budget) or "Create budget" (category and month preselected); nothing is submitted. Invalid month: `month`/`year` removed by replacement, category applied to today's month. Unknown, malformed, or another user's category: `category` removed, valid month kept, no focus moved, no request about the ID. Choosing another Budget period month removes all three |
 | Active categories toggle | button "Hide active categories" / "Show active categories" with `aria-expanded` and `aria-controls="categories-active-list"`; open by default; absent while an Active card's form or confirmation is open and when nothing is active. Saved per device in `localStorage` `fintrack:categories-active-expanded` (only `"false"` closes it) |
 | Other categories toggle | button "Show other categories" / "Hide other categories" with `aria-expanded` and `aria-controls="categories-other-list"`; closed by default; absent only while the section must stay open (create form open, an Other card's form or confirmation open); with nothing active it starts open but the button is still offered. Saved per device in `localStorage` `fintrack:categories-others-expanded` |
 | Create | button "Create category" opens a form named "Create category" (fields "Category name" and the "Icon" radiogroup; submit "Create category", "Cancel") |

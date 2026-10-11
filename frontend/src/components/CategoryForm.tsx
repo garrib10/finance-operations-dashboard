@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { SubmitEvent as ReactSubmitEvent } from "react";
 import { ApiError } from "../services/api";
@@ -30,6 +31,8 @@ interface CategoryFormProps {
   onCancel: () => void;
   /** Focus the name field when the form opens (for the create form). */
   focusNameOnOpen?: boolean;
+  /** Show the "+" every create button has (for the create form). */
+  createIcon?: boolean;
   /**
    * Reports every change, so a parent can keep the draft if the form is rebuilt (for
    * example when the card moves between page sections) and reopen it with `initial`.
@@ -47,6 +50,7 @@ export function CategoryForm({
   onSubmit,
   onCancel,
   focusNameOnOpen = false,
+  createIcon = false,
   onDraftChange,
 }: CategoryFormProps) {
   const baseId = useId();
@@ -164,7 +168,12 @@ export function CategoryForm({
       />
 
       <div className="category-form__actions">
-        <button type="submit" className="button button--primary" disabled={pending}>
+        <button
+          type="submit"
+          className={createIcon ? "button button--tinted button--icon" : "button button--tinted"}
+          disabled={pending}
+        >
+          {!pending && createIcon && <Plus aria-hidden="true" focusable="false" size={16} />}
           {pending ? pendingLabel : submitLabel}
         </button>
         <button type="button" className="button button--secondary" disabled={pending} onClick={onCancel}>

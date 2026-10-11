@@ -64,14 +64,14 @@ function useBudgets(budgets: BudgetResponse[]) {
 async function renderPage() {
   const user = userEvent.setup();
   render(<MemoryRouter><CategoryProvider><BudgetPage /></CategoryProvider></MemoryRouter>);
-  await screen.findByRole("heading", { name: "Create Budget" });
+  await screen.findByRole("heading", { name: "Create budget" });
   await waitFor(() => expect(within(screen.getByLabelText("Category")).getByRole("option", { name: "Pet Care" }))
     .toBeInTheDocument());
   return user;
 }
 
 const submit = (user: ReturnType<typeof userEvent.setup>) =>
-  user.click(screen.getByRole("button", { name: /Create Budget|Update Budget/ }));
+  user.click(screen.getByRole("button", { name: /Create budget|Update budget/ }));
 
 // Full user-event flows are slow under coverage instrumentation.
 vi.setConfig({ testTimeout: 20_000 });
@@ -90,7 +90,7 @@ describe("BudgetPage categories", () => {
   it("sends only categoryId for an existing category", async () => {
     const user = await renderPage();
     await user.selectOptions(screen.getByLabelText("Category"), String(petCare.id));
-    await user.type(screen.getByLabelText("Monthly Limit"), "60");
+    await user.type(screen.getByLabelText("Monthly limit"), "60");
     await submit(user);
 
     await waitFor(() => expect(budgetService.createBudget).toHaveBeenCalledWith(
@@ -102,7 +102,7 @@ describe("BudgetPage categories", () => {
     await user.selectOptions(screen.getByLabelText("Category"), CREATE_CATEGORY_VALUE);
     await user.type(screen.getByLabelText("Category name"), "Gym");
     await user.click(screen.getByRole("radio", { name: "Dumbbell" }));
-    await user.type(screen.getByLabelText("Monthly Limit"), "45");
+    await user.type(screen.getByLabelText("Monthly limit"), "45");
     vi.mocked(categoryService.getCategories).mockResolvedValue([...sampleCategories, gym]);
     useBudgets([budget(), budget({ id: 2, categoryId: gym.id, categoryName: "Gym", categoryIconKey: "dumbbell" })]);
     await submit(user);
@@ -131,7 +131,7 @@ describe("BudgetPage categories", () => {
   });
 
   it.each([
-    ["monthlyLimit", () => screen.getByLabelText("Monthly Limit"), "Monthly limit can have at most 10 whole digits and 2 decimal places"],
+    ["monthlyLimit", () => screen.getByLabelText("Monthly limit"), "Monthly limit can have at most 10 whole digits and 2 decimal places"],
     ["newCategory.name", () => screen.getByLabelText("Category name"), "Category name contains unsupported characters"],
     ["newCategory.iconKey", () => screen.getByRole("radiogroup", { name: "Icon" }), "Icon must be one of the approved category icons"],
   ])("shows server %s beside its control, focused and invalid until edited", async (field, control, message) => {
@@ -139,7 +139,7 @@ describe("BudgetPage categories", () => {
     const user = await renderPage();
     await user.selectOptions(screen.getByLabelText("Category"), CREATE_CATEGORY_VALUE);
     await user.type(screen.getByLabelText("Category name"), "Pets");
-    await user.type(screen.getByLabelText("Monthly Limit"), "99");
+    await user.type(screen.getByLabelText("Monthly limit"), "99");
     await submit(user);
 
     const element = await waitFor(() => {
@@ -151,7 +151,7 @@ describe("BudgetPage categories", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Please check the highlighted fields.");
     expect(element.getAttribute("role") === "radiogroup" ? within(element).getByRole("radio", { name: "Tag" }) : element)
       .toHaveFocus();
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(99);
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(99);
 
     if (field === "monthlyLimit") await user.type(element, "1");
     else if (field === "newCategory.name") await user.type(element, "s");
@@ -165,11 +165,11 @@ describe("BudgetPage categories", () => {
     const user = await renderPage();
     await user.selectOptions(screen.getByLabelText("Category"), CREATE_CATEGORY_VALUE);
     await user.type(screen.getByLabelText("Category name"), "pet care");
-    await user.type(screen.getByLabelText("Monthly Limit"), "60");
+    await user.type(screen.getByLabelText("Monthly limit"), "60");
     await submit(user);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("That category already exists. Nothing was saved.");
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(60);
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(60);
     await user.click(await screen.findByRole("button", { name: "Use existing category “Pet Care”" }));
     expect(screen.getByLabelText("Category")).toHaveValue("40");
     expect(budgetService.createBudget).toHaveBeenCalledTimes(1);
@@ -180,7 +180,7 @@ describe("BudgetPage categories", () => {
       new ApiError("Budget already exists for this category and month", 409));
     const user = await renderPage();
     await user.selectOptions(screen.getByLabelText("Category"), "1");
-    await user.type(screen.getByLabelText("Monthly Limit"), "60");
+    await user.type(screen.getByLabelText("Monthly limit"), "60");
     await submit(user);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Budget already exists for this category and month");
@@ -190,7 +190,7 @@ describe("BudgetPage categories", () => {
     const user = await renderPage();
     await user.selectOptions(screen.getByLabelText("Category"), CREATE_CATEGORY_VALUE);
     await user.type(screen.getByLabelText("Category name"), "Gym");
-    await user.type(screen.getByLabelText("Monthly Limit"), "45");
+    await user.type(screen.getByLabelText("Monthly limit"), "45");
     vi.mocked(categoryService.getCategories).mockRejectedValueOnce(new Error("network"));
     await submit(user);
 
@@ -204,14 +204,14 @@ describe("BudgetPage categories", () => {
     vi.mocked(budgetService.createBudget).mockReturnValue(pending.promise);
     const user = await renderPage();
     await user.selectOptions(screen.getByLabelText("Category"), "1");
-    await user.type(screen.getByLabelText("Monthly Limit"), "45");
-    const form = screen.getByRole("button", { name: "Create Budget" }).closest("form")!;
+    await user.type(screen.getByLabelText("Monthly limit"), "45");
+    const form = screen.getByRole("button", { name: "Create budget" }).closest("form")!;
 
     form.requestSubmit();
     form.requestSubmit();
     pending.resolve(budget());
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Create Budget" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create budget" })).toBeEnabled());
     expect(budgetService.createBudget).toHaveBeenCalledTimes(1);
   });
 
@@ -250,7 +250,7 @@ describe("BudgetPage categories", () => {
       new ApiError("Category not found", 404, undefined, "CATEGORY_NOT_FOUND"));
     const user = await renderPage();
     await user.selectOptions(screen.getByLabelText("Category"), String(petCare.id));
-    await user.type(screen.getByLabelText("Monthly Limit"), "60");
+    await user.type(screen.getByLabelText("Monthly limit"), "60");
     await submit(user);
 
     await waitFor(() => expect(screen.getByLabelText("Category")).toHaveAccessibleDescription(
@@ -271,7 +271,7 @@ describe("BudgetPage categories", () => {
   it("announces a successful save in a status region", async () => {
     const user = await renderPage();
     await user.selectOptions(screen.getByLabelText("Category"), String(petCare.id));
-    await user.type(screen.getByLabelText("Monthly Limit"), "60");
+    await user.type(screen.getByLabelText("Monthly limit"), "60");
     await submit(user);
 
     expect(await screen.findByText("Budget created.")).toHaveAttribute("role", "status");
@@ -321,7 +321,7 @@ describe("BudgetPage category deep link", () => {
         <HistoryProbe />
       </MemoryRouter>,
     );
-    await screen.findByRole("heading", { name: /Create Budget|Edit Budget/ });
+    await screen.findByRole("heading", { name: /Create budget|Edit budget/ });
     return user;
   }
 
@@ -329,10 +329,10 @@ describe("BudgetPage category deep link", () => {
     await renderAt(["/budgets?category=1"]);
 
     // Focus moves in an effect after the heading changes, so wait for it.
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit budget" })).toHaveFocus());
     expect(screen.getByLabelText("Category")).toHaveValue("1");
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500);
-    expect(screen.getByRole("button", { name: "Update Budget" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(500);
+    expect(screen.getByRole("button", { name: "Update budget" })).toBeInTheDocument();
     expect(budgetService.createBudget).not.toHaveBeenCalled();
   });
 
@@ -340,10 +340,10 @@ describe("BudgetPage category deep link", () => {
     await renderAt([`/budgets?category=${petCare.id}`]);
 
     await waitFor(() => expect(screen.getByLabelText("Category")).toHaveValue(String(petCare.id)));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Create Budget" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Create budget" })).toHaveFocus());
     // The form's month and year (the period filter has its own "Month" field).
     expect(document.getElementById("budget-month")).toHaveValue(String(month));
-    expect(document.getElementById("budget-year")).toHaveValue(year);
+    expect(document.getElementById("budget-year")).toHaveValue(String(year));
     expect(budgetService.createBudget).not.toHaveBeenCalled();
   });
 
@@ -352,7 +352,7 @@ describe("BudgetPage category deep link", () => {
 
     await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent(/^\/budgets$/));
     expect(screen.getByLabelText("Category")).toHaveValue("");
-    expect(screen.getByRole("heading", { name: "Create Budget" })).not.toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Create budget" })).not.toHaveFocus();
   });
 
   it.each(["abc", "1.5", "0", "-1", "999"])("ignores %s and removes only that parameter", async (value) => {
@@ -360,18 +360,18 @@ describe("BudgetPage category deep link", () => {
 
     await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent("/budgets?tab=list"));
     expect(screen.getByLabelText("Category")).toHaveValue("");
-    expect(screen.getByRole("heading", { name: "Create Budget" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create budget" })).toBeInTheDocument();
   });
 
   it("follows browser history between linked categories", async () => {
     const user = await renderAt(["/budgets?category=1", `/budgets?category=${petCare.id}`]);
     await waitFor(() => expect(screen.getByLabelText("Category")).toHaveValue(String(petCare.id)));
-    expect(screen.getByRole("heading", { name: "Create Budget" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create budget" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "History back" }));
 
     // Focus moves in an effect after the heading changes, so wait for it.
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit budget" })).toHaveFocus());
     expect(screen.getByLabelText("Category")).toHaveValue("1");
   });
 });
@@ -397,19 +397,19 @@ describe("BudgetPage month deep link", () => {
         <HistoryProbe />
       </MemoryRouter>,
     );
-    await screen.findByRole("heading", { name: /Create Budget|Edit Budget/ });
+    await screen.findByRole("heading", { name: /Create budget|Edit budget/ });
     return { user, view };
   }
 
   it("opens the linked month and edits that month's budget, not this month's", async () => {
     await renderAt(["/budgets?category=1&month=3&year=2025"]);
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit budget" })).toHaveFocus());
     expect(viewPeriod().getByLabelText("Month")).toHaveValue("3");
     expect(viewPeriod().getByLabelText("Year")).toHaveValue("2025");
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(300);
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(300);
     expect(document.getElementById("budget-month")).toHaveValue("3");
-    expect(document.getElementById("budget-year")).toHaveValue(2025);
+    expect(document.getElementById("budget-year")).toHaveValue("2025");
     expect(screen.getByTestId("budget-card-2")).toBeInTheDocument();
     expect(screen.queryByTestId("budget-card-1")).not.toBeInTheDocument();
     // The link stays, so a refresh or a copied URL opens the same thing.
@@ -420,10 +420,10 @@ describe("BudgetPage month deep link", () => {
   it("starts a new budget for the linked month when the category has none then", async () => {
     await renderAt([`/budgets?category=${petCare.id}&month=3&year=2025`]);
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Create Budget" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Create budget" })).toHaveFocus());
     expect(screen.getByLabelText("Category")).toHaveValue(String(petCare.id));
     expect(document.getElementById("budget-month")).toHaveValue("3");
-    expect(document.getElementById("budget-year")).toHaveValue(2025);
+    expect(document.getElementById("budget-year")).toHaveValue("2025");
     expect(budgetService.createBudget).not.toHaveBeenCalled();
   });
 
@@ -431,7 +431,7 @@ describe("BudgetPage month deep link", () => {
     useBudgets([budget()]);
     await renderAt(["/budgets?category=1&month=3&year=2025"]);
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Create Budget" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Create budget" })).toHaveFocus());
     expect(screen.getByLabelText("Category")).toHaveValue("1");
     expect(document.getElementById("budget-month")).toHaveValue("3");
   });
@@ -445,12 +445,12 @@ describe("BudgetPage month deep link", () => {
 
   it("reopens the same budget after a refresh", async () => {
     const { view } = await renderAt(["/budgets?category=1&month=3&year=2025"]);
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit budget" })).toHaveFocus());
     view.unmount();
 
     await renderAt(["/budgets?category=1&month=3&year=2025"]);
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(300);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit budget" })).toHaveFocus());
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(300);
   });
 
   it.each([
@@ -464,9 +464,9 @@ describe("BudgetPage month deep link", () => {
     await renderAt([`/budgets?tab=list&category=1&${query}`]);
 
     await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent(/^\/budgets\?tab=list&category=1$/));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit budget" })).toHaveFocus());
     expect(viewPeriod().getByLabelText("Month")).toHaveValue(String(month));
-    expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500); // This month's budget.
+    expect(screen.getByLabelText("Monthly limit")).toHaveValue(500); // This month's budget.
   });
 
   it("keeps a valid month but drops an unknown or another user's category, opening nothing", async () => {
@@ -475,7 +475,7 @@ describe("BudgetPage month deep link", () => {
     await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent(/^\/budgets\?month=3&year=2025$/));
     expect(viewPeriod().getByLabelText("Month")).toHaveValue("3");
     expect(screen.getByLabelText("Category")).toHaveValue("");
-    expect(screen.getByRole("heading", { name: "Create Budget" })).not.toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Create budget" })).not.toHaveFocus();
     expect(categoryService.getCategories).toHaveBeenCalledTimes(1); // Never asks the API about the ID.
   });
 
@@ -483,20 +483,20 @@ describe("BudgetPage month deep link", () => {
     await renderAt(["/budgets?month=3&year=2025"]);
 
     expect(viewPeriod().getByLabelText("Month")).toHaveValue("3");
-    expect(screen.getByRole("heading", { name: "Create Budget" })).not.toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Create budget" })).not.toHaveFocus();
     expect(screen.getByTestId("url")).toHaveTextContent("/budgets?month=3&year=2025");
   });
 
   it("uses up the link once the user shows another month, so it is not reopened", async () => {
     const { user } = await renderAt(["/budgets?tab=list&category=1&month=3&year=2025"]);
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
-    await user.click(screen.getByRole("button", { name: "Cancel Edit" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit budget" })).toHaveFocus());
+    await user.click(screen.getByRole("button", { name: "Cancel edit" }));
 
     await user.selectOptions(viewPeriod().getByLabelText("Month"), "4");
 
     await waitFor(() => expect(screen.getByTestId("url")).toHaveTextContent(/^\/budgets\?tab=list$/));
     expect(viewPeriod().getByLabelText("Month")).toHaveValue("4");
-    expect(screen.getByRole("heading", { name: "Create Budget" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create budget" })).toBeInTheDocument();
     expect(screen.getByLabelText("Category")).toHaveValue("");
   });
 
@@ -505,11 +505,11 @@ describe("BudgetPage month deep link", () => {
       "/budgets?category=1&month=3&year=2025",
       `/budgets?category=1&month=${month}&year=${year}`,
     ]);
-    await waitFor(() => expect(screen.getByLabelText("Monthly Limit")).toHaveValue(500));
+    await waitFor(() => expect(screen.getByLabelText("Monthly limit")).toHaveValue(500));
 
     await user.click(screen.getByRole("button", { name: "History back" }));
 
-    await waitFor(() => expect(screen.getByLabelText("Monthly Limit")).toHaveValue(300));
+    await waitFor(() => expect(screen.getByLabelText("Monthly limit")).toHaveValue(300));
     expect(viewPeriod().getByLabelText("Month")).toHaveValue("3");
     expect(viewPeriod().getByLabelText("Year")).toHaveValue("2025");
     expect(screen.getByTestId("url")).toHaveTextContent("/budgets?category=1&month=3&year=2025");
@@ -517,10 +517,10 @@ describe("BudgetPage month deep link", () => {
 
   it("moves focus once: typing afterwards and the budgets loading again never take it back", async () => {
     const { user } = await renderAt(["/budgets?category=1&month=3&year=2025"]);
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit Budget" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Edit budget" })).toHaveFocus());
     expect(screen.getAllByRole("heading", { level: 1 }).map((heading) => heading.textContent)).toEqual(["Budgets"]);
 
-    const limit = screen.getByLabelText("Monthly Limit");
+    const limit = screen.getByLabelText("Monthly limit");
     await user.clear(limit);
     await user.type(limit, "325");
     expect(limit).toHaveFocus();
