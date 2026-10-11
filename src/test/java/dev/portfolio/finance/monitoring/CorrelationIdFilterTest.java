@@ -125,4 +125,31 @@ class CorrelationIdFilterTest {
         assertThat(secondSaw.get()).isEqualTo(second.getHeader(CorrelationIdFilter.HEADER))
                 .isNotEqualTo(first.getHeader(CorrelationIdFilter.HEADER));
     }
+
+    @Test
+    void redactsEveryMessageInAnExceptionChainButKeepsClassesAndFrames() {
+        IllegalStateException original = new IllegalStateException("PRIVATE outer",
+                new IllegalArgumentException("PRIVATE inner"));
+
+        Throwable redacted = CorrelationIdFilter.redacted(original, 0);
+
+        assertThat(redacted).hasMessage("java.lang.IllegalStateException (message removed)");
+        assertThat(redacted.getStackTrace()).isEqualTo(original.getStackTrace());
+        assertThat(redacted.getCause()).hasMessage("java.lang.IllegalArgumentException (message removed)");
+        assertThat(redacted.getCause().getCause()).isNull();
+    }
+
+    @Test
+    void stopsAtACycleOrTenLevels() {
+        RuntimeException deep = new RuntimeException("PRIVATE 0");
+        for (int i = 1; i < 15; i++) deep = new RuntimeException("PRIVATE " + i, deep);
+
+        Throwable redacted = CorrelationIdFilter.redacted(deep, 0);
+        int levels = 0;
+        for (Throwable t = redacted; t != null; t = t.getCause()) {
+            assertThat(t.getMessage()).doesNotContain("PRIVATE");
+            levels++;
+        }
+        assertThat(levels).isEqualTo(11);
+    }
 }

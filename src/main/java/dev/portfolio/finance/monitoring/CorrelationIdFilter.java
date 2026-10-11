@@ -31,8 +31,11 @@ import jakarta.servlet.http.HttpServletResponse;
  * other threads does not inherit the ID (the application has no such work today).
  *
  * <p>Logging: a request that ends in a 5xx or an unhandled exception is logged once at ERROR
- * with the method, route template, status, duration, and exception class name: never the
- * URL, query string, headers, cookies, bodies, or exception message. Other requests are
+ * with the method, route template, status, duration, and exception class name, plus the
+ * exception's stack trace with every message removed (class names and code locations
+ * only): never the URL, query string, headers, cookies, bodies, or exception message.
+ * Tomcat's own copy of the same failure, which prints the message and has no correlation
+ * ID, is switched off in {@code MonitoringConfig}. Other requests are
  * logged at DEBUG (off in production): Railway's own HTTP logs and the
  * {@code http.server.requests} metric already cover routine traffic.
  */
@@ -62,9 +65,30 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
         } finally {
             try {
                 logCompletion(request, response, failure, (System.nanoTime() - started) / 1_000_000);
+            } catch (RuntimeException loggingProblem) {
+                // Logging must never change a request's outcome (or hide its exception).
             } finally {
                 MDC.remove(MDC_KEY);
             }
+        }
+    }
+
+    /**
+     * A copy of an exception chain with every message removed: each level keeps only its
+     * class name and stack frames, so a log shows where it failed but never what data it held.
+     */
+    static Throwable redacted(Throwable original, int depth) {
+        Throwable cause = original.getCause();
+        Throwable redactedCause = cause != null && cause != original && depth < 10 ? redacted(cause, depth + 1) : null;
+        RedactedException copy = new RedactedException(original.getClass().getName(), redactedCause);
+        copy.setStackTrace(original.getStackTrace());
+        return copy;
+    }
+
+    /** Stands in for an exception whose message must not be logged. */
+    static final class RedactedException extends RuntimeException {
+        RedactedException(String originalClass, Throwable cause) {
+            super(originalClass + " (message removed)", cause, false, true);
         }
     }
 
@@ -85,7 +109,9 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             String exception = cause == null ? "none"
                     : NestedExceptionUtils.getMostSpecificCause(cause).getClass().getSimpleName();
             // In the text for readable local logs, and as fields for production JSON.
-            log.atError()
+            var event = log.atError();
+            if (cause != null) event = event.setCause(redacted(cause, 0));
+            event
                     .addKeyValue("method", request.getMethod())
                     .addKeyValue("route", route)
                     .addKeyValue("status", status)

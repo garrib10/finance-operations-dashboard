@@ -53,6 +53,17 @@ class ProductionManagementConfigTest {
     }
 
     @Test
+    void logsAsStructuredJsonWithoutSqlValuesOrDebugOutput() {
+        assertThat(environment.getProperty("logging.structured.format.console")).isEqualTo("logstash");
+        assertThat(environment.getProperty("spring.jpa.show-sql")).isEqualTo("false");
+        assertThat(environment.getProperty("logging.level.org.hibernate.SQL")).isEqualTo("WARN");
+        assertThat(environment.getProperty("logging.level.org.hibernate.orm.jdbc.bind")).isEqualTo("OFF");
+        assertThat(environment.getProperty("logging.level.org.springframework.security")).isEqualTo("WARN");
+        assertThat(environment.getProperty("logging.level.root")).isEqualTo("INFO");
+        assertThat(environment.getProperty("logging.level.dev.portfolio.finance")).isEqualTo("INFO");
+    }
+
+    @Test
     void evenASignedInUserSeesOnlyTheStatus() throws Exception {
         String raw = mockMvc.perform(get("/actuator/health").header(HttpHeaders.AUTHORIZATION, signedInToken()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
