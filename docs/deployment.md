@@ -118,6 +118,14 @@ hashing pepper, cookie-domain, or raw-token variable, by design.
   nonproduction backend and add the stable branch alias to that backend's
   `FRONTEND_URLS`, or expect login on previews to be rejected with `403`.
 
+## Health checks and monitoring
+
+`/api/health` is unchanged and remains the documented check. The Actuator probes
+`/actuator/health/liveness` and `/actuator/health/readiness` (issue #20) are public and
+answer with `{"status":"UP"}` only; readiness also fails (`503`) when the database is down.
+They need no Railway setting or variable. The `prod` profile exposes nothing else from
+Actuator. See [monitoring.md](monitoring.md).
+
 ## Staging rollout (manual)
 
 1. Open the PR from `feature/v1.2.0-refresh-token-rotation` into `develop`. Wait for

@@ -84,6 +84,8 @@ Invalid credentials submitted through the Login form remain a Login form error.
 | Method | Endpoint             | Purpose                                 |
 | ------ | -------------------- | --------------------------------------- |
 | `GET`  | `/api/health`        | Check backend availability              |
+| `GET`  | `/actuator/health/liveness` | Process is running: `{"status":"UP"}` (issue #20) |
+| `GET`  | `/actuator/health/readiness` | Ready, database included: `{"status":"UP"}`, or `503 {"status":"DOWN"}` |
 | `POST` | `/api/auth/register` | Register a user                         |
 | `POST` | `/api/auth/login`    | Authenticate and obtain an access token |
 
@@ -453,6 +455,10 @@ The initial automation suite should:
 Browser expansion and parallel workers should be added only after serial execution and cleanup are reliable.
 
 ## Health and readiness
+
+The monitoring endpoints and their access rules are in [monitoring.md](monitoring.md).
+Detailed health, metrics, and every other `/actuator` path need an access token, and in
+production they show the status only or do not exist (`404`).
 
 Before running deployed UI workflows, automation should request `GET https://finance-operations-dashboard-production.up.railway.app/api/health`.
 
