@@ -118,6 +118,25 @@ hashing pepper, cookie-domain, or raw-token variable, by design.
   nonproduction backend and add the stable branch alias to that backend's
   `FRONTEND_URLS`, or expect login on previews to be rejected with `403`.
 
+## Health checks and monitoring
+
+`/api/health` is unchanged and remains the documented check. The Actuator probes
+`/actuator/health/liveness` and `/actuator/health/readiness` (issue #20) are public and
+answer with `{"status":"UP"}` only; readiness also fails (`503`) when the database is down.
+They need no Railway setting or variable. The `prod` profile exposes nothing else from
+Actuator. See [monitoring.md](monitoring.md).
+
+Production logs are one JSON object per line (Spring Boot's Logstash format), with a
+`correlationId` field; every response has an `X-Correlation-ID` header to search for. No
+Railway variable is needed for either.
+
+The external uptime monitor (`FinTrack Production API Health`, every 3 minutes, 30-second
+timeout, alert after 2 consecutive failures, recovery alerts on) checks
+`/api/health` from the monitoring provider; it needs no Railway change. Expect at most one
+failed check during a deploy. Pause it before planned maintenance. Setup, ownership, and
+alert testing are in [monitoring.md](monitoring.md#external-uptime-monitoring-and-alerts);
+incident steps in [production-troubleshooting.md](production-troubleshooting.md).
+
 ## Staging rollout (manual)
 
 1. Open the PR from `feature/v1.2.0-refresh-token-rotation` into `develop`. Wait for

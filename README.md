@@ -11,6 +11,7 @@
 ![Railway](https://img.shields.io/badge/Railway-0B0D0E?logo=railway&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Vercel-black?logo=vercel)
 ![Cloudinary](https://img.shields.io/badge/Cloudinary-3448C5?logo=cloudinary&logoColor=white)
+![Better Stack](https://img.shields.io/badge/Better_Stack-5B63D3?logo=betterstack&logoColor=white)
 
 FinTrack is a production-deployed full-stack personal finance application built with Java, Spring Boot, React, TypeScript, and MySQL. It provides secure account access, transaction and budget management, financial analytics, and a responsive dashboard.
 
@@ -249,6 +250,21 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 - Swagger/OpenAPI documentation disabled in production
 - Hibernate SQL output disabled in production
 - Stack traces and internal error details excluded from API responses
+
+---
+
+## Monitoring
+
+- Public health checks: `/api/health`, plus `/actuator/health/liveness` and
+  `/actuator/health/readiness` (readiness includes the database), each returning status only.
+- Detailed health and metrics are never public; production exposes health status only.
+- Metrics for request volume, latency, server errors, and authentication failures, with
+  bounded labels and no personal or financial data.
+- Structured JSON logs in production, with an `X-Correlation-ID` on every response to find a
+  request's log lines.
+- An external uptime monitor with a repeated-failure alert.
+
+See [Monitoring](docs/monitoring.md) and [Production troubleshooting](docs/production-troubleshooting.md).
 
 ---
 

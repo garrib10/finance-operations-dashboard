@@ -84,6 +84,8 @@ Invalid credentials submitted through the Login form remain a Login form error.
 | Method | Endpoint             | Purpose                                 |
 | ------ | -------------------- | --------------------------------------- |
 | `GET`  | `/api/health`        | Check backend availability              |
+| `GET`  | `/actuator/health/liveness` | Process is running: `{"status":"UP"}` (issue #20) |
+| `GET`  | `/actuator/health/readiness` | Ready, database included: `{"status":"UP"}`, or `503 {"status":"DOWN"}` |
 | `POST` | `/api/auth/register` | Register a user                         |
 | `POST` | `/api/auth/login`    | Authenticate and obtain an access token |
 
@@ -453,6 +455,18 @@ The initial automation suite should:
 Browser expansion and parallel workers should be added only after serial execution and cleanup are reliable.
 
 ## Health and readiness
+
+The monitoring endpoints and their access rules are in [monitoring.md](monitoring.md).
+
+Production availability is watched by an external monitor on `/api/health` (see
+[monitoring.md](monitoring.md#external-uptime-monitoring-and-alerts)); automation should not
+poll production more often than needed, so it never looks like an incident.
+
+Every response carries an `X-Correlation-ID` header. Automation may send its own value (1–64
+characters of `A-Z a-z 0-9 . _ -`) to find its requests in the logs; any other value is
+replaced with a UUID, and the request still proceeds.
+Detailed health, metrics, and every other `/actuator` path need an access token, and in
+production they show the status only or do not exist (`404`).
 
 Before running deployed UI workflows, automation should request `GET https://finance-operations-dashboard-production.up.railway.app/api/health`.
 
