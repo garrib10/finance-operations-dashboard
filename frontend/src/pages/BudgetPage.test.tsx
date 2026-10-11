@@ -49,7 +49,16 @@ vi.mock("recharts", () => ({
     <div data-testid="bar-chart">{children}</div>
   ),
   CartesianGrid: () => null,
-  XAxis: () => null,
+  XAxis: ({ dataKey, interval, angle, tickFormatter }: {
+    dataKey?: string;
+    interval?: number | string;
+    angle?: number;
+    tickFormatter?: (value: string) => string;
+  }) => (
+    <div data-testid="x-axis" data-key={dataKey} data-interval={String(interval)} data-angle={angle}>
+      {tickFormatter?.("Kids Activities and Lessons") ?? ""}
+    </div>
+  ),
   YAxis: ({ tickFormatter }: { tickFormatter?: (value: number) => string }) => (
     <div data-testid="y-axis-formatted-value">{tickFormatter?.(125) ?? ""}</div>
   ),
@@ -259,6 +268,16 @@ describe("BudgetPage", () => {
     ).toBeInTheDocument();
 
     expect(screen.getAllByTestId("bar-chart")).toHaveLength(2);
+
+    // #119: both charts label every category (no ticks hidden), angled, long names shortened.
+    const xAxes = screen.getAllByTestId("x-axis");
+    expect(xAxes).toHaveLength(2);
+    for (const xAxis of xAxes) {
+      expect(xAxis).toHaveAttribute("data-key", "category");
+      expect(xAxis).toHaveAttribute("data-interval", "0");
+      expect(xAxis).toHaveAttribute("data-angle", "-45");
+      expect(xAxis).toHaveTextContent("Kids Activiti…");
+    }
 
     const yAxisValues = screen.getAllByTestId("y-axis-formatted-value");
     expect(yAxisValues[0]).toHaveTextContent("$125");
