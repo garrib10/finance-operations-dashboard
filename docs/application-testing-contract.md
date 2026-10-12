@@ -319,11 +319,11 @@ keep working.
 | Primary navigation | `nav` named "Primary navigation" with links "Dashboard" (`/`), "Transactions", "Budgets", and "Categories" (`/categories`) |
 | Current page | the matching primary link has `aria-current="page"` |
 | Brand | link "FinTrack" (to `/`) |
-| Account menu | button "Open account menu for {name}" (`#account-menu-trigger`) in the page `header`; panel `#account-menu-panel` |
+| Account menu | button "Open account menu for {name}" (`#account-menu-trigger`); panel `#account-menu-panel`, which opens upward. It is always at the bottom of the navigation (v1.4.0, issue #121): `#app-sidebar` above 1100px, the `#mobile-navigation` drawer at 1100px and below (open the drawer first). Never in the `header`; exactly one is rendered at a time |
 | Account links | inside `nav` "Account navigation": "Profile" and "Account Settings" (not in the primary navigation) |
 | Logout | button "Logout" in the open account menu |
 | Public pages | `nav` "Authentication navigation" with "Login" and "Register"; hidden while a session is being restored |
-| Landmarks | exactly one `header` and one `main#main-content`; "Skip to main content" targets it |
+| Landmarks | exactly one `header` and one `main#main-content`; "Skip to main content" targets it. The signed-in `header` holds only the menu button and brand, and is hidden (`display: none`) above 1100px |
 | Sidebar toggle (above 1100px) | button "Collapse sidebar" / "Expand sidebar" with `aria-expanded`, controlling `#app-sidebar` |
 | Menu button (1100px and below) | button "Open navigation menu" with `aria-expanded`, controlling `#mobile-navigation` |
 | Navigation drawer | `dialog` named "Navigation menu" containing the primary navigation; close button "Close navigation menu" |
@@ -333,9 +333,12 @@ icons. Collapsed links keep their names ("Dashboard", "Transactions", "Budgets")
 name-based locators work in both states (including "Categories"); the choice is saved per browser in
 `localStorage` under `fintrack:sidebar-collapsed` ("true" or "false"). At 1100px and
 below the sidebar is hidden: open the drawer with the menu button, then follow a link
-(the drawer closes on navigation, Escape, the close button, or a backdrop click). Below
-640px the account menu button shows only the avatar; its name is unchanged. Prefer role
-and name locators over layout position.
+(the drawer closes on navigation, Escape, the close button, or a backdrop click). With the
+account menu open inside the drawer, Escape closes only the account menu; a second
+Escape closes the drawer. In the collapsed desktop sidebar the account menu button shows
+only the avatar; its name is unchanged (a decorative tooltip shows the name). Crossing
+1100px moves the account menu between the sidebar and the drawer and closes it. Prefer
+role and name locators over layout position.
 
 ### Categories page (v1.3.0)
 

@@ -4,7 +4,11 @@ import { useAuth } from "../context/AuthContext";
 import { getAccountName } from "../utils/accountIdentity";
 import { Avatar } from "./Avatar";
 
-/** The signed-in user's account dropdown: identity, Profile, Account Settings, and Logout. */
+/**
+ * The signed-in user's account menu: identity, Profile, Account Settings, and Logout.
+ * It sits at the bottom of the navigation (the desktop sidebar, or the drawer at 1100px
+ * and below; issue #121), so its panel opens upward.
+ */
 export function AccountMenu() {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
@@ -35,16 +39,20 @@ export function AccountMenu() {
         return;
       }
 
+      // Escape closes only this menu: cancelling the key keeps the drawer <dialog> open.
+      event.preventDefault();
+      event.stopPropagation();
       setIsAccountMenuOpen(false);
       accountTriggerRef.current?.focus();
     }
 
     document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
+    // Capture phase: runs before the drawer dialog treats Escape as a cancel.
+    document.addEventListener("keydown", handleKeyDown, true);
 
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown, true);
     };
   }, [isAccountMenuOpen]);
 
@@ -93,9 +101,13 @@ export function AccountMenu() {
 
         <span className="account-menu__name">{fullName}</span>
 
+        {/* Closed, the arrow points where the panel opens (up); open, it flips. */}
         <span className="account-menu__chevron" aria-hidden="true">
-          {isAccountMenuOpen ? "▴" : "▾"}
+          {isAccountMenuOpen ? "▾" : "▴"}
         </span>
+
+        {/* Shown only for the collapsed desktop sidebar; the button's label is its name. */}
+        <span className="sidebar-tooltip" aria-hidden="true">{fullName}</span>
       </button>
 
       {isAccountMenuOpen && (

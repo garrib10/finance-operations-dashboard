@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { DESKTOP_NAV_QUERY } from "../navigation";
 import { readSidebarCollapsed, saveSidebarCollapsed } from "../utils/sidebarPreference";
 import { AccountMenu } from "./AccountMenu";
@@ -10,10 +11,13 @@ import { PrimaryNav } from "./PrimaryNav";
 const SIDEBAR_ID = "app-sidebar";
 
 /**
- * The signed-in application shell: sidebar navigation, a compact top bar with the
- * account menu, and the main landmark. It renders only inside ProtectedRoute, so it
- * never appears before the session is restored. Each page's root section must stay a
- * direct child of <main>; the page CSS relies on that.
+ * The signed-in application shell: sidebar navigation, the account menu, and the main
+ * landmark. The account menu is always at the bottom of the navigation (issue #121): the
+ * sidebar above 1100px, the drawer at 1100px and below. Only one is ever rendered, so its
+ * IDs stay unique. The top bar exists only at 1100px and below, for the menu button.
+ * It renders only inside ProtectedRoute, so it never appears before the session is
+ * restored. Each page's root section must stay a direct child of <main>; the page CSS
+ * relies on that.
  *
  * Collapsing only changes a data attribute, so the routed page is never remounted.
  * The collapsed styles apply above 1100px only; narrower screens ignore the preference
@@ -21,6 +25,7 @@ const SIDEBAR_ID = "app-sidebar";
  */
 export function AppLayout() {
   const location = useLocation();
+  const isDesktop = useMediaQuery(DESKTOP_NAV_QUERY);
   // Read synchronously so the first render already has the saved width (no flash).
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readSidebarCollapsed);
   // The drawer is open only for the location it was opened on, so any navigation
@@ -79,6 +84,12 @@ export function AppLayout() {
         </div>
 
         <PrimaryNav className="app-sidebar__nav" />
+
+        {isDesktop && (
+          <div className="nav-footer">
+            <AccountMenu />
+          </div>
+        )}
       </div>
 
       <div className="app-layout__body">
@@ -101,7 +112,6 @@ export function AppLayout() {
               FinTrack
             </Link>
 
-            <AccountMenu />
           </div>
         </header>
 
@@ -110,7 +120,12 @@ export function AppLayout() {
         </main>
       </div>
 
-      <MobileNavDrawer open={isDrawerOpen} onClose={closeDrawer} returnFocusRef={menuButtonRef} />
+      <MobileNavDrawer
+        open={isDrawerOpen}
+        showAccountMenu={!isDesktop}
+        onClose={closeDrawer}
+        returnFocusRef={menuButtonRef}
+      />
     </div>
   );
 }
