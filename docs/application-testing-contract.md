@@ -19,6 +19,25 @@ Swagger/OpenAPI is intentionally disabled in production.
 
 Automation must use environment variables for deployed URLs rather than hard-coding them throughout the test suite.
 
+## Test credentials
+
+Automation signs in with fictional demo accounts whose credentials are **never committed**
+to either repository, pasted into issues or pull requests, or written into test code.
+
+| Variable | Meaning |
+| --- | --- |
+| `FINTRACK_TEST_EMAIL` | the demo account's email for the environment under test |
+| `FINTRACK_TEST_PASSWORD` | its password |
+
+- Locally, set them in the shell or an untracked `.env` file; in CI, store them as
+  encrypted repository secrets. The owner keeps the values in a password manager.
+- Use a separate account per environment (local, staging, production); a staging password
+  must never work in production.
+- The test run must fail with a clear message when either variable is missing, rather than
+  falling back to a default.
+- Unit-test passwords in this repository (for example `Fictional-Test-Pass1!`) are
+  made-up values for mocked requests and belong to no account.
+
 ## Frontend routes
 
 | Route             | Access      | Expected behavior                                    |
