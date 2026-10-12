@@ -209,10 +209,18 @@ by `<class> (message removed)`: class names and code locations to find the bug, 
 Tomcat's startup and other container logs are unaffected (`ServerErrorLoggingIntegrationTest`
 checks this on a real server).
 
-One existing behavior to know: when an exception is unhandled, the browser receives `401`
-rather than `500`, because Spring Boot's `/error` page requires sign-in. Logs and the
-`http.server.requests` metric still record it as a 500. Making `/error` public would change
-error responses, so it is left as a follow-up.
+The client receives `500` with the same JSON shape as other API errors and a fixed message,
+plus its `X-Correlation-ID` (issue #123):
+
+```json
+{"timestamp":"…","status":500,"error":"Internal Server Error","message":"An unexpected error occurred. Please try again."}
+```
+
+The body never contains the exception message, its class, a stack trace, or the request path
+(`ErrorResponseConfig`). Only the server's internal error dispatch is allowed through
+security; a request sent to `/error` directly still needs an access token (`401`). Before
+v1.4.0 the secured error page turned these failures into `401` for the client, while logs and
+metrics already recorded `500`.
 
 ## Signals at a glance
 
@@ -355,6 +363,7 @@ These must never be exposed in any environment: `env`, `configprops`, `beans`, `
 | Production profile: health only, status alone even with a token, metrics and info absent | `ProductionManagementConfigTest` |
 | An invalid setting stops startup | `ManagementConfigValidationTest` |
 | Unhandled exception on a real server: logged once with the ID and a message-free stack trace, Tomcat's copy off | `ServerErrorLoggingIntegrationTest` |
+| Unhandled exception answered with `500`, a fixed safe body, and the correlation header; `/error` itself still needs a token; signed-in unknown routes get `404` | `ServerErrorLoggingIntegrationTest`, `ErrorResponseConfigTest` |
 | Production logging policy: JSON, no SQL values, Security at WARN, INFO levels | `ProductionManagementConfigTest` |
 | HTTP timer with route templates (no IDs or query strings), 4xx and 5xx outcomes, the authentication-failure counter per flow and reason (counted once, never for successes, logout, or a missing cookie), connection-pool meters tagged by pool only, no request value in any tag | `MonitoringMetricsIntegrationTest`, `AuthenticationMetricsTest` |
 | Correlation IDs: accepted and replaced values, response header on success and errors, logging context set during and cleared after success, handled and unhandled failures, distinct per request, never a credential | `CorrelationIdFilterTest`, `CorrelationAndLogSafetyIntegrationTest` |
