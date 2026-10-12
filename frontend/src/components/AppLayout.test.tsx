@@ -3,7 +3,7 @@ vi.mock("../context/AuthContext", async (importOriginal) => ({
   useAuth: vi.fn(),
 }));
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
@@ -53,6 +53,23 @@ function TransactionsForwardProbe() {
 
 const sidebar = () => document.getElementById("app-sidebar")!;
 
+/** Stubs matchMedia for the desktop query; `change` crosses the 1100px breakpoint. */
+function stubDesktop(matches: boolean) {
+  const listeners = new Set<() => void>();
+  const query = {
+    matches,
+    addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+    removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+  };
+  vi.stubGlobal("matchMedia", vi.fn(() => query));
+  return {
+    change(next: boolean) {
+      query.matches = next;
+      listeners.forEach((listener) => listener());
+    },
+  };
+}
+
 function renderShell(path = "/transactions") {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -77,6 +94,7 @@ describe("AppLayout", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("renders the page as a direct child of a single main landmark", () => {
@@ -101,17 +119,22 @@ describe("AppLayout", () => {
     expect(screen.queryByRole("navigation", { name: "Authentication navigation" })).not.toBeInTheDocument();
   });
 
-  it("keeps the account menu in the single top bar", () => {
+  it("keeps the account menu out of the top bar, at the bottom of the drawer, at 1100px and below", () => {
     renderShell();
 
     const banners = screen.getAllByRole("banner");
     expect(banners).toHaveLength(1);
-    expect(within(banners[0]).getByRole("button", { name: "Open account menu for River Walker" }))
-      .toHaveAttribute("aria-expanded", "false");
+    expect(within(banners[0]).queryByRole("button", { name: /account menu/, hidden: true })).toBeNull();
+    expect(sidebar().querySelector(".account-menu")).toBeNull();
+    const drawer = document.getElementById("mobile-navigation")!;
+    const trigger = within(drawer).getByRole("button", { name: "Open account menu for River Walker", hidden: true });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(drawer.querySelector(".mobile-nav__panel")!.lastElementChild).toContainElement(trigger);
   });
 
   it("swaps only the page when navigating between destinations", async () => {
     const user = userEvent.setup();
+    stubDesktop(true);
     renderShell("/");
     const accountTrigger = screen.getByRole("button", { name: /account menu/i });
 
@@ -148,6 +171,69 @@ describe("AppLayout", () => {
     await user.click(screen.getByRole("button", { name: "History forward" }));
     expect(screen.getByRole("heading", { name: "Budgets page" })).toBeInTheDocument();
     expect(current()).toHaveAccessibleName("Budgets");
+  });
+
+  describe("account menu at the bottom of the navigation (#121)", () => {
+    const trigger = () => screen.getByRole("button", { name: /account menu for River Walker/ });
+
+    it("sits at the bottom of the sidebar, not in the top bar, above 1100px", () => {
+      stubDesktop(true);
+      renderShell();
+
+      const footer = sidebar().querySelector(".nav-footer");
+      expect(footer).toContainElement(trigger());
+      expect(sidebar().lastElementChild).toBe(footer);
+      expect(screen.getAllByRole("button", { name: /account menu/, hidden: true })).toHaveLength(1);
+    });
+
+    it("opens upward with the same identity, links, and logout", async () => {
+      const user = userEvent.setup();
+      stubDesktop(true);
+      renderShell();
+
+      expect(trigger()).toHaveTextContent("▴");
+      await user.click(trigger());
+
+      expect(trigger()).toHaveAttribute("aria-expanded", "true");
+      expect(trigger()).toHaveTextContent("▾");
+      const accountNav = screen.getByRole("navigation", { name: "Account navigation" });
+      expect(within(accountNav).getByRole("link", { name: "Profile" })).toHaveAttribute("href", "/profile");
+      expect(within(accountNav).getByRole("link", { name: "Account Settings" })).toHaveAttribute("href", "/settings");
+      expect(screen.getByRole("button", { name: "Logout" })).toBeInTheDocument();
+
+      await user.keyboard("{Escape}");
+      expect(trigger()).toHaveAttribute("aria-expanded", "false");
+      expect(trigger()).toHaveFocus();
+    });
+
+    it("keeps its name and a decorative name tooltip when the sidebar is collapsed", async () => {
+      const user = userEvent.setup();
+      stubDesktop(true);
+      renderShell();
+
+      await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+
+      expect(trigger()).toHaveAccessibleName("Open account menu for River Walker");
+      const tooltip = trigger().querySelector(".sidebar-tooltip");
+      expect(tooltip).toHaveTextContent("River Walker");
+      expect(tooltip).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("moves between the sidebar and the drawer when the window crosses 1100px, never two at once", () => {
+      const media = stubDesktop(false);
+      renderShell();
+      const drawer = () => document.getElementById("mobile-navigation")!;
+      const all = () => screen.getAllByRole("button", { name: /account menu/, hidden: true });
+      expect(drawer()).toContainElement(all()[0]);
+
+      act(() => media.change(true));
+      expect(all()).toHaveLength(1);
+      expect(sidebar()).toContainElement(all()[0]);
+
+      act(() => media.change(false));
+      expect(all()).toHaveLength(1);
+      expect(drawer()).toContainElement(all()[0]);
+    });
   });
 
   describe("collapsible sidebar", () => {
@@ -237,6 +323,7 @@ describe("AppLayout", () => {
 
     it("does not remount the routed page or the account menu when toggled", async () => {
       const user = userEvent.setup();
+      stubDesktop(true);
       renderShell();
       const accountTrigger = screen.getByRole("button", { name: /account menu/i });
       await user.click(screen.getByRole("button", { name: "Count 0" }));
@@ -377,7 +464,8 @@ describe("AppLayout", () => {
         listeners.forEach((listener) => listener());
 
         await vi.waitFor(() => expect(drawer().open).toBe(false));
-        expect(listeners.size).toBe(0);
+        // Only the layout's own desktop query stays subscribed; the drawer's listener is gone.
+        expect(listeners.size).toBe(1);
       } finally {
         vi.unstubAllGlobals();
       }
