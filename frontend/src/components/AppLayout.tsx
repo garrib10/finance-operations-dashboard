@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -23,6 +23,15 @@ const SIDEBAR_ID = "app-sidebar";
  * The collapsed styles apply above 1100px only; narrower screens ignore the preference
  * and use the menu button and drawer instead.
  */
+/** Shown in place of a page while its code loads; a section, like every page root. */
+function PageLoading() {
+  return (
+    <section className="page-loading" aria-busy="true">
+      <p className="empty-state" role="status">Loading page…</p>
+    </section>
+  );
+}
+
 export function AppLayout() {
   const location = useLocation();
   const isDesktop = useMediaQuery(DESKTOP_NAV_QUERY);
@@ -116,7 +125,10 @@ export function AppLayout() {
         </header>
 
         <main id="main-content" className="app-main" tabIndex={-1}>
-          <Outlet />
+          {/* Pages load on demand (#124); the shell stays while one loads. */}
+          <Suspense fallback={<PageLoading />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 

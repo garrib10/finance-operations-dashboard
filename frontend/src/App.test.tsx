@@ -58,9 +58,9 @@ describe("application routing and account forms", () => {
     vi.unstubAllGlobals();
   });
 
-  it.each([["/profile", "Profile"], ["/settings", "Account Settings"]])("protects and renders %s with account forms", (path, title) => {
+  it.each([["/profile", "Profile"], ["/settings", "Account Settings"]])("protects and renders %s with account forms", async (path, title) => {
     renderApp(path);
-    expect(screen.getByRole("heading", { name: title, level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: title, level: 1 })).toBeInTheDocument();
     expect(screen.getAllByRole("banner")).toHaveLength(1);
     expect(document.querySelector("form")).not.toBeNull();
     expect(screen.getByRole("link", { name: "Skip to main content" })).toHaveAttribute("href", "#main-content");
@@ -73,9 +73,9 @@ describe("application routing and account forms", () => {
   });
 
   it.each([["/", "Dashboard"], ["/transactions", "Transactions"], ["/budgets", "Budgets"], ["/categories", "Categories"],
-    ["/unknown", "Dashboard"]])("preserves existing route behavior for %s", (path, title) => {
+    ["/unknown", "Dashboard"]])("preserves existing route behavior for %s", async (path, title) => {
     renderApp(path);
-    expect(screen.getByRole("heading", { name: `${title} destination` })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: `${title} destination` })).toBeInTheDocument();
   });
 
   it("protects the fallback destination for an unknown signed-out route", () => {
@@ -136,7 +136,7 @@ describe("application routing and account forms", () => {
     const account = screen.getByRole("navigation", { name: "Account navigation" });
     await user.click(within(account).getByRole("link", { name: "Account Settings" }));
 
-    expect(screen.getByRole("heading", { name: "Account Settings", level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Account Settings", level: 1 })).toBeInTheDocument();
     expect(screen.getByTestId("destination")).toHaveTextContent("/settings");
   });
 });
