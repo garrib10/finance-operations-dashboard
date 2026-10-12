@@ -216,6 +216,7 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 
 - Desktop sidebar navigation with icons and a clearly marked current page
 - Collapsible icon-only sidebar mode with tooltips, saved per device
+- Account menu at the bottom of the navigation (sidebar or drawer), opening upward
 - Mobile and tablet navigation drawer (1100px and below) built on the native modal
   `<dialog>`, with focus handling, Escape and backdrop dismissal, and scroll locking
 - Skip link, labelled navigation landmarks, and reduced-motion support
@@ -223,6 +224,8 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 - Centralized, type-safe API communication
 - Reusable currency and date formatting
 - Direct route and browser-refresh support
+- Pages load on demand (route-based code splitting); the charts library loads only with
+  the Budgets page
 
 ---
 
@@ -594,7 +597,8 @@ The frontend runs at `http://localhost:5173`.
 
 ## Future Improvements
 
-- Code-split the frontend bundle by route
+- A separate Selenium end-to-end test suite, built against the
+  [Application Testing Contract](docs/application-testing-contract.md)
 
 ---
 

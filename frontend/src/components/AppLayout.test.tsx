@@ -4,7 +4,7 @@ vi.mock("../context/AuthContext", async (importOriginal) => ({
 }));
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { useState } from "react";
+import { lazy, useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -53,6 +53,9 @@ function TransactionsForwardProbe() {
 
 const sidebar = () => document.getElementById("app-sidebar")!;
 
+/** A lazily loaded page whose code never arrives, to observe the loading state. */
+const NeverLoadingPage = lazy(() => new Promise<{ default: () => null }>(() => {}));
+
 /** Stubs matchMedia for the desktop query; `change` crosses the 1100px breakpoint. */
 function stubDesktop(matches: boolean) {
   const listeners = new Set<() => void>();
@@ -95,6 +98,26 @@ describe("AppLayout", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("shows an accessible loading state inside the shell while a page's code loads (#124)", () => {
+    render(
+      <MemoryRouter initialEntries={["/slow"]}>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route path="/slow" element={<NeverLoadingPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    // The shell is usable at once; only the page area waits.
+    expect(screen.getByRole("navigation", { name: "Primary navigation" })).toBeInTheDocument();
+    const loading = screen.getByRole("status");
+    expect(loading).toHaveTextContent("Loading page…");
+    expect(loading.closest("section")).toHaveAttribute("aria-busy", "true");
+    // Like every page root, the placeholder section is a direct child of <main>.
+    expect(screen.getByRole("main").firstElementChild).toBe(loading.closest("section"));
   });
 
   it("renders the page as a direct child of a single main landmark", () => {
