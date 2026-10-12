@@ -568,6 +568,8 @@ Start the Spring Boot API:
 
 Flyway applies pending database migrations during application startup. V3 adds display names and persisted account preferences, V5 adds the refresh-session and token-history tables, and V6 (a Java migration) adds category normalization, built-in and icon metadata, and ownership constraints. For setup, adoption, and migration rules, see [Database Migrations](docs/database-migrations.md).
 
+To fill a local account with fictional sample data (custom categories, transactions, and budgets for the current month), run `node scripts/seed-local-demo.mjs` with `FINTRACK_SEED_EMAIL` and `FINTRACK_SEED_PASSWORD` set. It only runs against a local backend; see [Local demo data](docs/local-demo-data.md).
+
 The backend runs at `http://localhost:8080`.
 
 - Health endpoint: `http://localhost:8080/api/health`
