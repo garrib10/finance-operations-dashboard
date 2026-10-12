@@ -25,7 +25,8 @@ import dev.portfolio.finance.security.JwtService;
 /**
  * An unhandled exception on the real server (Tomcat, not MockMvc): logged once, by the
  * application, with the correlation ID and a stack trace whose messages are removed. Tomcat's
- * own copy, which would print the message and has no ID, is switched off.
+ * own copy, which would print the message and has no ID, is switched off. The client gets a
+ * 500 with a fixed, safe body (issue #123), not the 401 the secured /error page used to give.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -49,15 +50,55 @@ class ServerErrorLoggingIntegrationTest {
     @Autowired private UserRepository users;
     @Autowired private JwtService jwtService;
 
+    private HttpResponse<String> get(String path, String bearer) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header(CorrelationIdFilter.HEADER, "trace-tomcat-1");
+        if (bearer != null) request.header("Authorization", "Bearer " + bearer);
+        return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private String token() {
+        User user = users.save(new User("Server", "Error", "server-error-" + UUID.randomUUID() + "@example.com", "hash"));
+        return jwtService.generateToken(user);
+    }
+
+    @Test
+    void answersAnUnhandledExceptionWithA500AndASafeBody() throws Exception {
+        HttpResponse<String> response = get("/api/server-error-test/failure/42", token());
+
+        assertThat(response.statusCode()).isEqualTo(500);
+        assertThat(response.headers().firstValue(CorrelationIdFilter.HEADER)).contains("trace-tomcat-1");
+        assertThat(response.headers().firstValue("Content-Type")).hasValueSatisfying(type -> assertThat(type).startsWith("application/json"));
+        assertThat(response.body()).contains("\"status\":500", "\"error\":\"Internal Server Error\"",
+                "\"message\":\"An unexpected error occurred. Please try again.\"", "\"timestamp\"");
+        // Nothing about the failure or the request reaches the client.
+        assertThat(response.body()).doesNotContain("sentinel-private-detail", "jdbc:", "99.10", "IllegalStateException",
+                "exception", "trace", "path", "/api/server-error-test");
+    }
+
+    @Test
+    void keepsTheErrorPageItselfBehindAuthentication() throws Exception {
+        HttpResponse<String> direct = get("/error", null);
+
+        assertThat(direct.statusCode()).isEqualTo(401);
+        assertThat(direct.body()).contains("\"status\":401").doesNotContain("trace", "exception");
+    }
+
+    @Test
+    void stillAnswersUnauthenticatedAndMissingRoutesAsBefore() throws Exception {
+        assertThat(get("/api/server-error-test/failure/42", null).statusCode()).isEqualTo(401);
+        assertThat(get("/api/transactions/999999999", token()).statusCode()).isEqualTo(404);
+
+        // A signed-in request to a route that does not exist now gets a 404 too.
+        HttpResponse<String> missing = get("/api/no-such-route", token());
+        assertThat(missing.statusCode()).isEqualTo(404);
+        assertThat(missing.body()).contains("\"message\":\"The requested resource was not found.\"")
+                .doesNotContain("/api/no-such-route");
+    }
+
     @Test
     void logsTheFailureOnceWithItsIdAndCodeLocationsButNeverItsMessage(CapturedOutput output) throws Exception {
-        User user = users.save(new User("Server", "Error", "server-error-" + UUID.randomUUID() + "@example.com", "hash"));
-        HttpResponse<String> response = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/server-error-test/failure/42"))
-                        .header("Authorization", "Bearer " + jwtService.generateToken(user))
-                        .header(CorrelationIdFilter.HEADER, "trace-tomcat-1")
-                        .build(),
-                HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = get("/api/server-error-test/failure/42", token());
 
         String logs = output.getAll();
         assertThat(response.headers().firstValue(CorrelationIdFilter.HEADER)).contains("trace-tomcat-1");

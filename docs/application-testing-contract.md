@@ -490,6 +490,12 @@ replaced with a UUID, and the request still proceeds.
 Detailed health, metrics, and every other `/actuator` path need an access token, and in
 production they show the status only or do not exist (`404`).
 
+An unexpected server failure returns `500` with `{"timestamp", "status": 500, "error":
+"Internal Server Error", "message": "An unexpected error occurred. Please try again."}` and
+the `X-Correlation-ID` header; quote that ID when reporting it. A signed-in request to a
+route that does not exist returns `404` with `"message": "The requested resource was not
+found."` (both since v1.4.0; earlier releases returned `401` in these cases).
+
 Before running deployed UI workflows, automation should request `GET https://finance-operations-dashboard-production.up.railway.app/api/health`.
 
 A bounded retry should be used because Railway may require startup time.
