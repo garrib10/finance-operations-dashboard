@@ -354,3 +354,33 @@ Flyway logs a warning that MySQL 9.7 is newer than the latest version it was ver
 - [x] 24. Backend startup logs show Flyway at V6 with no pending migration.
 - [x] 25. The v1.2.0 smoke items (login, refresh, logout, password change, profile photos,
       transactions, budgets) still pass.
+
+## v1.4.0: Selenium readiness and final polish (#120)
+
+### What changes
+
+- **Frontend:** account menu at the bottom of the navigation (#121); signed-in pages load on
+  demand (#124); "New category" title inside its box.
+- **Backend:** unhandled exceptions return `500` with a safe body instead of `401` (#123).
+- **Database:** none (no Flyway migration; schema stays at V6).
+- **Variables:** none.
+
+Rollback is a plain redeploy of the v1.3.0 backend and frontend; no data changes.
+
+### v1.4.0 staging smoke checklist
+
+Run after the release reaches `staging`; record pass/fail.
+
+- [ ] 1. Backend deploy logs: "Schema `railway` is up to date", app started, no ERROR lines.
+- [ ] 2. `/api/health`, `/actuator/health/liveness`, and `/actuator/health/readiness` return
+      `200`; the Vercel host proxies `/api/health`.
+- [ ] 3. Desktop: the account menu is at the bottom of the sidebar and opens upward; Profile,
+      Account Settings, and Logout work; collapsed sidebar shows the avatar with a tooltip.
+- [ ] 4. Narrow window (1100px and below): the top bar has only the menu button and brand; the
+      account menu is at the bottom of the drawer; Escape closes the account menu first.
+- [ ] 5. Deep link and refresh on `/`, `/transactions`, `/budgets`, `/categories`,
+      `/profile`, and `/settings`; each page loads (briefly "Loading page…" at most).
+- [ ] 6. Budgets charts label every category; "New category" title sits inside its box.
+- [ ] 7. A signed-in request to an unknown API route returns `404` (not `401`), with
+      `X-Correlation-ID`.
+- [ ] 8. Sign-in, a transaction, a budget, and a custom category still work end to end.

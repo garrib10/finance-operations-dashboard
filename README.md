@@ -52,8 +52,8 @@ The project demonstrates layered backend architecture, short-lived JWTs with rot
 - Search, filtering, sorting, pagination, and financial analytics
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
-- **950 passing backend tests** (911 unit + 39 MySQL integration) with **98.86% instruction coverage** and **95.69% branch coverage**
-- **927 passing frontend tests** across **58 test files** with **99.58% statement, 98.84% branch, 99.81% function, and 100% line coverage**
+- **1,137 passing backend tests** (1,095 unit + 42 MySQL integration) with **98.62% instruction coverage** and **95.63% branch coverage**
+- **1,173 passing frontend tests** across **64 test files** with **99.45% statement, 98.51% branch, 99.83% function, and 100% line coverage**
 
 ---
 
@@ -275,10 +275,10 @@ See [Monitoring](docs/monitoring.md) and [Production troubleshooting](docs/produ
 
 | Test Suite        | Results                                                             |
 | ----------------- | ------------------------------------------------------------------- |
-| Backend           | **950 tests passing** (911 unit, 39 MySQL integration)              |
-| Backend Coverage  | **98.86% instruction coverage, 95.69% branch coverage**             |
-| Frontend          | **927 tests passing across 58 test files**                          |
-| Frontend Coverage | **99.58% statements, 98.84% branches, 99.81% functions, 100% lines** |
+| Backend           | **1,137 tests passing** (1,095 unit, 42 MySQL integration)          |
+| Backend Coverage  | **98.62% instruction coverage, 95.63% branch coverage**             |
+| Frontend          | **1,173 tests passing across 64 test files**                        |
+| Frontend Coverage | **99.45% statements, 98.51% branches, 99.83% functions, 100% lines** |
 
 For branch behavior, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
