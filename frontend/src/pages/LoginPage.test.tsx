@@ -44,7 +44,7 @@ function TransactionDestination() {
 
 async function submitLoginForm(
   email = "demo@fintrack.dev",
-  password = "FinTrackDemo123!",
+  password = "Fictional-Test-Pass1!",
 ) {
   const user = userEvent.setup();
 
@@ -113,7 +113,7 @@ describe("LoginPage", () => {
 
     expect(login).toHaveBeenCalledWith({
       email: "demo@fintrack.dev",
-      password: "FinTrackDemo123!",
+      password: "Fictional-Test-Pass1!",
     });
 
     expect(await screen.findByText("Dashboard Page")).toBeInTheDocument();
