@@ -369,18 +369,22 @@ Rollback is a plain redeploy of the v1.3.0 backend and frontend; no data changes
 
 ### v1.4.0 staging smoke checklist
 
-Run after the release reaches `staging`; record pass/fail.
+**Performed 2026-10-13 on staging: all 8 items passed** (v1.4.0 release, PR #140).
+Items 1, 2, and 7 were checked from the deploy logs and against the staging API (with a
+fictional test account whose data was deleted afterwards); items 3–6 and 8 by hand in Chrome
+at desktop and narrow widths. Production followed (PR #146): no downtime, health and probes
+`UP`, and a short production click-through passed. Tagged `v1.4.0`.
 
-- [ ] 1. Backend deploy logs: "Schema `railway` is up to date", app started, no ERROR lines.
-- [ ] 2. `/api/health`, `/actuator/health/liveness`, and `/actuator/health/readiness` return
+- [x] 1. Backend deploy logs: "Schema `railway` is up to date", app started, no ERROR lines.
+- [x] 2. `/api/health`, `/actuator/health/liveness`, and `/actuator/health/readiness` return
       `200`; the Vercel host proxies `/api/health`.
-- [ ] 3. Desktop: the account menu is at the bottom of the sidebar and opens upward; Profile,
+- [x] 3. Desktop: the account menu is at the bottom of the sidebar and opens upward; Profile,
       Account Settings, and Logout work; collapsed sidebar shows the avatar with a tooltip.
-- [ ] 4. Narrow window (1100px and below): the top bar has only the menu button and brand; the
+- [x] 4. Narrow window (1100px and below): the top bar has only the menu button and brand; the
       account menu is at the bottom of the drawer; Escape closes the account menu first.
-- [ ] 5. Deep link and refresh on `/`, `/transactions`, `/budgets`, `/categories`,
+- [x] 5. Deep link and refresh on `/`, `/transactions`, `/budgets`, `/categories`,
       `/profile`, and `/settings`; each page loads (briefly "Loading page…" at most).
-- [ ] 6. Budgets charts label every category; "New category" title sits inside its box.
-- [ ] 7. A signed-in request to an unknown API route returns `404` (not `401`), with
+- [x] 6. Budgets charts label every category; "New category" title sits inside its box.
+- [x] 7. A signed-in request to an unknown API route returns `404` (not `401`), with
       `X-Correlation-ID`.
-- [ ] 8. Sign-in, a transaction, a budget, and a custom category still work end to end.
+- [x] 8. Sign-in, a transaction, a budget, and a custom category still work end to end.
