@@ -1,6 +1,8 @@
 # FinTrack Application Testing Contract
 
-This document defines the branch implementation contract. Confirm the deployed revision before applying these expectations to a hosted environment; issue #16 is not deployed by this documentation update.
+This document is the contract the Selenium suite is built against. It describes FinTrack
+as of v1.4.0 (audited against the running application in issue #125). Confirm which release
+a hosted environment runs before applying these expectations to it.
 
 The Selenium automation suite is maintained in a separate repository. FinTrack does not include Selenium dependencies, WebDriver configuration, or Selenium test code.
 
@@ -19,6 +21,25 @@ Swagger/OpenAPI is intentionally disabled in production.
 
 Automation must use environment variables for deployed URLs rather than hard-coding them throughout the test suite.
 
+## Test credentials
+
+Automation signs in with fictional demo accounts whose credentials are **never committed**
+to either repository, pasted into issues or pull requests, or written into test code.
+
+| Variable | Meaning |
+| --- | --- |
+| `FINTRACK_TEST_EMAIL` | the demo account's email for the environment under test |
+| `FINTRACK_TEST_PASSWORD` | its password |
+
+- Locally, set them in the shell or an untracked `.env` file; in CI, store them as
+  encrypted repository secrets. The owner keeps the values in a password manager.
+- Use a separate account per environment (local, staging, production); a staging password
+  must never work in production.
+- The test run must fail with a clear message when either variable is missing, rather than
+  falling back to a default.
+- Unit-test passwords in this repository (for example `Fictional-Test-Pass1!`) are
+  made-up values for mocked requests and belong to no account.
+
 ## Frontend routes
 
 | Route             | Access      | Expected behavior                                    |
@@ -28,11 +49,16 @@ Automation must use environment variables for deployed URLs rather than hard-cod
 | `/`               | Protected   | Displays the Dashboard                               |
 | `/transactions`   | Protected   | Displays transaction management                      |
 | `/budgets`        | Protected   | Displays budget management                           |
+| `/categories`     | Protected   | Displays category usage and management               |
 | `/profile`        | Protected   | Edit own names; view read-only email                 |
 | `/settings`       | Protected   | Edit preferences and change password                 |
-| Any unknown route | Conditional | Redirects to `/`, which then requires authentication |
+| Any unknown route | Conditional | Redirects to `/` (signed in) or `/login` (signed out) |
 
 The Dashboard route is `/`, not `/dashboard`.
+
+Signed-in pages load their code on demand (v1.4.0, issue #124): the sidebar renders at once
+and the page area shows `role="status"` "Loading page…" until the page arrives. Wait for the
+page's `h1` (for example "Budgets") before interacting.
 
 When an unauthenticated user opens a protected route, FinTrack redirects the user to `/login`.
 
@@ -88,6 +114,8 @@ Invalid credentials submitted through the Login form remain a Login form error.
 | `GET`  | `/actuator/health/readiness` | Ready, database included: `{"status":"UP"}`, or `503 {"status":"DOWN"}` |
 | `POST` | `/api/auth/register` | Register a user                         |
 | `POST` | `/api/auth/login`    | Authenticate and obtain an access token |
+| `POST` | `/api/auth/refresh`  | Exchange the refresh cookie for a new access token (needs `X-FinTrack-CSRF: 1`) |
+| `POST` | `/api/auth/logout`   | End the refresh session and clear the cookie (needs `X-FinTrack-CSRF: 1`) |
 
 All other application endpoints require a valid JWT.
 
@@ -113,7 +141,8 @@ Successful-registration tests should therefore be executed deliberately rather t
 | Email    | Required and must be a valid email address |
 | Password | Required                                   |
 
-Routine automation should use dedicated accounts containing fictional data. Credentials must be stored in CI secrets or local environment variables and must never be committed.
+Routine automation should use dedicated accounts containing fictional data; see
+[Test credentials](#test-credentials).
 
 ## Transaction behavior
 
@@ -233,7 +262,14 @@ blue (`button--edit`) and Delete the same look in red.
 
 Budget analytics include monthly limit, amount spent, amount remaining, percentage used, and status.
 
-Budget progress bars expose:
+The Budgets page shows two charts, "Budget vs. spending" and "Budget utilization", with one
+bar group per budget in the month shown. Every bar has its category name on the x-axis
+(v1.4.0, issue #119), angled; names longer than 14 characters end in "…" on the axis, and the
+tooltip shows the full name. Budget cards on the Budgets page show the figures as text, with
+no progress bar.
+
+Budget progress bars appear on the Dashboard's Monthly Budgets cards (named "{Category}
+budget utilization") and on Categories cards (named "{Category} budget used"). They expose:
 
 - `role="progressbar"`
 - An accessible category-specific name
@@ -262,8 +298,11 @@ Usage above 100% remains visible and available through `aria-valuetext`, while t
   name field and offers "Use existing category “{name}”". Nothing is saved.
 - **Server field errors:** `amount`, `monthlyLimit`, `newCategory.name`, and
   `newCategory.iconKey` messages appear beside their controls with `aria-invalid`; the
-  first invalid control receives focus. Amounts above 9,999,999,999.99 or with more than
-  two decimals are rejected (`400`).
+  first invalid control receives focus. Amounts above 9,999,999,999.99 are rejected by the
+  server (`400`, "Amount can have at most 10 whole digits and 2 decimal places", and the
+  `monthlyLimit` equivalent). Values below 0.01 or with more than two decimals never reach
+  the server: the number inputs (`min="0.01"`, `step="0.01"`) block the submit with the
+  browser's own validation message, so assert that instead.
 - **Management:** custom categories are created, renamed, re-iconed, and deleted on the
   Categories page (`/categories`, reached from the sidebar). Delete is inactive (`aria-disabled="true"`) with a visible reason for a
   category in use; if the server still refuses a delete (`409`), a persistent
@@ -307,7 +346,7 @@ Accessible roles, labels, input IDs, link names, and button names should be pref
 
 These values are exposed through `data-testid`.
 
-### Navigation and layout (v1.3.0)
+### Navigation and layout (v1.3.0, account menu v1.4.0)
 
 Signed-in pages use a sidebar layout (issue #95); Login and Register keep a simple
 header. No navigation `data-testid` values are added. Link and button names are
@@ -319,11 +358,11 @@ keep working.
 | Primary navigation | `nav` named "Primary navigation" with links "Dashboard" (`/`), "Transactions", "Budgets", and "Categories" (`/categories`) |
 | Current page | the matching primary link has `aria-current="page"` |
 | Brand | link "FinTrack" (to `/`) |
-| Account menu | button "Open account menu for {name}" (`#account-menu-trigger`) in the page `header`; panel `#account-menu-panel` |
+| Account menu | button "Open account menu for {name}" (`#account-menu-trigger`); panel `#account-menu-panel`, which opens upward. It is always at the bottom of the navigation (v1.4.0, issue #121): `#app-sidebar` above 1100px, the `#mobile-navigation` drawer at 1100px and below (open the drawer first). Never in the `header`; exactly one is rendered at a time |
 | Account links | inside `nav` "Account navigation": "Profile" and "Account Settings" (not in the primary navigation) |
 | Logout | button "Logout" in the open account menu |
 | Public pages | `nav` "Authentication navigation" with "Login" and "Register"; hidden while a session is being restored |
-| Landmarks | exactly one `header` and one `main#main-content`; "Skip to main content" targets it |
+| Landmarks | exactly one `header` and one `main#main-content`; "Skip to main content" targets it. The signed-in `header` holds only the menu button and brand, and is hidden (`display: none`) above 1100px |
 | Sidebar toggle (above 1100px) | button "Collapse sidebar" / "Expand sidebar" with `aria-expanded`, controlling `#app-sidebar` |
 | Menu button (1100px and below) | button "Open navigation menu" with `aria-expanded`, controlling `#mobile-navigation` |
 | Navigation drawer | `dialog` named "Navigation menu" containing the primary navigation; close button "Close navigation menu" |
@@ -333,9 +372,12 @@ icons. Collapsed links keep their names ("Dashboard", "Transactions", "Budgets")
 name-based locators work in both states (including "Categories"); the choice is saved per browser in
 `localStorage` under `fintrack:sidebar-collapsed` ("true" or "false"). At 1100px and
 below the sidebar is hidden: open the drawer with the menu button, then follow a link
-(the drawer closes on navigation, Escape, the close button, or a backdrop click). Below
-640px the account menu button shows only the avatar; its name is unchanged. Prefer role
-and name locators over layout position.
+(the drawer closes on navigation, Escape, the close button, or a backdrop click). With the
+account menu open inside the drawer, Escape closes only the account menu; a second
+Escape closes the drawer. In the collapsed desktop sidebar the account menu button shows
+only the avatar; its name is unchanged (a decorative tooltip shows the name). Crossing
+1100px moves the account menu between the sidebar and the drawer and closes it. Prefer
+role and name locators over layout position.
 
 ### Categories page (v1.3.0)
 
@@ -352,7 +394,7 @@ server's reporting month (issue #100). No new `data-testid` values are added.
 | Budget progress | `role="progressbar"` named "{Category} budget used", `aria-valuenow` 0–100, `aria-valuetext` "{n}% used"; status text such as "Warning" |
 | No budget | "No budget for {Month}", shown only for categories that take budgets |
 | Activity | "{n} transaction(s) in {Month} · Last used {date}" (this month's count, income and expense) or "Not used yet" |
-| Spending table | `table` named "Spending in {Month Year}" with column headers Category, Spent, Share and a row header per category with spending; "No spending recorded for {Month Year}." when empty; rounding note "Percentages are rounded, so they may not add up to exactly 100%." |
+| Spending table | `table` named "Spending in {Month Year}" with column headers Category, Spent, Share and a row header per category with spending; "No spending recorded for {Month Year}." when empty; rounding note "Percentages are rounded, so they may not add up to exactly 100%." only when the rounded shares do not add up to 100% |
 | Toolbar | search "Search categories", selects "Filter categories" (All categories, Custom, Built-in, Unused, No budget in {Month}) and "Sort categories" (Name, Spending in {Month}, Most used); `role="status"` "Showing {n} of {total} categories"; button "Clear category filters" when not at the defaults |
 | No matches | "No categories match your search and filter." with button "Show all categories" |
 | Sections | while browsing (no search, filter "All categories"): `section` named "Active this month" (`h2`), then `section` named "Other categories · {n}" (`h2`); each category appears once. Empty Active: "Nothing has spending or a budget in {Month} yet." (an earlier month: `section` "Active in {Month Year}", empty text "Nothing had spending or a budget in {Month Year}."). Searching or filtering replaces both with the single flat results list |
@@ -419,6 +461,10 @@ Therefore:
 
 All automation accounts and records must use fictional data.
 
+For local development, `scripts/seed-local-demo.mjs` creates a fictional account with sample
+custom categories, transactions, and budgets for the current month on a local backend only;
+see [local demo data](local-demo-data.md).
+
 The initial Selenium suite should run serially. Before enabling parallel execution, each worker must receive a separate automation account.
 
 Automation should:
@@ -468,6 +514,12 @@ replaced with a UUID, and the request still proceeds.
 Detailed health, metrics, and every other `/actuator` path need an access token, and in
 production they show the status only or do not exist (`404`).
 
+An unexpected server failure returns `500` with `{"timestamp", "status": 500, "error":
+"Internal Server Error", "message": "An unexpected error occurred. Please try again."}` and
+the `X-Correlation-ID` header; quote that ID when reporting it. A signed-in request to a
+route that does not exist returns `404` with `"message": "The requested resource was not
+found."` (both since v1.4.0; earlier releases returned `401` in these cases).
+
 Before running deployed UI workflows, automation should request `GET https://finance-operations-dashboard-production.up.railway.app/api/health`.
 
 A bounded retry should be used because Railway may require startup time.
@@ -505,15 +557,17 @@ principal. No target user ID or email is accepted as an editable field.
   preserving date-only calendar values. Page size applies to all Transaction list
   requests; a change reloads page zero with current filters and sorting.
 - `POST /api/account/password`: sends only `currentPassword` and `newPassword`;
-  confirmation stays in the browser. Success is 204, clears all password inputs,
-  and leaves the session active. The old password then fails login; the new one succeeds.
+  confirmation stays in the browser. Success is 204 and ends every refresh session of the
+  user (since v1.2.0): every open tab signs out and the login page shows "Your password was
+  changed. Please sign in again." The old password then fails login; the new one succeeds.
 - New passwords follow registration policy: at least 15 Unicode code points,
   at most 72 UTF-8 bytes, no trimming/normalization or composition requirement.
   All-blank/common passwords and current-password reuse are rejected.
 - Incorrect current password and validation failures return safe field-specific 400
   errors. Genuine authentication failures retain centralized 401 handling.
-- Logout and password changes do not revoke previously issued JWTs. Refresh-token
-  rotation/revocation belongs to issue #18.
+- Logout and password changes end refresh sessions immediately, but an access token
+  already issued stays valid until it expires (at most five minutes; there is no
+  access-token denylist).
 
 Prefer labels such as `Display name`, `Date format`, `Transactions per page`,
 `Current password`, `New password`, and `Confirm new password`. The names of save,

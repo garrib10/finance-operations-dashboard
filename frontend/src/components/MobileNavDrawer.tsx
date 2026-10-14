@@ -1,12 +1,15 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { Link } from "react-router-dom";
 import { X } from "lucide-react";
+import { AccountMenu } from "./AccountMenu";
 import { PrimaryNav } from "./PrimaryNav";
 
 export const MOBILE_NAV_ID = "mobile-navigation";
 
 interface MobileNavDrawerProps {
   open: boolean;
+  /** At 1100px and below the account menu lives at the bottom of the drawer (#121). */
+  showAccountMenu: boolean;
   onClose: () => void;
   /** The menu button; focus returns here when the drawer closes. */
   returnFocusRef: RefObject<HTMLElement | null>;
@@ -18,7 +21,7 @@ interface MobileNavDrawerProps {
  * as a cancel event. Escape, the close button, a backdrop click, following a link,
  * and unmounting (logout, expired session) all close it and unlock page scrolling.
  */
-export function MobileNavDrawer({ open, onClose, returnFocusRef }: MobileNavDrawerProps) {
+export function MobileNavDrawer({ open, showAccountMenu, onClose, returnFocusRef }: MobileNavDrawerProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -75,6 +78,13 @@ export function MobileNavDrawer({ open, onClose, returnFocusRef }: MobileNavDraw
         </div>
 
         <PrimaryNav onNavigate={onClose} />
+
+        {/* Following Profile or Account Settings changes the route, which closes the drawer. */}
+        {showAccountMenu && (
+          <div className="nav-footer">
+            <AccountMenu />
+          </div>
+        )}
       </div>
     </dialog>
   );

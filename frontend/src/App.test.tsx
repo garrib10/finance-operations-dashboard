@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { AuthContext, type AuthContextValue } from "./context/AuthContext";
 import { accountUser } from "./test/accountFixtures";
@@ -45,9 +45,22 @@ function renderApp(path: string, authenticated = true, overrides: Partial<AuthCo
 vi.setConfig({ testTimeout: 20_000 });
 
 describe("application routing and account forms", () => {
-  it.each([["/profile", "Profile"], ["/settings", "Account Settings"]])("protects and renders %s with account forms", (path, title) => {
+  // The desktop layout (above 1100px), where the account menu is in the sidebar (#121).
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: true,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([["/profile", "Profile"], ["/settings", "Account Settings"]])("protects and renders %s with account forms", async (path, title) => {
     renderApp(path);
-    expect(screen.getByRole("heading", { name: title, level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: title, level: 1 })).toBeInTheDocument();
     expect(screen.getAllByRole("banner")).toHaveLength(1);
     expect(document.querySelector("form")).not.toBeNull();
     expect(screen.getByRole("link", { name: "Skip to main content" })).toHaveAttribute("href", "#main-content");
@@ -60,9 +73,9 @@ describe("application routing and account forms", () => {
   });
 
   it.each([["/", "Dashboard"], ["/transactions", "Transactions"], ["/budgets", "Budgets"], ["/categories", "Categories"],
-    ["/unknown", "Dashboard"]])("preserves existing route behavior for %s", (path, title) => {
+    ["/unknown", "Dashboard"]])("preserves existing route behavior for %s", async (path, title) => {
     renderApp(path);
-    expect(screen.getByRole("heading", { name: `${title} destination` })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: `${title} destination` })).toBeInTheDocument();
   });
 
   it("protects the fallback destination for an unknown signed-out route", () => {
@@ -74,7 +87,8 @@ describe("application routing and account forms", () => {
     renderApp(path);
 
     expect(screen.getByRole("navigation", { name: "Primary navigation" })).toBeInTheDocument();
-    expect(within(screen.getByRole("banner")).getByRole("button", { name: /account menu/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /account menu/i })).toBeInTheDocument();
+    expect(within(screen.getByRole("banner")).queryByRole("button", { name: /account menu/i })).toBeNull();
     expect(screen.getAllByRole("main")).toHaveLength(1);
     expect(screen.queryByRole("navigation", { name: "Authentication navigation" })).not.toBeInTheDocument();
   });
@@ -122,7 +136,7 @@ describe("application routing and account forms", () => {
     const account = screen.getByRole("navigation", { name: "Account navigation" });
     await user.click(within(account).getByRole("link", { name: "Account Settings" }));
 
-    expect(screen.getByRole("heading", { name: "Account Settings", level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Account Settings", level: 1 })).toBeInTheDocument();
     expect(screen.getByTestId("destination")).toHaveTextContent("/settings");
   });
 });

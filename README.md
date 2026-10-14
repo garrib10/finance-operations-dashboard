@@ -52,8 +52,8 @@ The project demonstrates layered backend architecture, short-lived JWTs with rot
 - Search, filtering, sorting, pagination, and financial analytics
 - Responsive dashboard visualizations built with Recharts
 - Production CORS, environment-based secrets, and disabled production API documentation
-- **950 passing backend tests** (911 unit + 39 MySQL integration) with **98.86% instruction coverage** and **95.69% branch coverage**
-- **927 passing frontend tests** across **58 test files** with **99.58% statement, 98.84% branch, 99.81% function, and 100% line coverage**
+- **1,137 passing backend tests** (1,095 unit + 42 MySQL integration) with **98.62% instruction coverage** and **95.63% branch coverage**
+- **1,173 passing frontend tests** across **64 test files** with **99.45% statement, 98.51% branch, 99.83% function, and 100% line coverage**
 
 ---
 
@@ -216,6 +216,7 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 
 - Desktop sidebar navigation with icons and a clearly marked current page
 - Collapsible icon-only sidebar mode with tooltips, saved per device
+- Account menu at the bottom of the navigation (sidebar or drawer), opening upward
 - Mobile and tablet navigation drawer (1100px and below) built on the native modal
   `<dialog>`, with focus handling, Escape and backdrop dismissal, and scroll locking
 - Skip link, labelled navigation landmarks, and reduced-motion support
@@ -223,6 +224,8 @@ See [Account API](docs/account-api.md) for request fields, response shapes, and 
 - Centralized, type-safe API communication
 - Reusable currency and date formatting
 - Direct route and browser-refresh support
+- Pages load on demand (route-based code splitting); the charts library loads only with
+  the Budgets page
 
 ---
 
@@ -272,10 +275,10 @@ See [Monitoring](docs/monitoring.md) and [Production troubleshooting](docs/produ
 
 | Test Suite        | Results                                                             |
 | ----------------- | ------------------------------------------------------------------- |
-| Backend           | **950 tests passing** (911 unit, 39 MySQL integration)              |
-| Backend Coverage  | **98.86% instruction coverage, 95.69% branch coverage**             |
-| Frontend          | **927 tests passing across 58 test files**                          |
-| Frontend Coverage | **99.58% statements, 98.84% branches, 99.81% functions, 100% lines** |
+| Backend           | **1,137 tests passing** (1,095 unit, 42 MySQL integration)          |
+| Backend Coverage  | **98.62% instruction coverage, 95.63% branch coverage**             |
+| Frontend          | **1,173 tests passing across 64 test files**                        |
+| Frontend Coverage | **99.45% statements, 98.51% branches, 99.83% functions, 100% lines** |
 
 For branch behavior, validation rules, stable automation selectors, test-data ownership, and Selenium assumptions, see the [FinTrack Application Testing Contract](docs/application-testing-contract.md).
 
@@ -565,6 +568,8 @@ Start the Spring Boot API:
 
 Flyway applies pending database migrations during application startup. V3 adds display names and persisted account preferences, V5 adds the refresh-session and token-history tables, and V6 (a Java migration) adds category normalization, built-in and icon metadata, and ownership constraints. For setup, adoption, and migration rules, see [Database Migrations](docs/database-migrations.md).
 
+To fill a local account with fictional sample data (custom categories, transactions, and budgets for the current month), run `node scripts/seed-local-demo.mjs` with `FINTRACK_SEED_EMAIL` and `FINTRACK_SEED_PASSWORD` set. It only runs against a local backend; see [Local demo data](docs/local-demo-data.md).
+
 The backend runs at `http://localhost:8080`.
 
 - Health endpoint: `http://localhost:8080/api/health`
@@ -594,7 +599,8 @@ The frontend runs at `http://localhost:5173`.
 
 ## Future Improvements
 
-- Code-split the frontend bundle by route
+- A separate Selenium end-to-end test suite, built against the
+  [Application Testing Contract](docs/application-testing-contract.md)
 
 ---
 

@@ -138,10 +138,6 @@
   gap: 0.75rem;
 }
 
-.app-topbar__content .account-menu {
-  margin-left: auto;
-}
-
 .app-topbar__menu,
 .mobile-nav__close {
   display: inline-flex;
@@ -211,6 +207,11 @@
   padding-left: 0.75rem;
 }
 
+/* The drawer scrolls, so the account panel stays within its width. */
+.mobile-nav .account-menu__panel {
+  width: 100%;
+}
+
 /* Page scrolling is locked while the drawer is open. */
 :root.scroll-locked {
   overflow: hidden;
@@ -244,15 +245,26 @@
     align-items: stretch;
     gap: 1.5rem;
     padding: 1.25rem 0.75rem;
-    /* Not a scroll container, so tooltips can extend past the column edge. The
-       content (brand row and three links) fits even short desktop windows. */
+    /* Not a scroll container, so tooltips and the account panel can extend past the
+       column edge. The content (brand row, four links, account button) fits even short
+       desktop windows. */
     background-color: var(--color-surface);
     border-right: 1px solid var(--color-border);
   }
 
-  /* The drawer controls belong to narrow screens only. */
-  .app-topbar__menu,
-  .app-topbar__brand {
+  /* The top bar belongs to narrow screens only: on desktop the account menu is at the
+     bottom of the sidebar (issue #121), so the content starts at the top. */
+  .app-topbar {
+    display: none;
+  }
+
+  /* Collapsed: the avatar alone, centred; the button keeps its full accessible name. */
+  .app-layout[data-sidebar-collapsed="true"] .account-menu__trigger {
+    justify-content: center;
+    padding: 0.375rem;
+  }
+
+  .app-layout[data-sidebar-collapsed="true"] :is(.account-menu__name, .account-menu__chevron) {
     display: none;
   }
 
@@ -388,8 +400,10 @@
     pointer-events: none;
   }
 
-  /* Link tooltips appear only when collapsed; the icon-only toggle always has one. */
+  /* Link and account tooltips appear only when collapsed (the account one only while its
+     menu is closed); the icon-only toggle always has one. */
   .app-layout[data-sidebar-collapsed="true"] .app-sidebar .primary-nav__link:is(:hover, :focus-visible) .sidebar-tooltip,
+  .app-layout[data-sidebar-collapsed="true"] .account-menu__trigger[aria-expanded="false"]:is(:hover, :focus-visible) .sidebar-tooltip,
   .app-sidebar__toggle:is(:hover, :focus-visible) .sidebar-tooltip {
     display: block;
   }
@@ -494,26 +508,35 @@
   color: var(--color-warning);
 }
 
+/* Bottom of the navigation: the desktop sidebar or the drawer (issue #121). */
+.nav-footer {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
 .account-menu {
   position: relative;
   flex-shrink: 0;
 }
 
 .account-menu__trigger {
+  position: relative;
+  width: 100%;
   min-height: 44px;
   display: flex;
   align-items: center;
   gap: 0.625rem;
-  padding: 0.375rem 0.625rem;
+  padding: 0.375rem 0.5rem;
   color: var(--color-text);
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
 }
 
 .account-menu__trigger:hover {
   color: var(--color-primary);
-  border-color: var(--color-primary);
+  background-color: var(--color-background);
 }
 
 /* Fixed dimensions prevent layout shift while a photo loads or falls back. */
@@ -547,9 +570,11 @@
 
 .account-menu__name {
   /* Display names can be 100 characters; truncate visually (the button's accessible
-     name and the open panel keep the full name) so the top bar never overflows. */
-  max-width: 14rem;
+     name and the open panel keep the full name) so the navigation never overflows. */
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
+  text-align: left;
   font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -560,10 +585,12 @@
   font-size: 0.75rem;
 }
 
+/* Opens upward from the bottom of the navigation; in the desktop sidebar it may extend
+   over the content, in the drawer it fits the drawer's width. */
 .account-menu__panel {
   position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
+  bottom: calc(100% + 0.5rem);
+  left: 0;
   z-index: var(--z-dropdown);
   width: min(18rem, calc(100vw - 2rem));
   padding: 1rem;
@@ -1164,12 +1191,6 @@
 }
 
 @media (max-width: 640px) {
-  /* Compact avatar-only trigger; its accessible name still includes the user's name. */
-  .account-menu__name,
-  .account-menu__chevron {
-    display: none;
-  }
-
   .app-main {
     padding: 1.5rem 0;
   }
@@ -1477,8 +1498,12 @@
   border-radius: var(--radius-sm);
 }
 
+/* Floated, the legend becomes an ordinary first row inside the box instead of sitting on
+   its top border (issue #121); the fieldset still takes its name from it. */
 .category-create legend {
-  padding: 0 0.25rem;
+  float: left;
+  width: 100%;
+  padding: 0;
   font-weight: 600;
 }
 

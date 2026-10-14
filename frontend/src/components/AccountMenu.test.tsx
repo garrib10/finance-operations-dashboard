@@ -285,7 +285,8 @@ describe("AccountMenu", () => {
     expect(trigger).toHaveTextContent("RW");
     expect(trigger).not.toHaveAccessibleName(/demo@/);
     await userEvent.click(trigger);
-    expect(screen.getAllByText("River Quiet Walker")).toHaveLength(2);
+    // The trigger's name, its (decorative) collapsed-sidebar tooltip, and the panel heading.
+    expect(screen.getAllByText("River Quiet Walker")).toHaveLength(3);
   });
 
   it.each([
@@ -361,13 +362,47 @@ describe("AccountMenu", () => {
       mockPhoto(photoUrl);
       renderMenu();
       expect([...trigger().children].map(child => child.className)).toEqual([
-        "avatar account-menu__avatar", "account-menu__name", "account-menu__chevron",
+        "avatar account-menu__avatar", "account-menu__name", "account-menu__chevron", "sidebar-tooltip",
       ]);
       await userEvent.click(trigger());
       expect(screen.getByText("demo@fintrack.dev")).toBeInTheDocument();
       await userEvent.keyboard("{Escape}");
       expect(trigger()).toHaveFocus();
       expect(trigger()).toHaveAttribute("aria-expanded", "false");
+    });
+  });
+
+  describe("at the bottom of the navigation (#121)", () => {
+    const menuTrigger = () => screen.getByRole("button", { name: /account menu for Demo User/ });
+
+    it("points up while closed (the panel opens upward) and flips while open", async () => {
+      mockAuthenticatedUser();
+      renderMenu();
+
+      expect(menuTrigger()).toHaveTextContent("▴");
+      await userEvent.click(menuTrigger());
+      expect(menuTrigger()).toHaveTextContent("▾");
+    });
+
+    it("adds a decorative name tooltip without changing the button's name", () => {
+      mockAuthenticatedUser();
+      renderMenu();
+
+      expect(menuTrigger()).toHaveAccessibleName("Open account menu for Demo User");
+      const tooltip = menuTrigger().querySelector(".sidebar-tooltip");
+      expect(tooltip).toHaveTextContent("Demo User");
+      expect(tooltip).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("cancels Escape while open, so the drawer dialog stays open, but not while closed", async () => {
+      mockAuthenticatedUser();
+      renderMenu();
+
+      // fireEvent returns false when a listener called preventDefault.
+      expect(fireEvent.keyDown(document, { key: "Escape" })).toBe(true);
+      await userEvent.click(menuTrigger());
+      expect(fireEvent.keyDown(document, { key: "Escape" })).toBe(false);
+      expect(menuTrigger()).toHaveAttribute("aria-expanded", "false");
     });
   });
 });

@@ -19,6 +19,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
+import jakarta.servlet.DispatcherType;
 import dev.portfolio.finance.security.AllowedOrigins;
 import dev.portfolio.finance.security.AuthRequestProtectionFilter;
 import dev.portfolio.finance.security.JwtAuthenticationFilter;
@@ -81,6 +82,14 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
+                        // The container's internal forward to /error after an unhandled
+                        // exception (issue #123): without this the error dispatch, which has
+                        // no bearer token, was rejected and the client saw 401 instead of 500.
+                        // Only ERROR dispatches match; a request a client sends to /error
+                        // itself is a REQUEST dispatch and still needs an access token.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR)
+                        .permitAll()
+
                         .requestMatchers(HttpMethod.OPTIONS, "/**")
                         .permitAll()
 

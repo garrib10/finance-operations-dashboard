@@ -28,7 +28,7 @@ async function completeRegistrationForm(): Promise<void> {
   await user.type(screen.getByLabelText("First Name"), "Demo");
   await user.type(screen.getByLabelText("Last Name"), "User");
   await user.type(screen.getByLabelText("Email"), "demo@fintrack.dev");
-  await user.type(screen.getByLabelText("Password"), "FinTrackDemo123!");
+  await user.type(screen.getByLabelText("Password"), "Fictional-Test-Pass1!");
 }
 
 function renderRegisterPage(): void {
@@ -65,7 +65,7 @@ describe("RegisterPage", () => {
       firstName: "Demo",
       lastName: "User",
       email: "demo@fintrack.dev",
-      password: "FinTrackDemo123!",
+      password: "Fictional-Test-Pass1!",
     });
 
     const submittingButton = screen.getByRole("button", {

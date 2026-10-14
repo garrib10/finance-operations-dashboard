@@ -1,20 +1,26 @@
 import "./App.css";
 
+import { lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-
-import ProfilePage from "./pages/ProfilePage";
-import AccountSettingsPage from "./pages/AccountSettingsPage";
 
 import { AppLayout } from "./components/AppLayout";
 import { PublicLayout } from "./components/PublicLayout";
 import { CategoryProvider } from "./context/CategoryProvider";
 import ProtectedRoute from "./components/ProtectedRoute";
-import BudgetPage from "./pages/BudgetPage";
-import CategoriesPage from "./pages/CategoriesPage";
-import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import TransactionPage from "./pages/TransactionPage";
+
+/*
+ * Signed-in pages load on demand (issue #124), each in its own file; the charts library goes
+ * with the Budgets page, its only user. Login and Register stay in the main bundle because
+ * they are the first screen for signed-out visitors. AppLayout shows the loading state.
+ */
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const TransactionPage = lazy(() => import("./pages/TransactionPage"));
+const BudgetPage = lazy(() => import("./pages/BudgetPage"));
+const CategoriesPage = lazy(() => import("./pages/CategoriesPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const AccountSettingsPage = lazy(() => import("./pages/AccountSettingsPage"));
 
 function App() {
   return (

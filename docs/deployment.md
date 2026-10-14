@@ -298,45 +298,89 @@ each item.
 
 ### v1.3.0 staging smoke checklist
 
-**Not yet performed.** Run after the feature reaches `staging`; record pass/fail, browser,
-and evidence for each item. Nothing here was run locally as part of the feature work.
+**Performed 2026-10-11 on staging: all 25 items passed** (v1.3.0 release, PR #127).
 
-- [ ] 1. Register a fresh user; the 13 built-in categories appear with their icons.
-- [ ] 2. Sign in as an existing (migrated) user; their categories, transactions, and
+- Items 1, 3–19, 22, and 23 were checked through the staging API with two fresh fictional
+  accounts (20/20 passed); the data they created was deleted afterwards. The test accounts
+  remain, because FinTrack has no account deletion.
+- Items 2, 4–5, 15–18, 20, 21, and 25 were checked by hand in Chrome on the staging site,
+  including keyboard-only use, phone width, and the v1.2.0 features.
+- Item 24: Flyway went from V5 to V6 in under a second on MySQL 9.7.2, and the app started.
+
+Production followed the same day: a fresh backup was taken, V6 was rehearsed on a restored
+copy with production settings (counts and totals unchanged, no duplicate or cross-user
+references), the release (PR #128) deployed without downtime, and a short production smoke
+test passed. Tagged `v1.3.0`.
+
+Flyway logs a warning that MySQL 9.7 is newer than the latest version it was verified with
+(9.4); the migration still ran correctly on staging and on the production copy.
+
+- [x] 1. Register a fresh user; the 13 built-in categories appear with their icons.
+- [x] 2. Sign in as an existing (migrated) user; their categories, transactions, and
       budgets are unchanged.
-- [ ] 3. Create a transaction with an existing category.
-- [ ] 4. Create a transaction with **Create a custom category…**, a name, and an icon.
-- [ ] 5. Reuse that category in another transaction without reloading the page.
-- [ ] 6. Create a budget with the same custom category.
-- [ ] 7. Create another custom category from the budget form.
-- [ ] 8. Use the budget-created category in a transaction.
-- [ ] 9. Edit a transaction to use a custom category (existing and new).
-- [ ] 10. Edit a budget to use a custom category (existing and new).
-- [ ] 11. Rename a custom category; transactions, budgets, filters, and the dashboard show
+- [x] 3. Create a transaction with an existing category.
+- [x] 4. Create a transaction with **Create a custom category…**, a name, and an icon.
+- [x] 5. Reuse that category in another transaction without reloading the page.
+- [x] 6. Create a budget with the same custom category.
+- [x] 7. Create another custom category from the budget form.
+- [x] 8. Use the budget-created category in a transaction.
+- [x] 9. Edit a transaction to use a custom category (existing and new).
+- [x] 10. Edit a budget to use a custom category (existing and new).
+- [x] 11. Rename a custom category; transactions, budgets, filters, and the dashboard show
       the new name, and amounts are unchanged.
-- [ ] 12. Change a custom category's icon; the new icon shows everywhere.
-- [ ] 13. Delete an unused custom category (after the confirmation step).
-- [ ] 14. Try to delete a category used by a transaction or a past budget: refused with the
+- [x] 12. Change a custom category's icon; the new icon shows everywhere.
+- [x] 13. Delete an unused custom category (after the confirmation step).
+- [x] 14. Try to delete a category used by a transaction or a past budget: refused with the
       "used by transactions or budgets" message, nothing removed.
-- [ ] 15. Built-in categories show no edit or delete controls.
-- [ ] 16. Filter transactions by a custom category, combined with type and dates; paging
+- [x] 15. Built-in categories show no edit or delete controls.
+- [x] 16. Filter transactions by a custom category, combined with type and dates; paging
       restarts at page 1; Reset clears it.
-- [ ] 17. Filter budgets by a custom category within a month; the empty message differs
+- [x] 17. Filter budgets by a custom category within a month; the empty message differs
       between "no budgets this month" and "none in this category".
-- [ ] 18. Dashboard: totals, recent transactions (with icons), spending by category, and
+- [x] 18. Dashboard: totals, recent transactions (with icons), spending by category, and
       budget statuses are correct.
-- [ ] 19. Server field errors appear beside their inputs: an amount over 10 whole digits
+- [x] 19. Server field errors appear beside their inputs: an amount over 10 whole digits
       (`amount`), a budget limit over 10 whole digits (`monthlyLimit`), a duplicate name
       (`newCategory.name`). `newCategory.iconKey` cannot be produced from the UI; check it
       with an API client sending an unknown icon (`400`, `fields["newCategory.iconKey"]`).
-- [ ] 20. Keyboard only: create a transaction and a budget with a new category, choose an
+- [x] 20. Keyboard only: create a transaction and a budget with a new category, choose an
       icon with arrow keys, rename and delete on the **Categories** page; focus returns
       sensibly after cancel, save, and delete.
-- [ ] 21. Phone width (about 375 px), tablet, and 200% browser zoom: no horizontal page
+- [x] 21. Phone width (about 375 px), tablet, and 200% browser zoom: no horizontal page
       scrolling, icon grid wraps, long names wrap, management controls reachable.
-- [ ] 22. Sign out and sign in as another user.
-- [ ] 23. The second user sees none of the first user's custom categories; a first-user
+- [x] 22. Sign out and sign in as another user.
+- [x] 23. The second user sees none of the first user's custom categories; a first-user
       category ID in `/api/categories/{id}` or `?categoryId=` returns `404`.
-- [ ] 24. Backend startup logs show Flyway at V6 with no pending migration.
-- [ ] 25. The v1.2.0 smoke items (login, refresh, logout, password change, profile photos,
+- [x] 24. Backend startup logs show Flyway at V6 with no pending migration.
+- [x] 25. The v1.2.0 smoke items (login, refresh, logout, password change, profile photos,
       transactions, budgets) still pass.
+
+## v1.4.0: Selenium readiness and final polish (#120)
+
+### What changes
+
+- **Frontend:** account menu at the bottom of the navigation (#121); signed-in pages load on
+  demand (#124); "New category" title inside its box.
+- **Backend:** unhandled exceptions return `500` with a safe body instead of `401` (#123).
+- **Database:** none (no Flyway migration; schema stays at V6).
+- **Variables:** none.
+
+Rollback is a plain redeploy of the v1.3.0 backend and frontend; no data changes.
+
+### v1.4.0 staging smoke checklist
+
+Run after the release reaches `staging`; record pass/fail.
+
+- [ ] 1. Backend deploy logs: "Schema `railway` is up to date", app started, no ERROR lines.
+- [ ] 2. `/api/health`, `/actuator/health/liveness`, and `/actuator/health/readiness` return
+      `200`; the Vercel host proxies `/api/health`.
+- [ ] 3. Desktop: the account menu is at the bottom of the sidebar and opens upward; Profile,
+      Account Settings, and Logout work; collapsed sidebar shows the avatar with a tooltip.
+- [ ] 4. Narrow window (1100px and below): the top bar has only the menu button and brand; the
+      account menu is at the bottom of the drawer; Escape closes the account menu first.
+- [ ] 5. Deep link and refresh on `/`, `/transactions`, `/budgets`, `/categories`,
+      `/profile`, and `/settings`; each page loads (briefly "Loading page…" at most).
+- [ ] 6. Budgets charts label every category; "New category" title sits inside its box.
+- [ ] 7. A signed-in request to an unknown API route returns `404` (not `401`), with
+      `X-Correlation-ID`.
+- [ ] 8. Sign-in, a transaction, a budget, and a custom category still work end to end.
