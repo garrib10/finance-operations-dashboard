@@ -14,8 +14,11 @@ if (typeof HTMLDialogElement !== "undefined" && typeof HTMLDialogElement.prototy
   };
 }
 
-// Keep device-level preferences (such as the sidebar state) from leaking between tests.
+// Keep device-level preferences (such as the sidebar state) and per-tab flags (such as the
+// page-reload guard) from leaking between tests.
 // Proxy and routing tests run in the Node environment, which has no window.
 afterEach(() => {
-  if (typeof window !== "undefined") window.localStorage.clear();
+  if (typeof window === "undefined") return;
+  window.localStorage.clear();
+  window.sessionStorage.clear();
 });
