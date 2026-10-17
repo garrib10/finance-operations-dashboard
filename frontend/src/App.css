@@ -744,6 +744,15 @@
   color: var(--color-text-muted);
 }
 
+/* Shown in place of a page whose code failed to load (PageErrorBoundary). */
+.page-error h1 {
+  margin-bottom: 0.5rem;
+}
+
+.page-error .button {
+  margin-top: 1.25rem;
+}
+
 .table-wrapper {
   width: 100%;
   overflow-x: auto;
@@ -1392,6 +1401,12 @@
 
 .category-label__name {
   overflow-wrap: anywhere;
+}
+
+/* In tables a column can shrink to one character with "anywhere", which split names like
+   "Transportation" mid-word at half-screen widths; break only very long words there. */
+.data-table .category-label__name {
+  overflow-wrap: break-word;
 }
 
 /* Offset the icon's top margin so it never makes the label taller than one text line. */
