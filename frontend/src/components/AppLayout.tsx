@@ -6,6 +6,7 @@ import { DESKTOP_NAV_QUERY } from "../navigation";
 import { readSidebarCollapsed, saveSidebarCollapsed } from "../utils/sidebarPreference";
 import { AccountMenu } from "./AccountMenu";
 import { MOBILE_NAV_ID, MobileNavDrawer } from "./MobileNavDrawer";
+import { PageErrorBoundary } from "./PageErrorBoundary";
 import { PrimaryNav } from "./PrimaryNav";
 
 const SIDEBAR_ID = "app-sidebar";
@@ -125,10 +126,13 @@ export function AppLayout() {
         </header>
 
         <main id="main-content" className="app-main" tabIndex={-1}>
-          {/* Pages load on demand (#124); the shell stays while one loads. */}
-          <Suspense fallback={<PageLoading />}>
-            <Outlet />
-          </Suspense>
+          {/* Pages load on demand (#124); the shell stays while one loads or if it fails.
+              Keyed by pathname so a failed page is retried when the user navigates. */}
+          <PageErrorBoundary key={location.pathname}>
+            <Suspense fallback={<PageLoading />}>
+              <Outlet />
+            </Suspense>
+          </PageErrorBoundary>
         </main>
       </div>
 
