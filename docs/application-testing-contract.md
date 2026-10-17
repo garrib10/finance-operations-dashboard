@@ -60,6 +60,14 @@ Signed-in pages load their code on demand (v1.4.0, issue #124): the sidebar rend
 and the page area shows `role="status"` "Loading page…" until the page arrives. Wait for the
 page's `h1` (for example "Budgets") before interacting.
 
+If a page fails (v1.4.1), the sidebar and account menu stay usable and the page area shows a
+`role="alert"` section with the `h1` "This page couldn't load" and a "Reload" button. If the
+page's code could not be downloaded, which usually means a new version was deployed while the
+tab was open, the app first reloads itself once, showing `role="status"` "Loading the latest
+version…". It reloads at most once per minute per tab (`sessionStorage` key
+`fintrack:page-load-reload-at`). Navigating to another page clears the error. Treat this alert
+as a test failure, never as an expected state.
+
 When an unauthenticated user opens a protected route, FinTrack redirects the user to `/login`.
 
 Successful registration redirects to `/login`. Successful login returns to the attempted protected route (including query/hash), or `/` when no destination was saved.

@@ -56,6 +56,11 @@ const sidebar = () => document.getElementById("app-sidebar")!;
 /** A lazily loaded page whose code never arrives, to observe the loading state. */
 const NeverLoadingPage = lazy(() => new Promise<{ default: () => null }>(() => {}));
 
+/** A page that fails while rendering, to observe the error state (v1.4.1). */
+function BrokenPage(): never {
+  throw new TypeError("Cannot read properties of undefined (reading 'map')");
+}
+
 /** Stubs matchMedia for the desktop query; `change` crosses the 1100px breakpoint. */
 function stubDesktop(matches: boolean) {
   const listeners = new Set<() => void>();
@@ -118,6 +123,31 @@ describe("AppLayout", () => {
     expect(loading.closest("section")).toHaveAttribute("aria-busy", "true");
     // Like every page root, the placeholder section is a direct child of <main>.
     expect(screen.getByRole("main").firstElementChild).toBe(loading.closest("section"));
+  });
+
+  it("keeps the shell usable when a page fails, and clears the error on navigation", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/budgets"]}>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route path="/budgets" element={<BrokenPage />} />
+            <Route path="/transactions" element={<CounterPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("This page couldn't load");
+    // Like every page root, the error section is a direct child of <main>.
+    expect(screen.getByRole("main").firstElementChild).toBe(alert);
+
+    await user.click(within(sidebar()).getByRole("link", { name: "Transactions" }));
+
+    expect(screen.getByRole("heading", { name: "Transactions page" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("renders the page as a direct child of a single main landmark", () => {
