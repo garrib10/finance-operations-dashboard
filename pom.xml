@@ -29,6 +29,15 @@
     </scm>
     <properties>
         <java.version>21</java.version>
+        <!--
+            Security overrides of versions managed by Spring Boot 4.1.1 (v1.4.2).
+            Tomcat 11.0.24: GHSA-gcx9-497g-6cp6, GHSA-9xv2-5v5q-p794, GHSA-h3x4-894j-xpx5 (fixed in 11.0.25).
+            Jackson 2.21.5 / 3.1.5: GHSA-7hhh-6rmp-j9qf, GHSA-cxp5-3px4-pw24 and related (fixed in 2.21.7 / 3.1.7).
+            Remove these once a Spring Boot release manages these versions or newer.
+        -->
+        <tomcat.version>11.0.27</tomcat.version>
+        <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+        <jackson-bom.version>3.1.7</jackson-bom.version>
     </properties>
     <dependencies>
 
