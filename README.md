@@ -4,10 +4,11 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1-brightgreen?logo=springboot&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)
 ![Flyway](https://img.shields.io/badge/Flyway-CC0200?logo=flyway&logoColor=white)
-![JUnit 5](https://img.shields.io/badge/JUnit-5-25A162?logo=junit5&logoColor=white)
-![Vitest](https://img.shields.io/badge/Vitest-4.1-6E9F18?logo=vitest&logoColor=white)
+![JUnit 6](https://img.shields.io/badge/JUnit-6-25A162?logo=junit5&logoColor=white)
+![Vitest](https://img.shields.io/badge/Vitest-5-6E9F18?logo=vitest&logoColor=white)
 ![Railway](https://img.shields.io/badge/Railway-0B0D0E?logo=railway&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Vercel-black?logo=vercel)
 ![Cloudinary](https://img.shields.io/badge/Cloudinary-3448C5?logo=cloudinary&logoColor=white)
@@ -66,7 +67,7 @@ The project demonstrates layered backend architecture, short-lived JWTs with rot
 | Database         | MySQL, Flyway                                                                                                 |
 | Image Storage    | Cloudinary (optional, backend-only profile photos)                                                            |
 | Authentication   | JWT, BCrypt                                                                                                   |
-| Backend Testing  | JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, Testcontainers (MySQL), JaCoCo        |
+| Backend Testing  | JUnit 6, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, Testcontainers (MySQL), JaCoCo        |
 | Frontend Testing | Vitest, React Testing Library, jest-dom, jsdom                                                                |
 | Deployment       | Vercel, Railway                                                                                               |
 
@@ -288,7 +289,7 @@ See the [frontend and staging testing guide](docs/frontend-testing.md) for comma
 
 ### Backend Testing
 
-The backend test suite uses JUnit 5, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, Flyway, Testcontainers (MySQL 8.4), and JaCoCo.
+The backend test suite uses JUnit 6, Mockito, Spring Boot Test, MockMvc, Spring Security Test, H2, Flyway, Testcontainers (MySQL 8.4), and JaCoCo.
 
 Coverage includes:
 
